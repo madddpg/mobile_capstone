@@ -151,9 +151,8 @@ class _LandingCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       height: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 40),
       decoration: BoxDecoration(
-        color: const Color(0xFFE7E6E4),
+        color: const Color(0xFFFFFFFF),
         borderRadius: BorderRadius.circular(45),
         boxShadow: [
           BoxShadow(
@@ -164,110 +163,136 @@ class _LandingCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 40),
-          const Text(
-            'Create an\nAccount',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 34,
-              height: 1.2,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF2F3E4F),
-            ),
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            'Your projects starts with us.',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF5B6E80),
-            ),
-          ),
-          const Spacer(),
-          Align(
-            alignment: Alignment.center,
-            child: FractionallySizedBox(
-              widthFactor: 0.75,
-              child: SizedBox(
-                height: 55,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    elevation: 0,
-                    padding: EdgeInsets.zero,
-                    shadowColor: Colors.transparent,
-                    backgroundColor: Colors.transparent,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                  ),
-                  onPressed: onGetStarted,
-                  child: Ink(
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                        colors: [Color(0xFFD6CEC3), Color(0xFF7C9BC0)],
-                      ),
-                      borderRadius: BorderRadius.circular(30),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.2),
-                          blurRadius: 25,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'Get Started',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF2F3E4F),
-                        ),
-                      ),
-                    ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(45),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0xFFFFFFFF), // #FFFFFF @ 100%
+                      Color(0xCCEDE4D4), // #EDE4D4 @ 80%
+                      Color(0x00648DB6), // #648DB6 @ 0%
+                    ],
+                    stops: [0.19, 0.65, 1.0],
                   ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 20),
-          Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Already have an account? ',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 13,
-                    color: Colors.white.withValues(alpha: 0.7),
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-                GestureDetector(
-                  onTap: onLogin,
-                  child: Text(
-                    'Login',
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 40),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 40),
+                  const Text(
+                    'Create an\nAccount',
                     style: TextStyle(
                       fontFamily: 'Poppins',
-                      fontSize: 13,
-                      color: Colors.white.withValues(alpha: 0.7),
-                      fontWeight: FontWeight.w600,
+                      fontSize: 34,
+                      height: 1.2,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF2F3E4F),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 14),
+                  const Text(
+                    'Your projects starts with us.',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF5B6E80),
+                    ),
+                  ),
+                  const Spacer(),
+                  Align(
+                    alignment: Alignment.center,
+                    child: FractionallySizedBox(
+                      widthFactor: 0.75,
+                      child: SizedBox(
+                        height: 55,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            elevation: 0,
+                            padding: EdgeInsets.zero,
+                            shadowColor: Colors.transparent,
+                            backgroundColor: Colors.transparent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                          ),
+                          onPressed: onGetStarted,
+                          child: Ink(
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                begin: Alignment.centerLeft,
+                                end: Alignment.centerRight,
+                                colors: [Color(0xFFD6CEC3), Color(0xFF7C9BC0)],
+                              ),
+                              borderRadius: BorderRadius.circular(30),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.2),
+                                  blurRadius: 25,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: const Center(
+                              child: Text(
+                                'Get Started',
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF2F3E4F),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Already have an account? ',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 13,
+                            color: Colors.white.withValues(alpha: 0.85),
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: onLogin,
+                          child: Text(
+                            'Login',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 13,
+                              color: Colors.white.withValues(alpha: 0.95),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

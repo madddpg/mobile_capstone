@@ -63,15 +63,106 @@ class _DisplayScreenState extends State<DisplayScreen>
                 opacity: _fade,
                 child: ScaleTransition(
                   scale: _scale,
-                  child: const Text(
-                    'iConstruct',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontFamily: 'Poppins',
-                      fontSize: 28,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 0.2,
-                    ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Logo mark
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 18),
+                        width: 82,
+                        height: 58,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF4E7CB),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Positioned(
+                              bottom: 10,
+                              left: 10,
+                              right: 10,
+                              child: Container(
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF263645),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 18,
+                              left: 12,
+                              child: Container(
+                                width: 12,
+                                height: 16,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF263645),
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 20,
+                              left: 30,
+                              child: Container(
+                                width: 10,
+                                height: 14,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF263645),
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 22,
+                              left: 46,
+                              child: Container(
+                                width: 10,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF263645),
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              top: 10,
+                              left: 18,
+                              child: Container(
+                                width: 10,
+                                height: 10,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF263645),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Text(
+                        'iConstruct',
+                        style: TextStyle(
+                          color: Color(0xFFF4E7CB),
+                          fontFamily: 'Poppins',
+                          fontSize: 28,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 4,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Plan smarter. Build better.',
+                        style: TextStyle(
+                          color: Color(0xFFEADAC2),
+                          fontFamily: 'Poppins',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -91,36 +182,13 @@ class _DisplayBackground extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF2A4155), Color(0xFF1B2E3F)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF2F3E4F), Color(0xFF4F6B8A), Color(0xFF6F8FAF)],
+          stops: [0, 0.55, 1],
         ),
       ),
-      child: CustomPaint(
-        painter: _DisplayStripePainter(),
-        child: const SizedBox.expand(),
-      ),
+      child: const SizedBox.expand(),
     );
   }
-}
-
-class _DisplayStripePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final stripePaint = Paint()..color = const Color(0x12000000);
-    const stripeWidth = 26.0;
-    const gap = 30.0;
-
-    double x = -stripeWidth;
-    while (x < size.width + stripeWidth) {
-      canvas.drawRect(
-        Rect.fromLTWH(x, 0, stripeWidth, size.height),
-        stripePaint,
-      );
-      x += stripeWidth + gap;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

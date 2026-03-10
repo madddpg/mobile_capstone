@@ -32,7 +32,6 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 24),
                   // Back button
                   Container(
                     width: 40,
@@ -49,100 +48,110 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 32),
-                  const Text(
-                    'Login',
-                    style: TextStyle(
-                      fontSize: 34,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    "Welcome back—let's build smarter.",
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFFE5E0D5),
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                  const SizedBox(height: 40),
-                  const _LoginField(label: 'Full Name'),
-                  const SizedBox(height: 16),
-                  _LoginField(
-                    label: 'Password',
-                    obscureText: _obscurePassword,
-                    trailing: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_off_rounded
-                            : Icons.visibility_rounded,
-                        color: const Color(0xFF1E2833),
-                      ),
-                      onPressed: () {
-                        setState(() => _obscurePassword = !_obscurePassword);
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () {
-                        // TODO: Forgot password flow.
-                      },
-                      style: TextButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: const Text(
-                        'Forgot Password?',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFFE5E0D5),
-                          fontWeight: FontWeight.w700,
-                          decoration: TextDecoration.underline,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 40),
-                  Center(
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF263646),
-                          borderRadius: BorderRadius.circular(28),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Color(0x66000000),
-                              offset: Offset(0, 10),
-                              blurRadius: 18,
-                            ),
-                          ],
-                        ),
-                        child: TextButton(
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(28),
-                            ),
-                          ),
-                          onPressed: () {
-                            // TODO: handle login.
-                          },
-                          child: const Text(
-                            'Login',
-                            style: TextStyle(fontWeight: FontWeight.w700),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text(
+                          'Login',
+                          style: TextStyle(
+                            fontSize: 34,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
                           ),
                         ),
-                      ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          "Welcome back—let's build smarter.",
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFFE5E0D5),
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                        const SizedBox(height: 40),
+                        const _LoginField(label: 'Full Name'),
+                        const SizedBox(height: 16),
+                        _LoginField(
+                          label: 'Password',
+                          obscureText: _obscurePassword,
+                          trailing: IconButton(
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_off_rounded
+                                  : Icons.visibility_rounded,
+                              color: const Color(0xFF1E2833),
+                            ),
+                            onPressed: () {
+                              setState(
+                                () => _obscurePassword = !_obscurePassword,
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: () {
+                              // TODO: Forgot password flow.
+                            },
+                            style: TextButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: const Text(
+                              'Forgot Password?',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFFE5E0D5),
+                                fontWeight: FontWeight.w700,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 40),
+                        Center(
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF263646),
+                                borderRadius: BorderRadius.circular(28),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Color(0x66000000),
+                                    offset: Offset(0, 10),
+                                    blurRadius: 18,
+                                  ),
+                                ],
+                              ),
+                              child: TextButton(
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(28),
+                                  ),
+                                ),
+                                onPressed: () {
+                                  // TODO: handle login.
+                                },
+                                child: const Text(
+                                  'Login',
+                                  style: TextStyle(fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 32),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 32),
                 ],
               ),
             ),

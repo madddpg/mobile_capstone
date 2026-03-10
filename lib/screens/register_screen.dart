@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -30,19 +31,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 56),
-                  const Text(
+                  const SizedBox(height: 80),
+                  Text(
                     'Register',
-                    style: TextStyle(
-                      fontSize: 32,
+                    style: GoogleFonts.inter(
+                      fontSize: 40,
                       fontWeight: FontWeight.w800,
                       color: Colors.white,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     'Create an account to start smart planning.',
-                    style: TextStyle(fontSize: 13, color: Color(0xFFE5E0D5)),
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: const Color(0xFFE5E0D5),
+                    ),
                   ),
                   const SizedBox(height: 36),
                   const _RegisterField(label: 'First Name'),
@@ -58,18 +62,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     obscureText: true,
                   ),
                   const SizedBox(height: 40),
-                  const Center(
+                  Center(
                     child: Text(
                       'By registration you have signed to our',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 11, color: Color(0xFFE5E0D5)),
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: const Color(0xFFE5E0D5),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 2),
-                  const Center(
+                  Center(
                     child: Text(
                       'Terms and Conditions',
-                      style: TextStyle(
+                      style: GoogleFonts.inter(
                         fontSize: 11,
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
@@ -104,9 +111,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           onPressed: () {
                             // TODO: handle registration logic.
                           },
-                          child: const Text(
+                          child: Text(
                             'Register',
-                            style: TextStyle(fontWeight: FontWeight.w700),
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),
@@ -135,6 +145,10 @@ class _RegisterField extends StatelessWidget {
       obscureText: obscureText,
       decoration: InputDecoration(
         hintText: label,
+        hintStyle: GoogleFonts.inter(
+          color: const Color(0xFF6B5C46),
+          fontSize: 13,
+        ),
         filled: true,
         fillColor: const Color(0xFFE8D8BF),
         contentPadding: const EdgeInsets.symmetric(
@@ -146,6 +160,7 @@ class _RegisterField extends StatelessWidget {
           borderSide: BorderSide.none,
         ),
       ),
+      style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF1E242B)),
     );
   }
 }

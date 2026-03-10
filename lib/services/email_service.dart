@@ -1,10 +1,6 @@
-import 'dart:async';
-import 'dart:convert';
 import 'dart:ui' show Locale;
 
-import 'package:http/http.dart' as http;
-
-import '../core/api_config.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class EmailSendOtpResult {
   final bool success;
@@ -26,114 +22,121 @@ class EmailApiException implements Exception {
 }
 
 class EmailService {
-  final http.Client _client;
-  final Uri _endpoint;
-  final Duration _timeout;
+  final FirebaseAuth _auth;
 
-  EmailService({
-    http.Client? client,
-    Uri? endpoint,
-    Duration timeout = const Duration(seconds: 15),
-  }) : _client = client ?? http.Client(),
-       _endpoint = endpoint ?? ApiConfig.constructApiUri(),
-       _timeout = timeout;
+  EmailService({FirebaseAuth? auth}) : _auth = auth ?? FirebaseAuth.instance;
 
-  /// Sends an OTP email using your PHP API.
-  ///
-  /// The API must accept:
-  /// - email (string)
-  /// - otp (digits only, string/int)
-  /// - lang (en|fil)
-  ///
-  /// By default this posts JSON. Set [useFormEncoding] if you prefer
-  /// application/x-www-form-urlencoded.
+  /// Sends Firebase's verification email to the currently signed in user.
   Future<EmailSendOtpResult> sendOtp({
     required String email,
     required String otp,
     required Locale locale,
     bool useFormEncoding = false,
   }) async {
-    final normalizedOtp = otp.replaceAll(RegExp(r'\s+'), '');
-    if (email.trim().isEmpty) {
+    final trimmedEmail = email.trim();
+    if (trimmedEmail.isEmpty) {
       throw const EmailApiException('Email is required.');
     }
-    if (!RegExp(r'^\d+$').hasMatch(normalizedOtp)) {
-      throw const EmailApiException('OTP must be digits only.');
+
+    final user = _auth.currentUser;
+    if (user == null ||
+        user.email?.toLowerCase() != trimmedEmail.toLowerCase()) {
+      throw const EmailApiException(
+        'Verification email can only be sent for the currently signed-in user.',
+      );
     }
 
-    final lang = _mapLocaleToLang(locale);
-    final payload = <String, String>{
-      'email': email.trim(),
-      'otp': normalizedOtp,
-      'lang': lang,
-    };
+    _mapLocaleToLang(locale);
 
     try {
-      final http.Response response;
-      if (useFormEncoding) {
-        response = await _client
-            .post(
-              _endpoint,
-              headers: const {
-                'Accept': 'application/json',
-                'Content-Type':
-                    'application/x-www-form-urlencoded; charset=utf-8',
-              },
-              body: payload,
-            )
-            .timeout(_timeout);
-      } else {
-        response = await _client
-            .post(
-              _endpoint,
-              headers: const {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json; charset=utf-8',
-              },
-              body: jsonEncode(payload),
-            )
-            .timeout(_timeout);
-      }
-
-      return _parseResponse(response);
-    } on TimeoutException {
-      throw const EmailApiException('Request timed out. Please try again.');
-    } on http.ClientException catch (e) {
-      throw EmailApiException('Network error: ${e.message}');
-    } on FormatException {
-      throw const EmailApiException('Invalid response from server.');
-    }
-  }
-
-  EmailSendOtpResult _parseResponse(http.Response response) {
-    Map<String, dynamic> json;
-    try {
-      final decoded = jsonDecode(response.body);
-      json = (decoded is Map<String, dynamic>) ? decoded : <String, dynamic>{};
+      await user.sendEmailVerification();
+      return const EmailSendOtpResult(
+        success: true,
+        message: 'Verification email sent. Please check your inbox.',
+      );
+    } on FirebaseAuthException catch (e) {
+      throw EmailApiException(
+        e.message ?? 'Failed to send verification email.',
+      );
     } catch (_) {
-      json = <String, dynamic>{};
+      throw const EmailApiException('Failed to send verification email.');
     }
-
-    final status = json['status']?.toString();
-    final message =
-        json['message']?.toString() ??
-        (response.statusCode >= 200 && response.statusCode < 300
-            ? 'Request completed.'
-            : 'Request failed.');
-
-    final okStatusCode =
-        response.statusCode >= 200 && response.statusCode < 300;
-    final okStatusField = status?.toLowerCase() == 'success';
-
-    if (okStatusCode && okStatusField) {
-      return EmailSendOtpResult(success: true, message: message);
-    }
-
-    final serverMessage = message.isNotEmpty
-        ? message
-        : 'Failed to send email.';
-    throw EmailApiException(serverMessage, statusCode: response.statusCode);
   }
+
+  /// Registers a new user with Firebase Authentication using email/password.
+  Future<UserCredential> register({
+    required String email,
+    required String password,
+  }) async {
+    final trimmedEmail = email.trim();
+    if (trimmedEmail.isEmpty || password.isEmpty) {
+      throw const EmailApiException('Email and password are required.');
+    }
+
+    try {
+      final credential = await _auth.createUserWithEmailAndPassword(
+        email: trimmedEmail,
+        password: password,
+      );
+
+      // Try to send a verification email; ignore errors here.
+      await credential.user?.sendEmailVerification();
+
+      return credential;
+    } on FirebaseAuthException catch (e) {
+      throw EmailApiException(e.message ?? 'Registration failed.');
+    } catch (_) {
+      throw const EmailApiException('Registration failed.');
+    }
+  }
+
+  /// Logs in an existing user with Firebase Authentication.
+  Future<UserCredential> login({
+    required String email,
+    required String password,
+  }) async {
+    final trimmedEmail = email.trim();
+    if (trimmedEmail.isEmpty || password.isEmpty) {
+      throw const EmailApiException('Email and password are required.');
+    }
+
+    try {
+      final credential = await _auth.signInWithEmailAndPassword(
+        email: trimmedEmail,
+        password: password,
+      );
+      return credential;
+    } on FirebaseAuthException catch (e) {
+      throw EmailApiException(e.message ?? 'Login failed.');
+    } catch (_) {
+      throw const EmailApiException('Login failed.');
+    }
+  }
+
+  /// Signs out the current Firebase user.
+  Future<void> logout() => _auth.signOut();
+
+  Future<void> reloadCurrentUser() async {
+    await _auth.currentUser?.reload();
+  }
+
+  Future<void> sendCurrentUserVerificationEmail() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw const EmailApiException('No signed-in user found.');
+    }
+
+    try {
+      await user.sendEmailVerification();
+    } on FirebaseAuthException catch (e) {
+      throw EmailApiException(
+        e.message ?? 'Failed to send verification email.',
+      );
+    }
+  }
+
+  /// Currently signed-in Firebase user (if any).
+  User? get currentUser => _auth.currentUser;
 
   String _mapLocaleToLang(Locale locale) {
     final code = locale.languageCode.toLowerCase();

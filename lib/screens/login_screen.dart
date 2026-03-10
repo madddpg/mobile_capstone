@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../services/email_service.dart';
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -8,7 +10,101 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final EmailService _emailService = EmailService();
+
   bool _obscurePassword = true;
+  bool _loading = false;
+  String? _emailError;
+  String? _passwordError;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  void _validateEmail(String value) {
+    final trimmed = value.trim();
+    const emailPattern = r'^[^@\s]+@[^@\s]+\.[^@\s]+$';
+    setState(() {
+      if (trimmed.isEmpty) {
+        _emailError = 'Email is required';
+      } else if (!RegExp(emailPattern).hasMatch(trimmed)) {
+        _emailError = 'Enter a valid email address';
+      } else {
+        _emailError = null;
+      }
+    });
+  }
+
+  void _validatePassword(String value) {
+    setState(() {
+      if (value.isEmpty) {
+        _passwordError = 'Password is required';
+      } else if (value.length < 6) {
+        _passwordError = 'Password must be at least 6 characters';
+      } else {
+        _passwordError = null;
+      }
+    });
+  }
+
+  Future<void> _handleLogin() async {
+    final email = _emailController.text;
+    final password = _passwordController.text;
+
+    _validateEmail(email);
+    _validatePassword(password);
+    if (_emailError != null || _passwordError != null) {
+      return;
+    }
+
+    setState(() => _loading = true);
+
+    try {
+      final credential = await _emailService.login(
+        email: email,
+        password: password,
+      );
+      await credential.user?.reload();
+      final verified = credential.user?.emailVerified ?? false;
+      if (!verified) {
+        await _emailService.sendCurrentUserVerificationEmail();
+        await _emailService.logout();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Your email is not verified yet. We sent another verification email.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Logged in successfully.')));
+    } on EmailApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Login failed. Please try again.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -71,11 +167,19 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                         const SizedBox(height: 40),
-                        const _LoginField(label: 'Full Name'),
+                        _LoginField(
+                          label: 'Email',
+                          controller: _emailController,
+                          errorText: _emailError,
+                          onChanged: _validateEmail,
+                        ),
                         const SizedBox(height: 16),
                         _LoginField(
                           label: 'Password',
                           obscureText: _obscurePassword,
+                          controller: _passwordController,
+                          errorText: _passwordError,
+                          onChanged: _validatePassword,
                           trailing: IconButton(
                             icon: Icon(
                               _obscurePassword
@@ -137,13 +241,21 @@ class _LoginScreenState extends State<LoginScreen> {
                                     borderRadius: BorderRadius.circular(28),
                                   ),
                                 ),
-                                onPressed: () {
-                                  // TODO: handle login.
-                                },
-                                child: const Text(
-                                  'Login',
-                                  style: TextStyle(fontWeight: FontWeight.w700),
-                                ),
+                                onPressed: _loading ? null : _handleLogin,
+                                child: _loading
+                                    ? const SizedBox(
+                                        height: 18,
+                                        width: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Text(
+                                        'Login',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
                               ),
                             ),
                           ),
@@ -166,19 +278,28 @@ class _LoginField extends StatelessWidget {
   final String label;
   final bool obscureText;
   final Widget? trailing;
+  final TextEditingController? controller;
+  final String? errorText;
+  final ValueChanged<String>? onChanged;
 
   const _LoginField({
     required this.label,
     this.obscureText = false,
     this.trailing,
+    this.controller,
+    this.errorText,
+    this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
     return TextField(
+      controller: controller,
       obscureText: obscureText,
+      onChanged: onChanged,
       decoration: InputDecoration(
         hintText: label,
+        errorText: errorText,
         filled: true,
         fillColor: const Color(0xFFE8D8BF),
         contentPadding: const EdgeInsets.symmetric(

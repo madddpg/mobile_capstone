@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../services/email_service.dart';
+
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
@@ -9,6 +11,118 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+
+  final EmailService _emailService = EmailService();
+
+  bool _loading = false;
+  String? _emailError;
+  String? _passwordError;
+  String? _confirmPasswordError;
+
+  @override
+  void dispose() {
+    _firstNameController.dispose();
+    _lastNameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleRegister() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    final confirmPassword = _confirmPasswordController.text;
+    _validateEmail(email);
+    _validatePassword(password);
+    _validateConfirmPassword(confirmPassword);
+    if (_emailError != null ||
+        _passwordError != null ||
+        _confirmPasswordError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Please fix the highlighted errors before registering.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _loading = true);
+
+    try {
+      await _emailService.register(email: email, password: password);
+      await _emailService.logout();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Registration successful. We sent a verification email to your inbox.',
+          ),
+        ),
+      );
+      Navigator.of(context).pop();
+    } on EmailApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Registration failed. Please try again.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  void _validateEmail(String value) {
+    final trimmed = value.trim();
+    const emailPattern = r'^[^@\s]+@[^@\s]+\.[^@\s]+$';
+    setState(() {
+      if (trimmed.isEmpty) {
+        _emailError = 'Email is required';
+      } else if (!RegExp(emailPattern).hasMatch(trimmed)) {
+        _emailError = 'Enter a valid email address';
+      } else {
+        _emailError = null;
+      }
+    });
+  }
+
+  void _validatePassword(String value) {
+    setState(() {
+      if (value.isEmpty) {
+        _passwordError = 'Password is required';
+      } else if (value.length < 6) {
+        _passwordError = 'Password must be at least 6 characters';
+      } else {
+        _passwordError = null;
+      }
+    });
+  }
+
+  void _validateConfirmPassword(String value) {
+    setState(() {
+      if (value.isEmpty) {
+        _confirmPasswordError = 'Confirm your password';
+      } else if (value != _passwordController.text) {
+        _confirmPasswordError = 'Passwords do not match';
+      } else {
+        _confirmPasswordError = null;
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final height = MediaQuery.of(context).size.height;
@@ -49,17 +163,37 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                   ),
                   const SizedBox(height: 36),
-                  const _RegisterField(label: 'First Name'),
+                  _RegisterField(
+                    label: 'First Name',
+                    controller: _firstNameController,
+                  ),
                   const SizedBox(height: 16),
-                  const _RegisterField(label: 'Last Name'),
+                  _RegisterField(
+                    label: 'Last Name',
+                    controller: _lastNameController,
+                  ),
                   const SizedBox(height: 16),
-                  const _RegisterField(label: 'Email'),
+                  _RegisterField(
+                    label: 'Email',
+                    controller: _emailController,
+                    errorText: _emailError,
+                    onChanged: _validateEmail,
+                  ),
                   const SizedBox(height: 16),
-                  const _RegisterField(label: 'Password', obscureText: true),
+                  _RegisterField(
+                    label: 'Password',
+                    obscureText: true,
+                    controller: _passwordController,
+                    errorText: _passwordError,
+                    onChanged: _validatePassword,
+                  ),
                   const SizedBox(height: 16),
-                  const _RegisterField(
+                  _RegisterField(
                     label: 'Confirm Password',
                     obscureText: true,
+                    controller: _confirmPasswordController,
+                    errorText: _confirmPasswordError,
+                    onChanged: _validateConfirmPassword,
                   ),
                   const SizedBox(height: 40),
                   Center(
@@ -108,16 +242,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               borderRadius: BorderRadius.circular(28),
                             ),
                           ),
-                          onPressed: () {
-                            // TODO: handle registration logic.
-                          },
-                          child: Text(
-                            'Register',
-                            style: GoogleFonts.inter(
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
+                          onPressed: _loading ? null : _handleRegister,
+                          child: _loading
+                              ? const SizedBox(
+                                  height: 18,
+                                  width: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation(
+                                      Colors.white,
+                                    ),
+                                  ),
+                                )
+                              : Text(
+                                  'Register',
+                                  style: GoogleFonts.inter(
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
                         ),
                       ),
                     ),
@@ -136,13 +279,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
 class _RegisterField extends StatelessWidget {
   final String label;
   final bool obscureText;
+  final TextEditingController? controller;
+  final String? errorText;
+  final ValueChanged<String>? onChanged;
 
-  const _RegisterField({required this.label, this.obscureText = false});
+  const _RegisterField({
+    required this.label,
+    this.obscureText = false,
+    this.controller,
+    this.errorText,
+    this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
     return TextField(
+      controller: controller,
       obscureText: obscureText,
+      onChanged: onChanged,
       decoration: InputDecoration(
         hintText: label,
         hintStyle: GoogleFonts.inter(
@@ -159,6 +313,8 @@ class _RegisterField extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none,
         ),
+        errorText: errorText,
+        errorStyle: GoogleFonts.inter(color: Colors.white, fontSize: 11),
       ),
       style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF1E242B)),
     );

@@ -1,11 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 
-class EmailSendOtpResult {
+class EmailActionResult {
   final bool success;
   final String message;
 
-  const EmailSendOtpResult({required this.success, required this.message});
+  const EmailActionResult({required this.success, required this.message});
 }
 
 class EmailApiException implements Exception {
@@ -22,83 +21,71 @@ class EmailApiException implements Exception {
 
 class EmailService {
   final FirebaseAuth _auth;
-  final FirebaseFunctions _functions;
 
-  EmailService({FirebaseAuth? auth, FirebaseFunctions? functions})
-    : _auth = auth ?? FirebaseAuth.instance,
-      _functions = functions ?? FirebaseFunctions.instance;
+  EmailService({FirebaseAuth? auth}) : _auth = auth ?? FirebaseAuth.instance;
 
-  /// Sends a real email OTP to the currently signed-in user via Cloud Functions.
-  Future<EmailSendOtpResult> sendOtp({required String email}) async {
-    final trimmedEmail = email.trim();
-    if (trimmedEmail.isEmpty) {
-      throw const EmailApiException('Email is required.');
-    }
+  Future<EmailActionResult> sendVerificationEmail({User? user}) async {
+    final currentUser = user ?? _auth.currentUser;
+    final email = currentUser?.email?.trim();
 
-    final user = _auth.currentUser;
-    if (user == null ||
-        user.email?.toLowerCase() != trimmedEmail.toLowerCase()) {
+    if (currentUser == null || email == null || email.isEmpty) {
       throw const EmailApiException(
-        'OTP can only be sent for the currently signed-in user.',
+        'No signed-in user with an email was found.',
       );
     }
 
     try {
-      final callable = _functions.httpsCallable('sendEmailOtp');
-      final response = await callable.call(<String, dynamic>{
-        'email': trimmedEmail,
-      });
-      final data = Map<String, dynamic>.from(response.data as Map);
+      await currentUser.sendEmailVerification();
 
-      return EmailSendOtpResult(
-        success: data['success'] == true,
-        message:
-            (data['message'] as String?) ??
-            'OTP sent. Please check your inbox.',
+      return const EmailActionResult(
+        success: true,
+        message: 'Verification email sent. Check your inbox and spam folder.',
       );
-    } on FirebaseFunctionsException catch (e) {
-      throw EmailApiException(_mapFunctionError(e), statusCode: _statusFor(e));
+    } on FirebaseAuthException catch (e) {
+      throw EmailApiException(
+        e.message ?? 'Could not send the verification email.',
+      );
     } catch (e) {
-      throw EmailApiException('Failed to send OTP email. ${e.toString()}');
+      throw EmailApiException(
+        'Could not send the verification email. ${e.toString()}',
+      );
     }
   }
 
-  Future<EmailSendOtpResult> verifyOtp({
-    required String email,
-    required String otp,
-  }) async {
-    final trimmedEmail = email.trim();
-    final trimmedOtp = otp.trim();
-
-    if (trimmedEmail.isEmpty || trimmedOtp.isEmpty) {
-      throw const EmailApiException('Email and OTP are required.');
-    }
-
-    if (!RegExp(r'^\d{6}$').hasMatch(trimmedOtp)) {
-      throw const EmailApiException('Enter the 6-digit OTP code.');
+  Future<EmailActionResult> checkEmailVerification() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw const EmailApiException('No signed-in user found.');
     }
 
     try {
-      final callable = _functions.httpsCallable('verifyEmailOtp');
-      final response = await callable.call(<String, dynamic>{
-        'email': trimmedEmail,
-        'otp': trimmedOtp,
-      });
-      final data = Map<String, dynamic>.from(response.data as Map);
-      await _auth.currentUser?.reload();
+      await user.reload();
+      final refreshedUser = _auth.currentUser;
+      if (refreshedUser?.emailVerified ?? false) {
+        return const EmailActionResult(
+          success: true,
+          message: 'Email verified successfully.',
+        );
+      }
 
-      return EmailSendOtpResult(
-        success: data['success'] == true,
-        message: (data['message'] as String?) ?? 'Email verified successfully.',
+      throw const EmailApiException(
+        'Email not verified yet. Open the verification link from your inbox, then try again.',
       );
-    } on FirebaseFunctionsException catch (e) {
-      throw EmailApiException(_mapFunctionError(e), statusCode: _statusFor(e));
+    } on FirebaseAuthException catch (e) {
+      throw EmailApiException(
+        e.message ?? 'Could not refresh your verification status.',
+      );
     } catch (e) {
-      throw EmailApiException('Failed to verify the OTP code. ${e.toString()}');
+      if (e is EmailApiException) {
+        rethrow;
+      }
+
+      throw EmailApiException(
+        'Could not refresh your verification status. ${e.toString()}',
+      );
     }
   }
 
-  /// Registers a new user with Firebase Authentication using email/password.
   Future<UserCredential> register({
     required String email,
     required String password,
@@ -115,22 +102,68 @@ class EmailService {
       );
 
       try {
-        await sendOtp(email: trimmedEmail);
+        await sendVerificationEmail(user: credential.user);
       } on EmailApiException catch (e) {
         throw EmailApiException(
-          'Account created, but OTP email could not be sent. ${e.message}',
+          'Account created, but verification email could not be sent. ${e.message}',
         );
       }
 
       return credential;
     } on FirebaseAuthException catch (e) {
+      if (e.code == 'email-already-in-use') {
+        return _resumeExistingRegistration(
+          email: trimmedEmail,
+          password: password,
+        );
+      }
+
       throw EmailApiException(e.message ?? 'Registration failed.');
     } catch (e) {
       throw EmailApiException('Registration failed. ${e.toString()}');
     }
   }
 
-  /// Logs in an existing user with Firebase Authentication.
+  Future<UserCredential> _resumeExistingRegistration({
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final credential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      await credential.user?.reload();
+
+      if (credential.user?.emailVerified ?? false) {
+        throw const EmailApiException(
+          'This email is already registered and verified. Please log in instead.',
+        );
+      }
+
+      try {
+        await sendVerificationEmail(user: credential.user);
+      } on EmailApiException catch (e) {
+        throw EmailApiException(
+          'This account already exists and is awaiting verification, but the verification email could not be sent. ${e.message}',
+        );
+      }
+
+      return credential;
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+        throw const EmailApiException(
+          'This email is already registered. Enter the existing password or log in instead.',
+        );
+      }
+
+      throw EmailApiException(
+        e.message ?? 'This email is already registered. Please log in instead.',
+      );
+    }
+  }
+
   Future<UserCredential> login({
     required String email,
     required String password,
@@ -141,11 +174,10 @@ class EmailService {
     }
 
     try {
-      final credential = await _auth.signInWithEmailAndPassword(
+      return await _auth.signInWithEmailAndPassword(
         email: trimmedEmail,
         password: password,
       );
-      return credential;
     } on FirebaseAuthException catch (e) {
       throw EmailApiException(e.message ?? 'Login failed.');
     } catch (e) {
@@ -153,45 +185,20 @@ class EmailService {
     }
   }
 
-  /// Signs out the current Firebase user.
   Future<void> logout() => _auth.signOut();
 
   Future<void> reloadCurrentUser() async {
     await _auth.currentUser?.reload();
   }
 
-  Future<EmailSendOtpResult> sendCurrentUserOtp() async {
+  Future<EmailActionResult> sendCurrentUserVerificationEmail() async {
     final user = _auth.currentUser;
     if (user == null) {
       throw const EmailApiException('No signed-in user found.');
     }
 
-    return sendOtp(email: user.email ?? '');
+    return sendVerificationEmail(user: user);
   }
 
-  /// Currently signed-in Firebase user (if any).
   User? get currentUser => _auth.currentUser;
-
-  String _mapFunctionError(FirebaseFunctionsException error) {
-    return error.message ?? 'A server error occurred.';
-  }
-
-  int? _statusFor(FirebaseFunctionsException error) {
-    switch (error.code) {
-      case 'invalid-argument':
-        return 400;
-      case 'unauthenticated':
-        return 401;
-      case 'permission-denied':
-        return 403;
-      case 'not-found':
-        return 404;
-      case 'resource-exhausted':
-        return 429;
-      case 'deadline-exceeded':
-        return 504;
-      default:
-        return null;
-    }
-  }
 }

@@ -1,6 +1,6 @@
 const crypto = require("crypto");
 const admin = require("firebase-admin");
-const nodemailer = require("nodemailer");
+const {Resend} = require("resend");
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const {defineSecret, defineString} = require("firebase-functions/params");
 
@@ -9,12 +9,10 @@ admin.initializeApp();
 const db = admin.firestore();
 const auth = admin.auth();
 
-const SMTP_HOST = defineString("SMTP_HOST", {default: "smtp.gmail.com"});
-const SMTP_PORT = defineString("SMTP_PORT", {default: "465"});
-const SMTP_FROM_EMAIL = defineString("SMTP_FROM_EMAIL");
-const SMTP_FROM_NAME = defineString("SMTP_FROM_NAME", {default: "iConstruct"});
-const SMTP_USER = defineSecret("SMTP_USER");
-const SMTP_PASS = defineSecret("SMTP_PASS");
+const EMAIL_FROM = defineString("EMAIL_FROM", {
+  default: "iConstruct <onboarding@resend.dev>",
+});
+const RESEND_API_KEY = defineSecret("RESEND_API_KEY");
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const RESEND_COOLDOWN_MS = 60 * 1000;
@@ -51,23 +49,42 @@ function hashOtp(uid, otp) {
   return crypto.createHash("sha256").update(`${uid}:${otp}`).digest("hex");
 }
 
-function buildTransport() {
-  return nodemailer.createTransport({
-    host: SMTP_HOST.value(),
-    port: Number(SMTP_PORT.value()),
-    secure: Number(SMTP_PORT.value()) === 465,
-    auth: {
-      user: SMTP_USER.value(),
-      pass: SMTP_PASS.value(),
-    },
-  });
+function buildResendClient() {
+  return new Resend(RESEND_API_KEY.value());
 }
 
-function mapSmtpError(error) {
-  if (error?.code === "EAUTH") {
+function mapEmailProviderError(error) {
+  const message = String(error?.message || error?.response || "");
+
+  if (
+    error?.statusCode === 401 ||
+    error?.statusCode === 403 ||
+    message.toLowerCase().includes("api key")
+  ) {
     return new HttpsError(
       "failed-precondition",
-      "Email delivery is not configured correctly. Check the Gmail sender address and App Password in Firebase Functions secrets.",
+      "Email delivery is not configured correctly. Check the Resend API key and sender address in Firebase Functions config.",
+    );
+  }
+
+  if (
+    error?.statusCode === 429 ||
+    message.toLowerCase().includes("rate limit")
+  ) {
+    return new HttpsError(
+      "resource-exhausted",
+      "The email provider rate limit has been reached. Please wait and try again later.",
+    );
+  }
+
+  if (message.toLowerCase().includes("verify a domain")) {
+    const allowedRecipient = message.match(/own email address \(([^)]+)\)/)?.[1];
+
+    return new HttpsError(
+      "failed-precondition",
+      allowedRecipient
+        ? `Resend is still in testing mode and can only send to ${allowedRecipient}. Verify a domain in Resend and update EMAIL_FROM, or test with that recipient.`
+        : "The email sender is not ready yet. Verify your sending domain in Resend and update EMAIL_FROM before sending to other recipients.",
     );
   }
 
@@ -103,7 +120,7 @@ async function loadVerifiedUser(uid, email) {
 }
 
 exports.sendEmailOtp = onCall(
-  {secrets: [SMTP_USER, SMTP_PASS]},
+  {secrets: [RESEND_API_KEY]},
   async (request) => {
     const uid = requireAuth(request);
     const email = readEmail(request);
@@ -143,19 +160,23 @@ exports.sendEmailOtp = onCall(
       verifiedAt: null,
     }, {merge: true});
 
-    const transporter = buildTransport();
+    const resend = buildResendClient();
 
     try {
-      await transporter.sendMail({
-        from: `"${SMTP_FROM_NAME.value()}" <${SMTP_FROM_EMAIL.value()}>`,
-        to: email,
+      const result = await resend.emails.send({
+        from: EMAIL_FROM.value(),
+        to: [email],
         subject: "Your iConstruct OTP Code",
         text: `Your iConstruct verification code is ${otp}. It expires in 10 minutes.`,
         html: otpEmailHtml(otp),
       });
+
+      if (result.error) {
+        throw result.error;
+      }
     } catch (error) {
       console.error("Failed to send OTP email", error);
-      throw mapSmtpError(error);
+      throw mapEmailProviderError(error);
     }
 
     return {

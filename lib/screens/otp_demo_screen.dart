@@ -10,25 +10,20 @@ class OtpDemoScreen extends StatefulWidget {
 }
 
 class _OtpDemoScreenState extends State<OtpDemoScreen> {
-  final _emailController = TextEditingController();
-  final _otpController = TextEditingController();
-
   final EmailService _emailService = EmailService();
 
   bool _loading = false;
 
   @override
   void dispose() {
-    _emailController.dispose();
-    _otpController.dispose();
     super.dispose();
   }
 
-  Future<void> _sendOtp() async {
+  Future<void> _sendVerificationEmail() async {
     setState(() => _loading = true);
 
     try {
-      final result = await _emailService.sendOtp(email: _emailController.text);
+      final result = await _emailService.sendCurrentUserVerificationEmail();
 
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -52,33 +47,25 @@ class _OtpDemoScreenState extends State<OtpDemoScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Send OTP (Demo)')),
+      appBar: AppBar(title: const Text('Email Verification (Demo)')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TextField(
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(labelText: 'Email'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _otpController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'OTP (digits only)'),
+            const Text(
+              'This demo sends a Firebase verification email for the currently signed-in user.',
             ),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: _loading ? null : _sendOtp,
+              onPressed: _loading ? null : _sendVerificationEmail,
               child: _loading
                   ? const SizedBox(
                       height: 18,
                       width: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Send OTP'),
+                  : const Text('Send Verification Email'),
             ),
           ],
         ),

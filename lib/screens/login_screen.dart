@@ -74,14 +74,17 @@ class _LoginScreenState extends State<LoginScreen> {
       await credential.user?.reload();
       final verified = credential.user?.emailVerified ?? false;
       if (!verified) {
-        await _emailService.sendCurrentUserOtp();
+        final result = await _emailService.sendCurrentUserVerificationEmail();
         if (!mounted) return;
-        final otpVerified = await showEmailVerificationOtpModal(
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(result.message)));
+        final emailVerified = await showEmailVerificationModal(
           context,
           email: email.trim(),
         );
         if (!mounted) return;
-        if (otpVerified == true) {
+        if (emailVerified == true) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Logged in successfully.')),
           );

@@ -61,10 +61,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     try {
       await _emailService.register(email: email, password: password);
       if (!mounted) return;
-      final verified = await showEmailVerificationOtpModal(
-        context,
-        email: email,
-      );
+      final verified = await showEmailVerificationModal(context, email: email);
       if (!mounted) return;
       if (verified == true) {
         await _emailService.logout();

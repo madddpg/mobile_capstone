@@ -1,13 +1,12 @@
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../services/email_service.dart';
 import 'login_screen.dart';
 
-Future<bool?> showEmailVerificationOtpModal(
+Future<bool?> showEmailVerificationModal(
   BuildContext context, {
   required String email,
   Future<void> Function()? onVerified,
@@ -90,7 +89,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'We sent a verification message to your email. Confirm your account to continue.',
+                    'Use the verification email from Firebase Authentication to confirm your account before continuing.',
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       height: 1.5,
@@ -131,7 +130,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            'Tip: enter the latest 6-digit OTP from your inbox. If it expires, resend a fresh code.',
+                            'Tip: after tapping the verification link in your inbox, come back to the app and refresh your verification status.',
                             style: GoogleFonts.inter(
                               fontSize: 12,
                               height: 1.5,
@@ -171,57 +170,16 @@ class _EmailVerificationPanel extends StatefulWidget {
 
 class _EmailVerificationPanelState extends State<_EmailVerificationPanel> {
   final EmailService _emailService = EmailService();
-  late final List<TextEditingController> _otpControllers;
-  late final List<FocusNode> _otpFocusNodes;
 
   bool _checkingVerification = false;
   bool _resendingEmail = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _otpControllers = List.generate(6, (_) => TextEditingController());
-    _otpFocusNodes = List.generate(6, (_) => FocusNode());
-  }
-
-  @override
-  void dispose() {
-    for (final controller in _otpControllers) {
-      controller.dispose();
-    }
-    for (final focusNode in _otpFocusNodes) {
-      focusNode.dispose();
-    }
-    super.dispose();
-  }
-
-  String get _enteredOtp =>
-      _otpControllers.map((controller) => controller.text).join();
-
-  void _onOtpChanged(int index, String value) {
-    final sanitized = value.replaceAll(RegExp(r'\D'), '');
-    if (sanitized != value) {
-      _otpControllers[index].text = sanitized;
-      _otpControllers[index].selection = TextSelection.collapsed(
-        offset: sanitized.length,
-      );
-    }
-
-    if (sanitized.isNotEmpty && index < _otpFocusNodes.length - 1) {
-      _otpFocusNodes[index + 1].requestFocus();
-    }
-
-    if (sanitized.isEmpty && index > 0) {
-      _otpFocusNodes[index - 1].requestFocus();
-    }
-  }
 
   Future<void> _resendVerificationEmail() async {
     FocusScope.of(context).unfocus();
     setState(() => _resendingEmail = true);
 
     try {
-      final result = await _emailService.sendOtp(email: widget.email);
+      final result = await _emailService.sendCurrentUserVerificationEmail();
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -247,19 +205,10 @@ class _EmailVerificationPanelState extends State<_EmailVerificationPanel> {
 
   Future<void> _checkVerification() async {
     FocusScope.of(context).unfocus();
-    if (!RegExp(r'^\d{6}$').hasMatch(_enteredOtp)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter the 6-digit OTP code first.')),
-      );
-      return;
-    }
     setState(() => _checkingVerification = true);
 
     try {
-      final result = await _emailService.verifyOtp(
-        email: widget.email,
-        otp: _enteredOtp,
-      );
+      final result = await _emailService.checkEmailVerification();
 
       if (!mounted) return;
 
@@ -340,7 +289,7 @@ class _EmailVerificationPanelState extends State<_EmailVerificationPanel> {
             const SizedBox(height: 8),
           ],
           Text(
-            'OTP Verification',
+            'Email Verification',
             style: GoogleFonts.inter(
               fontSize: 16,
               fontWeight: FontWeight.w800,
@@ -350,8 +299,8 @@ class _EmailVerificationPanelState extends State<_EmailVerificationPanel> {
           const SizedBox(height: 8),
           Text(
             widget.modalMode
-                ? 'Enter the 6-digit code from your email, then submit to confirm.'
-                : 'Enter the 6-digit code we emailed to you to verify this account.',
+                ? 'Check your inbox for the Firebase verification link, open it, then come back here and continue.'
+                : 'Use the verification link we emailed to you to confirm this account.',
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
               fontSize: 11,
@@ -360,15 +309,52 @@ class _EmailVerificationPanelState extends State<_EmailVerificationPanel> {
             ),
           ),
           const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: List.generate(
-              _otpControllers.length,
-              (index) => _OtpDigitField(
-                controller: _otpControllers[index],
-                focusNode: _otpFocusNodes[index],
-                onChanged: (value) => _onOtpChanged(index, value),
-              ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.55),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'What to do next',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF243749),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '1. Open the verification email sent to ${widget.email}.',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    height: 1.45,
+                    color: const Color(0xFF556273),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '2. Tap the verification link in that email.',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    height: 1.45,
+                    color: const Color(0xFF556273),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '3. Return here and refresh your verification status.',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    height: 1.45,
+                    color: const Color(0xFF556273),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 14),
@@ -440,7 +426,7 @@ class _EmailVerificationPanelState extends State<_EmailVerificationPanel> {
                         ),
                       )
                     : Text(
-                        'Submit',
+                        'I Verified My Email',
                         style: GoogleFonts.inter(
                           fontWeight: FontWeight.w700,
                           fontSize: 15,
@@ -519,66 +505,15 @@ class _VerificationEmailCard extends StatelessWidget {
                 Text(
                   email,
                   style: GoogleFonts.inter(
-                    fontSize: 15,
+                    fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF1E2833),
+                    color: const Color(0xFF243749),
                   ),
                 ),
               ],
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _OtpDigitField extends StatelessWidget {
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final ValueChanged<String> onChanged;
-
-  const _OtpDigitField({
-    required this.controller,
-    required this.focusNode,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 42,
-      child: TextField(
-        controller: controller,
-        focusNode: focusNode,
-        onChanged: onChanged,
-        textAlign: TextAlign.center,
-        keyboardType: TextInputType.number,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        maxLength: 1,
-        style: GoogleFonts.inter(
-          fontSize: 18,
-          fontWeight: FontWeight.w700,
-          color: const Color(0xFF1E2833),
-        ),
-        decoration: InputDecoration(
-          counterText: '',
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(vertical: 14),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Color(0xFFD9CCB7)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Color(0xFF4B73A5), width: 1.4),
-          ),
-        ),
       ),
     );
   }

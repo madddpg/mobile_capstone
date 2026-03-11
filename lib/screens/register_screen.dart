@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../services/email_service.dart';
+import 'email_verification_screen.dart';
+import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -58,16 +60,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     try {
       await _emailService.register(email: email, password: password);
-      await _emailService.logout();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Registration successful. We sent a verification email to your inbox.',
-          ),
-        ),
+      final verified = await showEmailVerificationOtpModal(
+        context,
+        email: email,
       );
-      Navigator.of(context).pop();
+      if (!mounted) return;
+      if (verified == true) {
+        await _emailService.logout();
+        if (!mounted) return;
+        await Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+        );
+      }
     } on EmailApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -166,11 +171,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   _RegisterField(
                     label: 'First Name',
                     controller: _firstNameController,
+                    prefixIcon: Icons.person_outline_rounded,
+                    textInputAction: TextInputAction.next,
                   ),
                   const SizedBox(height: 16),
                   _RegisterField(
                     label: 'Last Name',
                     controller: _lastNameController,
+                    prefixIcon: Icons.badge_outlined,
+                    textInputAction: TextInputAction.next,
                   ),
                   const SizedBox(height: 16),
                   _RegisterField(
@@ -178,6 +187,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     controller: _emailController,
                     errorText: _emailError,
                     onChanged: _validateEmail,
+                    prefixIcon: Icons.alternate_email_rounded,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
                   ),
                   const SizedBox(height: 16),
                   _RegisterField(
@@ -186,6 +198,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     controller: _passwordController,
                     errorText: _passwordError,
                     onChanged: _validatePassword,
+                    prefixIcon: Icons.lock_outline_rounded,
+                    textInputAction: TextInputAction.next,
                   ),
                   const SizedBox(height: 16),
                   _RegisterField(
@@ -194,6 +208,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     controller: _confirmPasswordController,
                     errorText: _confirmPasswordError,
                     onChanged: _validateConfirmPassword,
+                    prefixIcon: Icons.verified_user_outlined,
+                    textInputAction: TextInputAction.done,
                   ),
                   const SizedBox(height: 40),
                   Center(
@@ -282,6 +298,9 @@ class _RegisterField extends StatelessWidget {
   final TextEditingController? controller;
   final String? errorText;
   final ValueChanged<String>? onChanged;
+  final IconData? prefixIcon;
+  final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
 
   const _RegisterField({
     required this.label,
@@ -289,6 +308,9 @@ class _RegisterField extends StatelessWidget {
     this.controller,
     this.errorText,
     this.onChanged,
+    this.prefixIcon,
+    this.keyboardType,
+    this.textInputAction,
   });
 
   @override
@@ -297,6 +319,8 @@ class _RegisterField extends StatelessWidget {
       controller: controller,
       obscureText: obscureText,
       onChanged: onChanged,
+      keyboardType: keyboardType,
+      textInputAction: textInputAction,
       decoration: InputDecoration(
         hintText: label,
         hintStyle: GoogleFonts.inter(
@@ -305,6 +329,9 @@ class _RegisterField extends StatelessWidget {
         ),
         filled: true,
         fillColor: const Color(0xFFE8D8BF),
+        prefixIcon: prefixIcon == null
+            ? null
+            : Icon(prefixIcon, color: const Color(0xFF32475E), size: 20),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 18,
           vertical: 14,
@@ -312,6 +339,14 @@ class _RegisterField extends StatelessWidget {
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0x00FFFFFF)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFF8DB3E0), width: 1.5),
         ),
         errorText: errorText,
         errorStyle: GoogleFonts.inter(color: Colors.white, fontSize: 11),

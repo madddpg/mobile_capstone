@@ -28,11 +28,7 @@ class _OtpDemoScreenState extends State<OtpDemoScreen> {
     setState(() => _loading = true);
 
     try {
-      final result = await _emailService.sendOtp(
-        email: _emailController.text,
-        otp: _otpController.text,
-        locale: Localizations.localeOf(context),
-      );
+      final result = await _emailService.sendOtp(email: _emailController.text);
 
       if (!mounted) return;
       ScaffoldMessenger.of(

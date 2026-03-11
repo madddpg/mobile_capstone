@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../services/email_service.dart';
+import 'email_verification_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -72,16 +74,21 @@ class _LoginScreenState extends State<LoginScreen> {
       await credential.user?.reload();
       final verified = credential.user?.emailVerified ?? false;
       if (!verified) {
-        await _emailService.sendCurrentUserVerificationEmail();
-        await _emailService.logout();
+        await _emailService.sendCurrentUserOtp();
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Your email is not verified yet. We sent another verification email.',
-            ),
-          ),
+        final otpVerified = await showEmailVerificationOtpModal(
+          context,
+          email: email.trim(),
         );
+        if (!mounted) return;
+        if (otpVerified == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Logged in successfully.')),
+          );
+          return;
+        }
+
+        await _emailService.logout();
         return;
       }
 
@@ -172,6 +179,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           controller: _emailController,
                           errorText: _emailError,
                           onChanged: _validateEmail,
+                          prefixIcon: Icons.alternate_email_rounded,
+                          keyboardType: TextInputType.emailAddress,
+                          textInputAction: TextInputAction.next,
                         ),
                         const SizedBox(height: 16),
                         _LoginField(
@@ -180,6 +190,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           controller: _passwordController,
                           errorText: _passwordError,
                           onChanged: _validatePassword,
+                          prefixIcon: Icons.lock_outline_rounded,
+                          textInputAction: TextInputAction.done,
                           trailing: IconButton(
                             icon: Icon(
                               _obscurePassword
@@ -281,6 +293,9 @@ class _LoginField extends StatelessWidget {
   final TextEditingController? controller;
   final String? errorText;
   final ValueChanged<String>? onChanged;
+  final IconData? prefixIcon;
+  final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
 
   const _LoginField({
     required this.label,
@@ -289,6 +304,9 @@ class _LoginField extends StatelessWidget {
     this.controller,
     this.errorText,
     this.onChanged,
+    this.prefixIcon,
+    this.keyboardType,
+    this.textInputAction,
   });
 
   @override
@@ -297,11 +315,22 @@ class _LoginField extends StatelessWidget {
       controller: controller,
       obscureText: obscureText,
       onChanged: onChanged,
+      keyboardType: keyboardType,
+      textInputAction: textInputAction,
+      style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF1E242B)),
       decoration: InputDecoration(
         hintText: label,
+        hintStyle: GoogleFonts.inter(
+          color: const Color(0xFF6B5C46),
+          fontSize: 13,
+        ),
         errorText: errorText,
+        errorStyle: GoogleFonts.inter(color: Colors.white, fontSize: 11),
         filled: true,
         fillColor: const Color(0xFFE8D8BF),
+        prefixIcon: prefixIcon == null
+            ? null
+            : Icon(prefixIcon, color: const Color(0xFF32475E), size: 20),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 18,
           vertical: 14,
@@ -309,6 +338,14 @@ class _LoginField extends StatelessWidget {
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0x00FFFFFF)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFF8DB3E0), width: 1.5),
         ),
         suffixIcon: trailing,
       ),

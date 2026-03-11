@@ -1,6 +1,7 @@
 const crypto = require("crypto");
+const nodemailer = require("nodemailer");
 const admin = require("firebase-admin");
-const {Resend} = require("resend");
+const logger = require("firebase-functions/logger");
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const {defineSecret, defineString} = require("firebase-functions/params");
 
@@ -9,82 +10,98 @@ admin.initializeApp();
 const db = admin.firestore();
 const auth = admin.auth();
 
-const EMAIL_FROM = defineString("EMAIL_FROM", {
-  default: "iConstruct <onboarding@resend.dev>",
-});
-const RESEND_API_KEY = defineSecret("RESEND_API_KEY");
+const EMAIL_FROM = defineString("EMAIL_FROM");
+const SMTP_HOST = defineString("SMTP_HOST", {default: "smtp.gmail.com"});
+const SMTP_PORT = defineString("SMTP_PORT", {default: "465"});
+const SMTP_USER = defineString("SMTP_USER");
+const SMTP_PASS = defineSecret("SMTP_PASS");
 
-const OTP_TTL_MS = 10 * 60 * 1000;
-const RESEND_COOLDOWN_MS = 60 * 1000;
+const OTP_TTL_MS = 5 * 60 * 1000;
+const OTP_REQUEST_COOLDOWN_MS = 60 * 1000;
 const MAX_ATTEMPTS = 5;
-
-function requireAuth(request) {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "You must be signed in.");
-  }
-  return request.auth.uid;
-}
+const VERIFIED_REGISTRATION_WINDOW_MS = 15 * 60 * 1000;
+const OTP_COLLECTION = "email_otp";
 
 function readEmail(request) {
   const email = String(request.data?.email || "").trim().toLowerCase();
+
   if (!email) {
     throw new HttpsError("invalid-argument", "Email is required.");
   }
+
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    throw new HttpsError("invalid-argument", "Enter a valid email address.");
+  }
+
   return email;
 }
 
 function readOtp(request) {
   const otp = String(request.data?.otp || "").trim();
+
   if (!/^\d{6}$/.test(otp)) {
     throw new HttpsError("invalid-argument", "Enter the 6-digit OTP code.");
   }
+
   return otp;
 }
 
+function readVerificationToken(request) {
+  const verificationToken = String(request.data?.verificationToken || "").trim();
+
+  if (!verificationToken) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Verify the OTP before finishing registration.",
+    );
+  }
+
+  return verificationToken;
+}
+
 function generateOtp() {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  return String(crypto.randomInt(100000, 1000000));
 }
 
-function hashOtp(uid, otp) {
-  return crypto.createHash("sha256").update(`${uid}:${otp}`).digest("hex");
+function hashVerificationToken(token) {
+  return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-function buildResendClient() {
-  return new Resend(RESEND_API_KEY.value());
+function buildTransporter() {
+  const port = Number(SMTP_PORT.value());
+
+  return nodemailer.createTransport({
+    host: SMTP_HOST.value(),
+    port,
+    secure: port === 465,
+    auth: {
+      user: SMTP_USER.value(),
+      pass: SMTP_PASS.value(),
+    },
+  });
 }
 
 function mapEmailProviderError(error) {
   const message = String(error?.message || error?.response || "");
 
   if (
-    error?.statusCode === 401 ||
-    error?.statusCode === 403 ||
-    message.toLowerCase().includes("api key")
+    error?.responseCode === 535 ||
+    error?.responseCode === 534 ||
+    message.toLowerCase().includes("authentication")
   ) {
     return new HttpsError(
       "failed-precondition",
-      "Email delivery is not configured correctly. Check the Resend API key and sender address in Firebase Functions config.",
+      "Email delivery is not configured correctly. Check the SMTP host, sender address, username, and password in Firebase Functions config.",
     );
   }
 
   if (
-    error?.statusCode === 429 ||
+    error?.responseCode === 421 ||
     message.toLowerCase().includes("rate limit")
   ) {
     return new HttpsError(
       "resource-exhausted",
       "The email provider rate limit has been reached. Please wait and try again later.",
-    );
-  }
-
-  if (message.toLowerCase().includes("verify a domain")) {
-    const allowedRecipient = message.match(/own email address \(([^)]+)\)/)?.[1];
-
-    return new HttpsError(
-      "failed-precondition",
-      allowedRecipient
-        ? `Resend is still in testing mode and can only send to ${allowedRecipient}. Verify a domain in Resend and update EMAIL_FROM, or test with that recipient.`
-        : "The email sender is not ready yet. Verify your sending domain in Resend and update EMAIL_FROM before sending to other recipients.",
     );
   }
 
@@ -99,98 +116,170 @@ function otpEmailHtml(otp) {
     <div style="font-family: Arial, sans-serif; background: #f4f0e8; padding: 24px; color: #243749;">
       <div style="max-width: 480px; margin: 0 auto; background: #ffffff; border-radius: 20px; padding: 28px;">
         <p style="margin: 0 0 10px; font-size: 14px; color: #5a6978;">iConstruct Email Verification</p>
-        <h2 style="margin: 0 0 14px; font-size: 28px;">Your OTP Code</h2>
-        <p style="margin: 0 0 20px; font-size: 14px; line-height: 1.5;">Enter this 6-digit code in the app to verify your account.</p>
+        <h2 style="margin: 0 0 14px; font-size: 28px;">Email Verification Code</h2>
+        <p style="margin: 0 0 20px; font-size: 14px; line-height: 1.5;">Your verification code is:</p>
         <div style="font-size: 34px; letter-spacing: 10px; font-weight: 700; background: #f1e6d4; border-radius: 16px; padding: 18px; text-align: center;">${otp}</div>
-        <p style="margin: 20px 0 0; font-size: 13px; color: #5a6978;">This code expires in 10 minutes.</p>
+        <p style="margin: 20px 0 0; font-size: 13px; color: #5a6978;">This code will expire in 5 minutes.</p>
+        <p style="margin: 8px 0 0; font-size: 13px; color: #5a6978;">Do not share this code with anyone.</p>
       </div>
     </div>
   `;
 }
 
-async function loadVerifiedUser(uid, email) {
-  const userRecord = await auth.getUser(uid);
-  if ((userRecord.email || "").toLowerCase() !== email) {
+exports.sendEmailOtp = onCall({secrets: [SMTP_PASS]}, async (request) => {
+  const email = readEmail(request);
+  const now = Date.now();
+  const nowTimestamp = admin.firestore.Timestamp.now();
+  const docRef = db.collection(OTP_COLLECTION).doc(email);
+
+  logger.info("Generating email OTP", {email});
+
+  const existingDoc = await docRef.get();
+  const existingData = existingDoc.data();
+  const lastRequestTime = existingData?.last_request_time?.toMillis?.() || 0;
+
+  if (lastRequestTime && now - lastRequestTime < OTP_REQUEST_COOLDOWN_MS) {
+    logger.warn("OTP requested too soon", {email});
     throw new HttpsError(
-      "permission-denied",
-      "OTP can only be used for the signed-in account email.",
+      "failed-precondition",
+      "Please wait before requesting another code.",
     );
   }
-  return userRecord;
-}
 
-exports.sendEmailOtp = onCall(
-  {secrets: [RESEND_API_KEY]},
-  async (request) => {
-    const uid = requireAuth(request);
-    const email = readEmail(request);
-    const userRecord = await loadVerifiedUser(uid, email);
+  const otp = generateOtp();
+  const otpPayload = {
+    email,
+    otp_code: otp,
+    created_at: nowTimestamp,
+    expires_at: admin.firestore.Timestamp.fromMillis(now + OTP_TTL_MS),
+    attempt_count: 0,
+    last_request_time: nowTimestamp,
+  };
 
-    if (userRecord.emailVerified) {
-      return {
-        success: true,
-        message: "This email is already verified.",
-      };
-    }
+  try {
+    await docRef.set(otpPayload);
+    logger.info("OTP stored in Firestore", {email, collection: OTP_COLLECTION});
+  } catch (error) {
+    logger.error("Failed to store OTP in Firestore", {email, error});
+    throw new HttpsError(
+      "internal",
+      "Could not save the verification code. Please try again.",
+    );
+  }
 
-    const docRef = db.collection("emailOtps").doc(uid);
-    const existingDoc = await docRef.get();
-    const existingData = existingDoc.data();
-    const now = Date.now();
+  const transporter = buildTransporter();
 
-    if (existingData?.createdAt?.toMillis) {
-      const createdAt = existingData.createdAt.toMillis();
-      if (now - createdAt < RESEND_COOLDOWN_MS) {
-        throw new HttpsError(
-          "resource-exhausted",
-          "Please wait before requesting another OTP.",
-        );
-      }
-    }
+  try {
+    await transporter.sendMail({
+      from: EMAIL_FROM.value(),
+      to: email,
+      subject: "Email Verification Code",
+      text: `Your verification code is: ${otp}\nThis code will expire in 5 minutes.\nDo not share this code with anyone.`,
+      html: otpEmailHtml(otp),
+    });
+    logger.info("OTP email sent", {email});
+  } catch (error) {
+    logger.error("Failed to send OTP email", {email, error});
+    throw mapEmailProviderError(error);
+  }
 
-    const otp = generateOtp();
-    const expiresAt = admin.firestore.Timestamp.fromMillis(now + OTP_TTL_MS);
-
-    await docRef.set({
-      email,
-      codeHash: hashOtp(uid, otp),
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      expiresAt,
-      attempts: 0,
-      verifiedAt: null,
-    }, {merge: true});
-
-    const resend = buildResendClient();
-
-    try {
-      const result = await resend.emails.send({
-        from: EMAIL_FROM.value(),
-        to: [email],
-        subject: "Your iConstruct OTP Code",
-        text: `Your iConstruct verification code is ${otp}. It expires in 10 minutes.`,
-        html: otpEmailHtml(otp),
-      });
-
-      if (result.error) {
-        throw result.error;
-      }
-    } catch (error) {
-      console.error("Failed to send OTP email", error);
-      throw mapEmailProviderError(error);
-    }
-
-    return {
-      success: true,
-      message: "OTP sent. Please check your inbox.",
-    };
-  },
-);
+  return {
+    success: true,
+    message: "Verification code sent to your email.",
+  };
+});
 
 exports.verifyEmailOtp = onCall(async (request) => {
-  const uid = requireAuth(request);
   const email = readEmail(request);
   const otp = readOtp(request);
-  const userRecord = await loadVerifiedUser(uid, email);
+  const docRef = db.collection(OTP_COLLECTION).doc(email);
+  const doc = await docRef.get();
+
+  if (!doc.exists) {
+    logger.warn("OTP verification requested without stored code", {email});
+    throw new HttpsError(
+      "not-found",
+      "No verification code was found for this email. Request a new code.",
+    );
+  }
+
+  const data = doc.data();
+  const expiresAt = data.expires_at?.toMillis?.() || 0;
+  const attemptCount = Number(data.attempt_count || 0);
+
+  if (Date.now() > expiresAt) {
+    await docRef.delete();
+    logger.warn("Expired OTP attempted", {email});
+    throw new HttpsError(
+      "deadline-exceeded",
+      "This code has expired. Please request a new one.",
+    );
+  }
+
+  if (attemptCount >= MAX_ATTEMPTS) {
+    await docRef.delete();
+    logger.warn("OTP attempts exceeded", {email, attemptCount});
+    throw new HttpsError(
+      "resource-exhausted",
+      "Too many incorrect attempts. Please request a new code.",
+    );
+  }
+
+  if (data.otp_code !== otp) {
+    await docRef.set({attempt_count: attemptCount + 1}, {merge: true});
+    logger.warn("Incorrect OTP submitted", {
+      email,
+      attemptCount: attemptCount + 1,
+    });
+    throw new HttpsError("invalid-argument", "Incorrect OTP code.");
+  }
+
+  const verificationToken = crypto.randomBytes(32).toString("hex");
+  const verificationTokenHash = hashVerificationToken(verificationToken);
+  const verifiedAt = admin.firestore.Timestamp.now();
+
+  await docRef.set(
+    {
+      email,
+      created_at: data.created_at || verifiedAt,
+      expires_at: data.expires_at,
+      last_request_time: data.last_request_time || verifiedAt,
+      attempt_count: 0,
+      otp_code: admin.firestore.FieldValue.delete(),
+      verified_at: verifiedAt,
+      verification_expires_at: admin.firestore.Timestamp.fromMillis(
+        Date.now() + VERIFIED_REGISTRATION_WINDOW_MS,
+      ),
+      verification_token_hash: verificationTokenHash,
+    },
+    {merge: true},
+  );
+
+  logger.info("OTP verified successfully", {email});
+
+  return {
+    success: true,
+    message: "Email verified. You can finish registration now.",
+    verificationToken,
+  };
+});
+
+exports.finalizeEmailOtpRegistration = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "You must be signed in.");
+  }
+
+  const email = readEmail(request);
+  const verificationToken = readVerificationToken(request);
+  const userRecord = await auth.getUser(request.auth.uid);
+  const signedInEmail = String(userRecord.email || "").trim().toLowerCase();
+
+  if (signedInEmail !== email) {
+    throw new HttpsError(
+      "permission-denied",
+      "The signed-in account email does not match the verified email.",
+    );
+  }
 
   if (userRecord.emailVerified) {
     return {
@@ -199,47 +288,40 @@ exports.verifyEmailOtp = onCall(async (request) => {
     };
   }
 
-  const docRef = db.collection("emailOtps").doc(uid);
+  const docRef = db.collection(OTP_COLLECTION).doc(email);
   const doc = await docRef.get();
 
   if (!doc.exists) {
-    throw new HttpsError("not-found", "No OTP request was found for this account.");
+    throw new HttpsError(
+      "failed-precondition",
+      "Verify the OTP before finishing registration.",
+    );
   }
 
   const data = doc.data();
-  const expiresAt = data.expiresAt?.toMillis?.() || 0;
-  const attempts = Number(data.attempts || 0);
+  const verificationExpiresAt = data.verification_expires_at?.toMillis?.() || 0;
 
-  if (data.email !== email) {
+  if (!data.verification_token_hash || Date.now() > verificationExpiresAt) {
+    await docRef.delete();
+    throw new HttpsError(
+      "failed-precondition",
+      "Your verification session expired. Request a new OTP and verify again.",
+    );
+  }
+
+  if (hashVerificationToken(verificationToken) !== data.verification_token_hash) {
     throw new HttpsError(
       "permission-denied",
-      "OTP does not match the signed-in account email.",
+      "The verification proof is invalid. Verify the OTP again.",
     );
   }
 
-  if (Date.now() > expiresAt) {
-    throw new HttpsError("deadline-exceeded", "This OTP has expired. Please resend a new code.");
-  }
-
-  if (attempts >= MAX_ATTEMPTS) {
-    throw new HttpsError(
-      "resource-exhausted",
-      "Too many failed attempts. Please resend a new OTP.",
-    );
-  }
-
-  if (data.codeHash !== hashOtp(uid, otp)) {
-    await docRef.set({attempts: attempts + 1}, {merge: true});
-    throw new HttpsError("invalid-argument", "Incorrect OTP code.");
-  }
-
-  await auth.updateUser(uid, {emailVerified: true});
-  await docRef.set({
-    verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
-    codeHash: admin.firestore.FieldValue.delete(),
-    expiresAt: admin.firestore.FieldValue.delete(),
-    attempts: admin.firestore.FieldValue.delete(),
-  }, {merge: true});
+  await auth.updateUser(request.auth.uid, {emailVerified: true});
+  await docRef.delete();
+  logger.info("Registration email marked verified", {
+    email,
+    uid: request.auth.uid,
+  });
 
   return {
     success: true,

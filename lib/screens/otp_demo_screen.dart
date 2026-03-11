@@ -19,11 +19,11 @@ class _OtpDemoScreenState extends State<OtpDemoScreen> {
     super.dispose();
   }
 
-  Future<void> _sendVerificationEmail() async {
+  Future<void> _sendOtp() async {
     setState(() => _loading = true);
 
     try {
-      final result = await _emailService.sendCurrentUserVerificationEmail();
+      final result = await _emailService.sendCurrentUserOtp();
 
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -47,25 +47,25 @@ class _OtpDemoScreenState extends State<OtpDemoScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Email Verification (Demo)')),
+      appBar: AppBar(title: const Text('Send OTP (Demo)')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'This demo sends a Firebase verification email for the currently signed-in user.',
+              'This demo sends a 6-digit OTP to the currently signed-in user.',
             ),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: _loading ? null : _sendVerificationEmail,
+              onPressed: _loading ? null : _sendOtp,
               child: _loading
                   ? const SizedBox(
                       height: 18,
                       width: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Send Verification Email'),
+                  : const Text('Send OTP'),
             ),
           ],
         ),

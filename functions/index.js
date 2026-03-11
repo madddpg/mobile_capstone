@@ -63,6 +63,20 @@ function buildTransport() {
   });
 }
 
+function mapSmtpError(error) {
+  if (error?.code === "EAUTH") {
+    return new HttpsError(
+      "failed-precondition",
+      "Email delivery is not configured correctly. Check the Gmail sender address and App Password in Firebase Functions secrets.",
+    );
+  }
+
+  return new HttpsError(
+    "internal",
+    "Could not send the verification email right now. Please try again later.",
+  );
+}
+
 function otpEmailHtml(otp) {
   return `
     <div style="font-family: Arial, sans-serif; background: #f4f0e8; padding: 24px; color: #243749;">
@@ -130,13 +144,19 @@ exports.sendEmailOtp = onCall(
     }, {merge: true});
 
     const transporter = buildTransport();
-    await transporter.sendMail({
-      from: `"${SMTP_FROM_NAME.value()}" <${SMTP_FROM_EMAIL.value()}>`,
-      to: email,
-      subject: "Your iConstruct OTP Code",
-      text: `Your iConstruct verification code is ${otp}. It expires in 10 minutes.`,
-      html: otpEmailHtml(otp),
-    });
+
+    try {
+      await transporter.sendMail({
+        from: `"${SMTP_FROM_NAME.value()}" <${SMTP_FROM_EMAIL.value()}>`,
+        to: email,
+        subject: "Your iConstruct OTP Code",
+        text: `Your iConstruct verification code is ${otp}. It expires in 10 minutes.`,
+        html: otpEmailHtml(otp),
+      });
+    } catch (error) {
+      console.error("Failed to send OTP email", error);
+      throw mapSmtpError(error);
+    }
 
     return {
       success: true,

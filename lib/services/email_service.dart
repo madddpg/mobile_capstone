@@ -58,8 +58,8 @@ class EmailService {
       );
     } on FirebaseFunctionsException catch (e) {
       throw EmailApiException(_mapFunctionError(e), statusCode: _statusFor(e));
-    } catch (_) {
-      throw const EmailApiException('Failed to send OTP email.');
+    } catch (e) {
+      throw EmailApiException('Failed to send OTP email. ${e.toString()}');
     }
   }
 
@@ -93,8 +93,8 @@ class EmailService {
       );
     } on FirebaseFunctionsException catch (e) {
       throw EmailApiException(_mapFunctionError(e), statusCode: _statusFor(e));
-    } catch (_) {
-      throw const EmailApiException('Failed to verify the OTP code.');
+    } catch (e) {
+      throw EmailApiException('Failed to verify the OTP code. ${e.toString()}');
     }
   }
 
@@ -125,8 +125,8 @@ class EmailService {
       return credential;
     } on FirebaseAuthException catch (e) {
       throw EmailApiException(e.message ?? 'Registration failed.');
-    } catch (_) {
-      throw const EmailApiException('Registration failed.');
+    } catch (e) {
+      throw EmailApiException('Registration failed. ${e.toString()}');
     }
   }
 
@@ -148,8 +148,8 @@ class EmailService {
       return credential;
     } on FirebaseAuthException catch (e) {
       throw EmailApiException(e.message ?? 'Login failed.');
-    } catch (_) {
-      throw const EmailApiException('Login failed.');
+    } catch (e) {
+      throw EmailApiException('Login failed. ${e.toString()}');
     }
   }
 

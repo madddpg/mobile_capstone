@@ -78,10 +78,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(e.message)));
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Register flow failed: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Registration failed. Please try again.')),
+        SnackBar(content: Text('Registration failed. ${e.toString()}')),
       );
     } finally {
       if (mounted) {

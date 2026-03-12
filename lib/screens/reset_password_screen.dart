@@ -2,45 +2,38 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../services/email_service.dart';
-import 'email_verification_screen.dart';
-import 'forgot_password_screen.dart';
+import 'login_screen.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class ResetPasswordScreen extends StatefulWidget {
+  final String email;
+  final String verificationToken;
+
+  const ResetPasswordScreen({
+    super.key,
+    required this.email,
+    required this.verificationToken,
+  });
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController();
+class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   final _passwordController = TextEditingController();
+  final _confirmController = TextEditingController();
   final EmailService _emailService = EmailService();
 
   bool _obscurePassword = true;
+  bool _obscureConfirm = true;
   bool _loading = false;
-  String? _emailError;
   String? _passwordError;
+  String? _confirmError;
 
   @override
   void dispose() {
-    _emailController.dispose();
     _passwordController.dispose();
+    _confirmController.dispose();
     super.dispose();
-  }
-
-  void _validateEmail(String value) {
-    final trimmed = value.trim();
-    const emailPattern = r'^[^@\s]+@[^@\s]+\.[^@\s]+$';
-    setState(() {
-      if (trimmed.isEmpty) {
-        _emailError = 'Email is required';
-      } else if (!RegExp(emailPattern).hasMatch(trimmed)) {
-        _emailError = 'Enter a valid email address';
-      } else {
-        _emailError = null;
-      }
-    });
   }
 
   void _validatePassword(String value) {
@@ -55,51 +48,42 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
-  Future<void> _handleLogin() async {
-    final email = _emailController.text;
-    final password = _passwordController.text;
+  void _validateConfirm(String value) {
+    setState(() {
+      if (value.isEmpty) {
+        _confirmError = 'Please confirm your password';
+      } else if (value != _passwordController.text) {
+        _confirmError = 'Passwords do not match';
+      } else {
+        _confirmError = null;
+      }
+    });
+  }
 
-    _validateEmail(email);
+  Future<void> _handleReset() async {
+    final password = _passwordController.text;
+    final confirm = _confirmController.text;
     _validatePassword(password);
-    if (_emailError != null || _passwordError != null) {
-      return;
-    }
+    _validateConfirm(confirm);
+    if (_passwordError != null || _confirmError != null) return;
 
     setState(() => _loading = true);
-
     try {
-      final credential = await _emailService.login(
-        email: email,
-        password: password,
+      await _emailService.resetPassword(
+        email: widget.email,
+        verificationToken: widget.verificationToken,
+        newPassword: password,
       );
-      await credential.user?.reload();
-      final verified = credential.user?.emailVerified ?? false;
-      if (!verified) {
-        final result = await _emailService.sendCurrentUserOtp();
-        if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(result.message)));
-        final verificationResult = await showEmailVerificationOtpModal(
-          context,
-          email: email.trim(),
-        );
-        if (!mounted) return;
-        if (verificationResult?.success == true) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Logged in successfully.')),
-          );
-          return;
-        }
-
-        await _emailService.logout();
-        return;
-      }
-
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Logged in successfully.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password reset successfully. Please log in.'),
+        ),
+      );
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => route.isFirst,
+      );
     } on EmailApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -108,12 +92,12 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Login failed. Please try again.')),
+        const SnackBar(
+          content: Text('Failed to reset password. Please try again.'),
+        ),
       );
     } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -135,7 +119,6 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Back button pinned top-left
                 Container(
                   width: 40,
                   height: 40,
@@ -153,7 +136,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: () => Navigator.of(context).maybePop(),
                   ),
                 ),
-                // Form block centered in remaining space
                 Expanded(
                   child: Center(
                     child: SingleChildScrollView(
@@ -162,10 +144,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Login',
+                            'Reset Password',
                             style: GoogleFonts.poppins(
-                              fontSize: 36,
-                              height: 1,
+                              fontSize: 34,
+                              height: 1.1,
                               fontWeight: FontWeight.w800,
                               color: const Color(0xFFF1E7D6),
                               shadows: const [
@@ -179,31 +161,22 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            "Welcome back—let's build smarter.",
+                            'Create a new password securely.',
                             style: GoogleFonts.poppins(
-                              fontSize: 15,
+                              fontSize: 14,
                               fontWeight: FontWeight.w500,
                               fontStyle: FontStyle.italic,
                               color: const Color(0xFFEADFD0),
                             ),
                           ),
                           const SizedBox(height: 36),
-                          _LoginField(
-                            label: 'Email Address',
-                            controller: _emailController,
-                            errorText: _emailError,
-                            onChanged: _validateEmail,
-                            keyboardType: TextInputType.emailAddress,
-                            textInputAction: TextInputAction.next,
-                          ),
-                          const SizedBox(height: 16),
-                          _LoginField(
-                            label: 'Password',
-                            obscureText: _obscurePassword,
+                          _ResetField(
+                            label: 'Enter new password',
                             controller: _passwordController,
+                            obscureText: _obscurePassword,
                             errorText: _passwordError,
                             onChanged: _validatePassword,
-                            textInputAction: TextInputAction.done,
+                            textInputAction: TextInputAction.next,
                             trailing: IconButton(
                               icon: Icon(
                                 _obscurePassword
@@ -217,34 +190,24 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton(
-                              onPressed: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        const ForgotPasswordScreen(),
-                                  ),
-                                );
-                              },
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                  vertical: 4,
-                                ),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          const SizedBox(height: 16),
+                          _ResetField(
+                            label: 'Confirm new password',
+                            controller: _confirmController,
+                            obscureText: _obscureConfirm,
+                            errorText: _confirmError,
+                            onChanged: _validateConfirm,
+                            textInputAction: TextInputAction.done,
+                            trailing: IconButton(
+                              icon: Icon(
+                                _obscureConfirm
+                                    ? Icons.visibility_off_rounded
+                                    : Icons.visibility_rounded,
+                                color: const Color(0xFF42566C),
+                                size: 22,
                               ),
-                              child: Text(
-                                'Forgot Password?',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  fontStyle: FontStyle.italic,
-                                  color: const Color(0xFFF6F0E5),
-                                ),
+                              onPressed: () => setState(
+                                () => _obscureConfirm = !_obscureConfirm,
                               ),
                             ),
                           ),
@@ -272,7 +235,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       borderRadius: BorderRadius.circular(15),
                                     ),
                                   ),
-                                  onPressed: _loading ? null : _handleLogin,
+                                  onPressed: _loading ? null : _handleReset,
                                   child: _loading
                                       ? const SizedBox(
                                           height: 18,
@@ -285,7 +248,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                           ),
                                         )
                                       : Text(
-                                          'Login',
+                                          'Confirm',
                                           style: GoogleFonts.poppins(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w700,
@@ -309,24 +272,22 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-class _LoginField extends StatelessWidget {
+class _ResetField extends StatelessWidget {
   final String label;
   final bool obscureText;
   final Widget? trailing;
   final TextEditingController? controller;
   final String? errorText;
   final ValueChanged<String>? onChanged;
-  final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
 
-  const _LoginField({
+  const _ResetField({
     required this.label,
     this.obscureText = false,
     this.trailing,
     this.controller,
     this.errorText,
     this.onChanged,
-    this.keyboardType,
     this.textInputAction,
   });
 
@@ -336,7 +297,6 @@ class _LoginField extends StatelessWidget {
       controller: controller,
       obscureText: obscureText,
       onChanged: onChanged,
-      keyboardType: keyboardType,
       textInputAction: textInputAction,
       style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF1E242B)),
       decoration: InputDecoration(
@@ -350,6 +310,7 @@ class _LoginField extends StatelessWidget {
         errorStyle: GoogleFonts.poppins(color: Colors.white, fontSize: 11),
         filled: true,
         fillColor: const Color(0xFFE9DECC),
+        suffixIcon: trailing,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 18,
           vertical: 14,
@@ -360,13 +321,20 @@ class _LoginField extends StatelessWidget {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0x00FFFFFF)),
+          borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF8DB3E0), width: 1.5),
+          borderSide: const BorderSide(color: Color(0xFF648DB6), width: 1.5),
         ),
-        suffixIcon: trailing,
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.redAccent, width: 1),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
+        ),
       ),
     );
   }

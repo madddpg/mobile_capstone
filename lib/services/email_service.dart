@@ -218,6 +218,44 @@ class EmailService {
     }
   }
 
+  Future<void> resetPassword({
+    required String email,
+    required String verificationToken,
+    required String newPassword,
+  }) async {
+    final trimmedEmail = email.trim();
+    if (trimmedEmail.isEmpty ||
+        verificationToken.isEmpty ||
+        newPassword.isEmpty) {
+      throw const EmailApiException(
+        'Email, verification token, and new password are required.',
+      );
+    }
+    if (newPassword.length < 6) {
+      throw const EmailApiException('Password must be at least 6 characters.');
+    }
+
+    try {
+      final callable = _functions.httpsCallable('resetPasswordWithToken');
+      final response = await callable.call(<String, dynamic>{
+        'email': trimmedEmail,
+        'verificationToken': verificationToken,
+        'newPassword': newPassword,
+      });
+      final data = Map<String, dynamic>.from(response.data as Map);
+      if (data['success'] != true) {
+        throw const EmailApiException(
+          'Failed to reset password. Please try again.',
+        );
+      }
+    } on FirebaseFunctionsException catch (e) {
+      throw EmailApiException(_mapFunctionError(e), statusCode: _statusFor(e));
+    } catch (e) {
+      if (e is EmailApiException) rethrow;
+      throw EmailApiException('Failed to reset password. ${e.toString()}');
+    }
+  }
+
   Future<void> logout() => _auth.signOut();
 
   Future<void> reloadCurrentUser() async {

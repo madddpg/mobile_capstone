@@ -76,20 +76,34 @@ class _LandingScreenState extends State<LandingScreen>
                     child: _LandingCard(
                       onGetStarted: () {
                         _runExit(() {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const RegisterScreen(),
-                            ),
-                          );
+                          Navigator.of(context)
+                              .push(
+                                MaterialPageRoute(
+                                  builder: (_) => const RegisterScreen(),
+                                ),
+                              )
+                              .then((_) {
+                                if (mounted) {
+                                  _exitController.reverse();
+                                  setState(() => _exiting = false);
+                                }
+                              });
                         }, restoreIfStaying: false);
                       },
                       onLogin: () {
                         _runExit(() {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const LoginScreen(),
-                            ),
-                          );
+                          Navigator.of(context)
+                              .push(
+                                MaterialPageRoute(
+                                  builder: (_) => const LoginScreen(),
+                                ),
+                              )
+                              .then((_) {
+                                if (mounted) {
+                                  _exitController.reverse();
+                                  setState(() => _exiting = false);
+                                }
+                              });
                         }, restoreIfStaying: false);
                       },
                     ),
@@ -152,8 +166,17 @@ class _LandingCard extends StatelessWidget {
       width: double.infinity,
       height: double.infinity,
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFFFF),
         borderRadius: BorderRadius.circular(45),
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFFFFFFFF), // white
+            Color(0xCCEDE4D4), // warm cream
+            Color(0x00EDE4D4), // fade to transparent
+          ],
+          stops: [0.19, 0.65, 1.0],
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.15),
@@ -165,133 +188,111 @@ class _LandingCard extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(45),
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Color(0xFFFFFFFF), // #FFFFFF @ 100%
-                      Color(0xCCEDE4D4), // #EDE4D4 @ 80%
-                      Color(0x00648DB6), // #648DB6 @ 0%
-                    ],
-                    stops: [0.19, 0.65, 1.0],
-                  ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 40),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Spacer(),
+              const Text(
+                'Create an\nAccount',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 45,
+                  height: 1.2,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF2F3E4F),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 40),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 40),
-                  const Text(
-                    'Create an\nAccount',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 34,
-                      height: 1.2,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF2F3E4F),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  const Text(
-                    'Your projects starts with us.',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF5B6E80),
-                    ),
-                  ),
-                  const Spacer(),
-                  Align(
-                    alignment: Alignment.center,
-                    child: FractionallySizedBox(
-                      widthFactor: 0.75,
-                      child: SizedBox(
-                        height: 55,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            elevation: 0,
-                            padding: EdgeInsets.zero,
-                            shadowColor: Colors.transparent,
-                            backgroundColor: Colors.transparent,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
-                            ),
+              const SizedBox(height: 10),
+              const Text(
+                'Your projects starts with us.',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w400,
+                  color: Color(0xFF5B6E80),
+                ),
+              ),
+              const SizedBox(height: 36),
+              Align(
+                alignment: Alignment.center,
+                child: FractionallySizedBox(
+                  widthFactor: 0.75,
+                  child: SizedBox(
+                    height: 55,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        elevation: 0,
+                        padding: EdgeInsets.zero,
+                        shadowColor: Colors.transparent,
+                        backgroundColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                      ),
+                      onPressed: onGetStarted,
+                      child: Ink(
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                            colors: [
+                              Color(0xE6EDE4D4), // #EDE4D4 @ 90%
+                              Color(0xB3FFFFFF), // #FFFFFF @ 70%
+                              Color(0xFF648DB6), // #648DB6 @ 100%
+                            ],
+                            stops: [0.0, 0.5, 1.0],
                           ),
-                          onPressed: onGetStarted,
-                          child: Ink(
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                begin: Alignment.centerLeft,
-                                end: Alignment.centerRight,
-                                colors: [Color(0xFFD6CEC3), Color(0xFF7C9BC0)],
-                              ),
-                              borderRadius: BorderRadius.circular(30),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.2),
-                                  blurRadius: 25,
-                                  offset: const Offset(0, 8),
-                                ),
-                              ],
-                            ),
-                            child: const Center(
-                              child: Text(
-                                'Get Started',
-                                style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF2F3E4F),
-                                ),
-                              ),
+                          borderRadius: BorderRadius.circular(50),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'Get Started',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF2C3E50),
                             ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  Center(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Already have an account? ',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 13,
-                            color: Colors.white.withValues(alpha: 0.85),
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: onLogin,
-                          child: Text(
-                            'Login',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 13,
-                              color: Colors.white.withValues(alpha: 0.95),
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 20),
+              Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Already have an account? ',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 15,
+                        color: Color(0xFF2C3E50),
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: onLogin,
+                      child: const Text(
+                        'Login',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 15,
+                          color: Color(0xFF2C3E50),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

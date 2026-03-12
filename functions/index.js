@@ -361,3 +361,67 @@ exports.finalizeEmailOtpRegistration = onCall(async (request) => {
     message: "Email verified successfully.",
   };
 });
+
+exports.resetPasswordWithToken = onCall(async (request) => {
+  const email = readEmail(request);
+  const verificationToken = readVerificationToken(request);
+  const newPassword = String(request.data?.newPassword || "").trim();
+
+  if (newPassword.length < 6) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Password must be at least 6 characters.",
+    );
+  }
+
+  const docRef = db.collection(OTP_COLLECTION).doc(email);
+  const doc = await docRef.get();
+
+  if (!doc.exists) {
+    throw new HttpsError(
+      "not-found",
+      "No verification found. Please verify your email first.",
+    );
+  }
+
+  const data = doc.data();
+  const verificationExpiresAt =
+    data.verification_expires_at?.toMillis?.() || 0;
+
+  if (!data.verification_token_hash || Date.now() > verificationExpiresAt) {
+    await docRef.delete();
+    throw new HttpsError(
+      "failed-precondition",
+      "Your verification session has expired. Please verify again.",
+    );
+  }
+
+  if (
+    hashVerificationToken(verificationToken) !== data.verification_token_hash
+  ) {
+    throw new HttpsError(
+      "permission-denied",
+      "Invalid verification token. Please verify your email again.",
+    );
+  }
+
+  try {
+    const userRecord = await auth.getUserByEmail(email);
+    await auth.updateUser(userRecord.uid, {password: newPassword});
+    await docRef.delete();
+    logger.info("Password reset successfully", {email});
+    return {success: true, message: "Password reset successfully."};
+  } catch (e) {
+    if (e.code === "auth/user-not-found") {
+      throw new HttpsError(
+        "not-found",
+        "No account found with this email address.",
+      );
+    }
+    logger.error("Failed to reset password", {email, error: e});
+    throw new HttpsError(
+      "internal",
+      "Failed to reset password. Please try again.",
+    );
+  }
+});

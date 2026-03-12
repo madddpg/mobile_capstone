@@ -2,30 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../services/email_service.dart';
-import 'email_verification_screen.dart';
-import 'forgot_password_screen.dart';
+import 'forgot_password_otp_screen.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class ForgotPasswordScreen extends StatefulWidget {
+  const ForgotPasswordScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
   final EmailService _emailService = EmailService();
 
-  bool _obscurePassword = true;
   bool _loading = false;
   String? _emailError;
-  String? _passwordError;
 
   @override
   void dispose() {
     _emailController.dispose();
-    _passwordController.dispose();
     super.dispose();
   }
 
@@ -43,63 +38,20 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
-  void _validatePassword(String value) {
-    setState(() {
-      if (value.isEmpty) {
-        _passwordError = 'Password is required';
-      } else if (value.length < 6) {
-        _passwordError = 'Password must be at least 6 characters';
-      } else {
-        _passwordError = null;
-      }
-    });
-  }
-
-  Future<void> _handleLogin() async {
+  Future<void> _sendCode() async {
     final email = _emailController.text;
-    final password = _passwordController.text;
-
     _validateEmail(email);
-    _validatePassword(password);
-    if (_emailError != null || _passwordError != null) {
-      return;
-    }
+    if (_emailError != null) return;
 
     setState(() => _loading = true);
-
     try {
-      final credential = await _emailService.login(
-        email: email,
-        password: password,
-      );
-      await credential.user?.reload();
-      final verified = credential.user?.emailVerified ?? false;
-      if (!verified) {
-        final result = await _emailService.sendCurrentUserOtp();
-        if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(result.message)));
-        final verificationResult = await showEmailVerificationOtpModal(
-          context,
-          email: email.trim(),
-        );
-        if (!mounted) return;
-        if (verificationResult?.success == true) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Logged in successfully.')),
-          );
-          return;
-        }
-
-        await _emailService.logout();
-        return;
-      }
-
+      await _emailService.sendOtp(email: email.trim());
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Logged in successfully.')));
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ForgotPasswordOtpScreen(email: email.trim()),
+        ),
+      );
     } on EmailApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -108,12 +60,10 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Login failed. Please try again.')),
+        const SnackBar(content: Text('Failed to send code. Please try again.')),
       );
     } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -135,7 +85,6 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Back button pinned top-left
                 Container(
                   width: 40,
                   height: 40,
@@ -153,7 +102,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: () => Navigator.of(context).maybePop(),
                   ),
                 ),
-                // Form block centered in remaining space
                 Expanded(
                   child: Center(
                     child: SingleChildScrollView(
@@ -162,10 +110,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Login',
+                            'Forgot Password?',
                             style: GoogleFonts.poppins(
-                              fontSize: 36,
-                              height: 1,
+                              fontSize: 32,
+                              height: 1.1,
                               fontWeight: FontWeight.w800,
                               color: const Color(0xFFF1E7D6),
                               shadows: const [
@@ -179,74 +127,23 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            "Welcome back—let's build smarter.",
+                            "Enter your email and we'll send you a verification code.",
                             style: GoogleFonts.poppins(
-                              fontSize: 15,
+                              fontSize: 14,
                               fontWeight: FontWeight.w500,
                               fontStyle: FontStyle.italic,
                               color: const Color(0xFFEADFD0),
                             ),
                           ),
                           const SizedBox(height: 36),
-                          _LoginField(
+                          _ForgotField(
                             label: 'Email Address',
                             controller: _emailController,
                             errorText: _emailError,
                             onChanged: _validateEmail,
                             keyboardType: TextInputType.emailAddress,
-                            textInputAction: TextInputAction.next,
-                          ),
-                          const SizedBox(height: 16),
-                          _LoginField(
-                            label: 'Password',
-                            obscureText: _obscurePassword,
-                            controller: _passwordController,
-                            errorText: _passwordError,
-                            onChanged: _validatePassword,
                             textInputAction: TextInputAction.done,
-                            trailing: IconButton(
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_off_rounded
-                                    : Icons.visibility_rounded,
-                                color: const Color(0xFF42566C),
-                                size: 22,
-                              ),
-                              onPressed: () => setState(
-                                () => _obscurePassword = !_obscurePassword,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton(
-                              onPressed: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        const ForgotPasswordScreen(),
-                                  ),
-                                );
-                              },
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                  vertical: 4,
-                                ),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              child: Text(
-                                'Forgot Password?',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  fontStyle: FontStyle.italic,
-                                  color: const Color(0xFFF6F0E5),
-                                ),
-                              ),
-                            ),
+                            onSubmitted: (_) => _sendCode(),
                           ),
                           const SizedBox(height: 44),
                           Center(
@@ -272,7 +169,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       borderRadius: BorderRadius.circular(15),
                                     ),
                                   ),
-                                  onPressed: _loading ? null : _handleLogin,
+                                  onPressed: _loading ? null : _sendCode,
                                   child: _loading
                                       ? const SizedBox(
                                           height: 18,
@@ -285,7 +182,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                           ),
                                         )
                                       : Text(
-                                          'Login',
+                                          'Send Code',
                                           style: GoogleFonts.poppins(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w700,
@@ -309,33 +206,31 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-class _LoginField extends StatelessWidget {
+class _ForgotField extends StatelessWidget {
   final String label;
-  final bool obscureText;
-  final Widget? trailing;
   final TextEditingController? controller;
   final String? errorText;
   final ValueChanged<String>? onChanged;
   final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
 
-  const _LoginField({
+  const _ForgotField({
     required this.label,
-    this.obscureText = false,
-    this.trailing,
     this.controller,
     this.errorText,
     this.onChanged,
     this.keyboardType,
     this.textInputAction,
+    this.onSubmitted,
   });
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
-      obscureText: obscureText,
       onChanged: onChanged,
+      onSubmitted: onSubmitted,
       keyboardType: keyboardType,
       textInputAction: textInputAction,
       style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF1E242B)),
@@ -360,13 +255,20 @@ class _LoginField extends StatelessWidget {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0x00FFFFFF)),
+          borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF8DB3E0), width: 1.5),
+          borderSide: const BorderSide(color: Color(0xFF648DB6), width: 1.5),
         ),
-        suffixIcon: trailing,
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.redAccent, width: 1),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
+        ),
       ),
     );
   }

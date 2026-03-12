@@ -77,7 +77,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                   ),
                   const SizedBox(height: 42),
                   Text(
-                    'Verify Email',
+                    'Register',
                     style: GoogleFonts.inter(
                       fontSize: 38,
                       fontWeight: FontWeight.w800,
@@ -172,6 +172,7 @@ class _EmailVerificationPanelState extends State<_EmailVerificationPanel> {
 
   bool _checkingVerification = false;
   bool _resendingEmail = false;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -210,6 +211,10 @@ class _EmailVerificationPanelState extends State<_EmailVerificationPanel> {
     if (sanitized.isEmpty && index > 0) {
       _otpFocusNodes[index - 1].requestFocus();
     }
+
+    if (_errorMessage != null) {
+      setState(() => _errorMessage = null);
+    }
   }
 
   Future<void> _resendVerificationEmail() async {
@@ -244,12 +249,13 @@ class _EmailVerificationPanelState extends State<_EmailVerificationPanel> {
   Future<void> _checkVerification() async {
     FocusScope.of(context).unfocus();
     if (!RegExp(r'^\d{6}$').hasMatch(_enteredOtp)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter the 6-digit OTP code first.')),
-      );
+      setState(() => _errorMessage = 'Please enter the complete 6-digit code.');
       return;
     }
-    setState(() => _checkingVerification = true);
+    setState(() {
+      _checkingVerification = true;
+      _errorMessage = null;
+    });
 
     try {
       final String resultMessage;
@@ -287,19 +293,15 @@ class _EmailVerificationPanelState extends State<_EmailVerificationPanel> {
 
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (route) => false,
+        (route) => route.isFirst,
       );
     } on EmailApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
+      setState(() => _errorMessage = e.message);
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not confirm your verification status.'),
-        ),
+      setState(
+        () => _errorMessage = 'Could not verify the code. Please try again.',
       );
     } finally {
       if (mounted) {
@@ -398,15 +400,39 @@ class _EmailVerificationPanelState extends State<_EmailVerificationPanel> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(
                 _otpControllers.length,
-                (index) => _OtpDigitField(
-                  controller: _otpControllers[index],
-                  focusNode: _otpFocusNodes[index],
-                  onChanged: (value) => _onOtpChanged(index, value),
-                  compact: widget.modalMode,
+                (index) => Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: _OtpDigitField(
+                    controller: _otpControllers[index],
+                    focusNode: _otpFocusNodes[index],
+                    onChanged: (value) => _onOtpChanged(index, value),
+                    compact: widget.modalMode,
+                  ),
                 ),
               ),
             ),
           ),
+          if (_errorMessage != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFEBEB),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE8AEAE)),
+              ),
+              child: Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFFB33A3A),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           Wrap(
             alignment: WrapAlignment.center,

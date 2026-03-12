@@ -22,6 +22,19 @@ const MAX_ATTEMPTS = 5;
 const VERIFIED_REGISTRATION_WINDOW_MS = 15 * 60 * 1000;
 const OTP_COLLECTION = "email_otp";
 
+function readRequiredStringParam(param, label) {
+  const value = String(param.value() || "").trim();
+
+  if (!value) {
+    throw new HttpsError(
+      "failed-precondition",
+      `${label} is not configured for the email OTP function.`,
+    );
+  }
+
+  return value;
+}
+
 function readEmail(request) {
   const email = String(request.data?.email || "").trim().toLowerCase();
 
@@ -68,17 +81,28 @@ function hashVerificationToken(token) {
 }
 
 function buildTransporter() {
-  const port = Number(SMTP_PORT.value());
+  const port = Number(readRequiredStringParam(SMTP_PORT, "SMTP_PORT"));
+
+  if (!Number.isFinite(port) || port <= 0) {
+    throw new HttpsError(
+      "failed-precondition",
+      "SMTP_PORT must be a valid numeric port for email OTP delivery.",
+    );
+  }
 
   return nodemailer.createTransport({
-    host: SMTP_HOST.value(),
+    host: readRequiredStringParam(SMTP_HOST, "SMTP_HOST"),
     port,
     secure: port === 465,
     auth: {
-      user: SMTP_USER.value(),
-      pass: SMTP_PASS.value(),
+      user: readRequiredStringParam(SMTP_USER, "SMTP_USER"),
+      pass: readRequiredStringParam(SMTP_PASS, "SMTP_PASS"),
     },
   });
+}
+
+function readEmailFromAddress() {
+  return readRequiredStringParam(EMAIL_FROM, "EMAIL_FROM");
 }
 
 function mapEmailProviderError(error) {
@@ -167,11 +191,19 @@ exports.sendEmailOtp = onCall({secrets: [SMTP_PASS]}, async (request) => {
     );
   }
 
-  const transporter = buildTransporter();
+  let transporter;
+
+  try {
+    transporter = buildTransporter();
+  } catch (error) {
+    logger.error("Email transport configuration is invalid", {email, error});
+    await docRef.delete().catch(() => null);
+    throw error;
+  }
 
   try {
     await transporter.sendMail({
-      from: EMAIL_FROM.value(),
+      from: readEmailFromAddress(),
       to: email,
       subject: "Email Verification Code",
       text: `Your verification code is: ${otp}\nThis code will expire in 5 minutes.\nDo not share this code with anyone.`,
@@ -180,6 +212,7 @@ exports.sendEmailOtp = onCall({secrets: [SMTP_PASS]}, async (request) => {
     logger.info("OTP email sent", {email});
   } catch (error) {
     logger.error("Failed to send OTP email", {email, error});
+    await docRef.delete().catch(() => null);
     throw mapEmailProviderError(error);
   }
 

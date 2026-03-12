@@ -40,8 +40,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  Future<void> _handleSendOtp() async {
-    final email = _emailController.text.trim();
+  Future<bool> _sendOtpAndVerify(String email) async {
     _validateEmail(email);
     if (_emailError != null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -49,28 +48,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
           content: Text('Enter a valid email before sending OTP.'),
         ),
       );
-      return;
+      return false;
     }
 
     setState(() => _sendingOtp = true);
 
     try {
       final result = await _emailService.sendOtp(email: email);
-      if (!mounted) return;
+      if (!mounted) return false;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(result.message)));
       await _promptOtpVerification(email);
+      return _emailVerified &&
+          _verifiedEmail == email &&
+          _verificationToken != null;
     } on EmailApiException catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(e.message)));
       if (e.statusCode == 412) {
         await _promptOtpVerification(email);
+        return _emailVerified &&
+            _verifiedEmail == email &&
+            _verificationToken != null;
       }
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Failed to send OTP. $e')));
@@ -79,6 +84,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
         setState(() => _sendingOtp = false);
       }
     }
+
+    return _emailVerified &&
+        _verifiedEmail == email &&
+        _verificationToken != null;
   }
 
   Future<void> _handleRegister() async {
@@ -104,12 +113,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!_emailVerified ||
         _verifiedEmail != email ||
         _verificationToken == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Verify your email with the OTP before registering.'),
-        ),
-      );
-      return;
+      final verificationCompleted = await _sendOtpAndVerify(email);
+      if (!mounted || !verificationCompleted) {
+        return;
+      }
     }
 
     setState(() => _loading = true);
@@ -295,39 +302,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         color: const Color(0xFFE8D8BF),
                       ),
                     ),
-                  ],
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: _sendingOtp ? null : _handleSendOtp,
-                      style: TextButton.styleFrom(
-                        foregroundColor: const Color(0xFFE8D8BF),
-                        padding: EdgeInsets.zero,
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ] else ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      'Tap Register to receive and verify your OTP in a modal.',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFFE8D8BF),
                       ),
-                      child: _sendingOtp
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation(
-                                  Colors.white,
-                                ),
-                              ),
-                            )
-                          : Text(
-                              'Send OTP',
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                decoration: TextDecoration.underline,
-                              ),
-                            ),
                     ),
-                  ),
+                  ],
                   const SizedBox(height: 16),
                   _RegisterField(
                     label: 'Password',
@@ -395,8 +380,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               borderRadius: BorderRadius.circular(28),
                             ),
                           ),
-                          onPressed: _loading ? null : _handleRegister,
-                          child: _loading
+                          onPressed: _loading || _sendingOtp
+                              ? null
+                              : _handleRegister,
+                          child: _loading || _sendingOtp
                               ? const SizedBox(
                                   height: 18,
                                   width: 18,
@@ -408,7 +395,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   ),
                                 )
                               : Text(
-                                  'Register',
+                                  _emailVerified &&
+                                          _verifiedEmail ==
+                                              _emailController.text.trim()
+                                      ? 'Register'
+                                      : 'Verify Email',
                                   style: GoogleFonts.inter(
                                     fontWeight: FontWeight.w700,
                                     color: Colors.white,

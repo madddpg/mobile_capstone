@@ -14,9 +14,11 @@ Future<EmailOtpVerificationResult?> showEmailVerificationOtpModal(
   return showDialog<EmailOtpVerificationResult>(
     context: context,
     barrierDismissible: false,
+    barrierColor: const Color(0xCC102033),
     builder: (dialogContext) => Dialog(
       backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
       child: _EmailVerificationPanel(
         email: email,
         modalMode: true,
@@ -310,14 +312,23 @@ class _EmailVerificationPanelState extends State<_EmailVerificationPanel> {
   Widget build(BuildContext context) {
     final panel = Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
+      constraints: BoxConstraints(
+        maxWidth: widget.modalMode ? 330 : double.infinity,
+      ),
+      padding: EdgeInsets.fromLTRB(
+        widget.modalMode ? 18 : 18,
+        widget.modalMode ? 18 : 22,
+        widget.modalMode ? 18 : 18,
+        widget.modalMode ? 18 : 20,
+      ),
       decoration: BoxDecoration(
-        color: const Color(0xFFF1E6D4),
-        borderRadius: BorderRadius.circular(28),
+        color: const Color(0xFFF2EBDC),
+        borderRadius: BorderRadius.circular(widget.modalMode ? 30 : 28),
+        border: Border.all(color: const Color(0xE0D8C9B1)),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x40000000),
-            blurRadius: 24,
+            color: Color(0x3F0E1B29),
+            blurRadius: 28,
             offset: Offset(0, 16),
           ),
         ],
@@ -334,26 +345,26 @@ class _EmailVerificationPanelState extends State<_EmailVerificationPanel> {
                     : () => Navigator.of(context).pop(),
                 borderRadius: BorderRadius.circular(999),
                 child: Container(
-                  width: 32,
-                  height: 32,
+                  width: 28,
+                  height: 28,
                   decoration: const BoxDecoration(
-                    color: Color(0xFFE3D4BF),
+                    color: Color(0xFFE6DDCC),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
                     Icons.close_rounded,
                     color: Color(0xFF243749),
-                    size: 18,
+                    size: 16,
                   ),
                 ),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 2),
           ],
           Text(
             'OTP Verification',
             style: GoogleFonts.inter(
-              fontSize: 16,
+              fontSize: widget.modalMode ? 15 : 16,
               fontWeight: FontWeight.w800,
               color: const Color(0xFF243749),
             ),
@@ -361,45 +372,51 @@ class _EmailVerificationPanelState extends State<_EmailVerificationPanel> {
           const SizedBox(height: 8),
           Text(
             widget.modalMode
-                ? 'Enter the 6-digit code from your email, then submit to confirm.'
+                ? 'Enter the 6-digit code sent to ${widget.email}.'
                 : 'Enter the 6-digit code we emailed to you to verify this account.',
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
-              fontSize: 11,
+              fontSize: widget.modalMode ? 10.5 : 11,
               height: 1.45,
               color: const Color(0xFF556273),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.symmetric(
+              horizontal: widget.modalMode ? 6 : 16,
+              vertical: widget.modalMode ? 4 : 16,
+            ),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.55),
+              color: widget.modalMode
+                  ? Colors.transparent
+                  : Colors.white.withValues(alpha: 0.55),
               borderRadius: BorderRadius.circular(18),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(
                 _otpControllers.length,
                 (index) => _OtpDigitField(
                   controller: _otpControllers[index],
                   focusNode: _otpFocusNodes[index],
                   onChanged: (value) => _onOtpChanged(index, value),
+                  compact: widget.modalMode,
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           Wrap(
             alignment: WrapAlignment.center,
             crossAxisAlignment: WrapCrossAlignment.center,
             spacing: 4,
             children: [
               Text(
-                'Did not receive the email?',
+                'Did not receive the OTP?',
                 style: GoogleFonts.inter(
-                  fontSize: 11,
+                  fontSize: 10,
                   color: const Color(0xFF556273),
                 ),
               ),
@@ -424,7 +441,7 @@ class _EmailVerificationPanelState extends State<_EmailVerificationPanel> {
                     : Text(
                         'Resend',
                         style: GoogleFonts.inter(
-                          fontSize: 11,
+                          fontSize: 10,
                           fontWeight: FontWeight.w700,
                           color: const Color(0xFF243749),
                         ),
@@ -432,21 +449,23 @@ class _EmailVerificationPanelState extends State<_EmailVerificationPanel> {
               ),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
-            height: 52,
+            height: widget.modalMode ? 46 : 52,
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: const Color(0xFF263646),
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(widget.modalMode ? 12 : 18),
               ),
               child: TextButton(
                 onPressed: _checkingVerification ? null : _checkVerification,
                 style: TextButton.styleFrom(
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(
+                      widget.modalMode ? 12 : 18,
+                    ),
                   ),
                 ),
                 child: _checkingVerification
@@ -462,7 +481,7 @@ class _EmailVerificationPanelState extends State<_EmailVerificationPanel> {
                         'Submit',
                         style: GoogleFonts.inter(
                           fontWeight: FontWeight.w700,
-                          fontSize: 15,
+                          fontSize: widget.modalMode ? 14 : 15,
                         ),
                       ),
               ),
@@ -556,17 +575,19 @@ class _OtpDigitField extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final ValueChanged<String> onChanged;
+  final bool compact;
 
   const _OtpDigitField({
     required this.controller,
     required this.focusNode,
     required this.onChanged,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 42,
+      width: compact ? 34 : 42,
       child: TextField(
         controller: controller,
         focusNode: focusNode,
@@ -574,17 +595,26 @@ class _OtpDigitField extends StatelessWidget {
         keyboardType: TextInputType.number,
         maxLength: 1,
         textAlign: TextAlign.center,
+        style: GoogleFonts.inter(
+          fontSize: compact ? 16 : 17,
+          fontWeight: FontWeight.w700,
+          color: const Color(0xFF243749),
+        ),
         decoration: InputDecoration(
           counterText: '',
           filled: true,
-          fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          fillColor: const Color(0xFFF8F7F1),
+          contentPadding: EdgeInsets.symmetric(vertical: compact ? 10 : 12),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none,
+            borderRadius: BorderRadius.circular(compact ? 12 : 14),
+            borderSide: const BorderSide(color: Color(0xFFD2C5B0)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(compact ? 12 : 14),
+            borderSide: const BorderSide(color: Color(0xFFD2C5B0)),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(compact ? 12 : 14),
             borderSide: const BorderSide(color: Color(0xFF243749), width: 1.4),
           ),
         ),

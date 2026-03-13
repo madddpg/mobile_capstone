@@ -2,9 +2,8 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
-import '../services/email_service.dart';
-import 'login_screen.dart';
+import 'package:iconstruct/features/auth/data/email_service.dart';
+import 'package:iconstruct/features/auth/presentation/screens/login_screen.dart';
 
 Future<EmailOtpVerificationResult?> showEmailVerificationOtpModal(
   BuildContext context, {

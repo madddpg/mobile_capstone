@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
-import '../services/email_service.dart';
-import 'email_verification_screen.dart';
-import 'login_screen.dart';
+import 'package:iconstruct/features/auth/data/email_service.dart';
+import 'package:iconstruct/features/auth/presentation/screens/email_verification_screen.dart';
+import 'package:iconstruct/features/auth/presentation/screens/login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -42,12 +41,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _confirmPasswordController.dispose();
     _scrollController.dispose();
     super.dispose();
-  }
-
-  Future<void> _openLogin() async {
-    await Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => const LoginScreen()));
   }
 
   Future<bool> _sendOtpAndVerify(String email) async {

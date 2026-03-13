@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-
-import '../services/email_service.dart';
+import 'package:iconstruct/features/auth/data/email_service.dart';
 
 class OtpDemoScreen extends StatefulWidget {
   const OtpDemoScreen({super.key});

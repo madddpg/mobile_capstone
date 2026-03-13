@@ -1,8 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-
-import 'main_display.dart';
+import 'package:iconstruct/features/onboarding/presentation/screens/main_display.dart';
 
 class DisplayScreen extends StatefulWidget {
   const DisplayScreen({super.key});

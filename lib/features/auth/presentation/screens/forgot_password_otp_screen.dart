@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
-import '../services/email_service.dart';
-import 'reset_password_screen.dart';
+import 'package:iconstruct/features/auth/data/email_service.dart';
+import 'package:iconstruct/features/auth/presentation/screens/reset_password_screen.dart';
 
 class ForgotPasswordOtpScreen extends StatefulWidget {
   final String email;
@@ -32,8 +31,12 @@ class _ForgotPasswordOtpScreenState extends State<ForgotPasswordOtpScreen> {
 
   @override
   void dispose() {
-    for (final c in _otpControllers) c.dispose();
-    for (final f in _otpFocusNodes) f.dispose();
+    for (final c in _otpControllers) {
+      c.dispose();
+    }
+    for (final f in _otpFocusNodes) {
+      f.dispose();
+    }
     super.dispose();
   }
 

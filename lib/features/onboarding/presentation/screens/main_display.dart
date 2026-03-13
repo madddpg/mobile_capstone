@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'landing_screen.dart';
+import 'package:iconstruct/features/onboarding/presentation/screens/landing_screen.dart';
 
 class MainDisplayScreen extends StatefulWidget {
   const MainDisplayScreen({super.key});

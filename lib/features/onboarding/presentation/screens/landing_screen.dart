@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-
-import 'register_screen.dart';
-import 'login_screen.dart';
+import 'package:iconstruct/features/auth/presentation/screens/login_screen.dart';
+import 'package:iconstruct/features/auth/presentation/screens/register_screen.dart';
 
 class LandingScreen extends StatefulWidget {
   const LandingScreen({super.key});
@@ -111,13 +110,13 @@ class _LandingScreenState extends State<LandingScreen>
                 ),
               ),
             ),
-            FadeTransition(
-              opacity: _fadeOut,
-              child: SlideTransition(
-                position: _slideOut,
-                child: Positioned(
-                  top: 95,
-                  left: 30,
+            Positioned(
+              top: 20,
+              left: 20,
+              child: FadeTransition(
+                opacity: _fadeOut,
+                child: SlideTransition(
+                  position: _slideOut,
                   child: _FloatingBackButton(
                     onTap: () {
                       _runExit(() {
@@ -197,7 +196,7 @@ class _LandingCard extends StatelessWidget {
               const Text(
                 'Create an\nAccount',
                 style: TextStyle(
-                  fontFamily: 'Inter',
+                  fontFamily: 'Boldonse-Regular',
                   fontSize: 45,
                   height: 1.2,
                   fontWeight: FontWeight.w700,
@@ -306,46 +305,26 @@ class _FloatingBackButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: Color(0x33000000),
-            blurRadius: 20,
-            spreadRadius: 2,
-            offset: Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(32),
-          child: Ink(
-            width: 60,
-            height: 60,
-            decoration: const BoxDecoration(
-              color: Color(0xFFE5E1DA),
-              shape: BoxShape.circle,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1E7D6),
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF000000).withValues(alpha: 0.20),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
-            child: Center(
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF3A4D63),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.arrow_back,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ),
-            ),
-          ),
+          ],
+        ),
+        child: const Icon(
+          Icons.arrow_back_ios_new_rounded,
+          color: Color(0xFF32465C),
+          size: 18,
         ),
       ),
     );

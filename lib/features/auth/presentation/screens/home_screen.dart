@@ -87,7 +87,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Text(
                       'Current project\nplans?',
                       style: TextStyle(
-                        fontFamily: 'Bungee-Regular',
+                        fontFamily: 'Inter',
                         fontSize: 36,
                         fontWeight: FontWeight.w700, // already bold
                         color: Color(0xFFEDE4D4),

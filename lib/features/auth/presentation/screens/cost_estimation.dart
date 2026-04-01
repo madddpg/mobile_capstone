@@ -590,30 +590,20 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
                           ),
                         ),
                         const SizedBox(height: 10),
-                        Wrap(
-                          spacing: 10,
-                          runSpacing: 10,
+                        Column(
                           children: [
                             for (final entry in _addedPlumbingMaterials)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFEDE4D4).withAlpha(40),
-                                  borderRadius: BorderRadius.circular(30),
-                                  border: Border.all(
-                                    color: const Color(0xFFEDE4D4),
-                                  ),
-                                ),
-                                child: Text(
-                                  entry.displayLabel,
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 11,
-                                    color: const Color(0xFFEDE4D4),
-                                  ),
-                                ),
+                              _AddedMaterialItem(
+                                title: entry.materialName.trim(),
+                                subtitle: entry.displayLabel
+                                    .replaceFirst(entry.materialName.trim(), '')
+                                    .replaceFirst(' • ', '')
+                                    .trim(),
+                                unit: 'Qty.',
+                                qtyController: entry.qtyController,
+                                onChanged: (val) {
+                                  entry.quantity = double.tryParse(val) ?? 0.0;
+                                },
                               ),
                           ],
                         ),
@@ -706,30 +696,18 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
+                      Column(
                         children: [
                           for (final tile in _addedTiles)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFEDE4D4).withAlpha(40),
-                                borderRadius: BorderRadius.circular(30),
-                                border: Border.all(
-                                  color: const Color(0xFFEDE4D4),
-                                ),
-                              ),
-                              child: Text(
-                                '${tile.tileTypeName} • ${tile.tileSizeName}',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 11,
-                                  color: const Color(0xFFEDE4D4),
-                                ),
-                              ),
+                            _AddedMaterialItem(
+                              title: tile.tileTypeName,
+                              subtitle:
+                                  '${tile.tileSizeGroup} • ${tile.tileSizeName}',
+                              unit: 'Qty.',
+                              qtyController: tile.qtyController,
+                              onChanged: (val) {
+                                tile.quantity = double.tryParse(val) ?? 0.0;
+                              },
                             ),
                         ],
                       ),
@@ -1608,6 +1586,7 @@ class _MaterialCardOption extends StatelessWidget {
     final imageUrl = (item.imageUrl ?? '').trim();
     final title = item.name.trim();
     final subtitle = showDescriptionLine ? item.description.trim() : '';
+    final showImage = !item.category.contains('Tile Size');
 
     final borderColor = isSelected
         ? const Color(0xFFEDE4D4)
@@ -1625,8 +1604,10 @@ class _MaterialCardOption extends StatelessWidget {
         ),
         child: Row(
           children: [
-            _MaterialThumb(imageUrl: imageUrl),
-            const SizedBox(width: 12),
+            if (showImage) ...[
+              _MaterialThumb(imageUrl: imageUrl),
+              const SizedBox(width: 12),
+            ],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1699,6 +1680,123 @@ class _MaterialThumb extends StatelessWidget {
                   },
                 ),
         ),
+      ),
+    );
+  }
+}
+
+class _AddedMaterialItem extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final TextEditingController qtyController;
+  final String unit;
+  final ValueChanged<String> onChanged;
+
+  const _AddedMaterialItem({
+    required this.title,
+    required this.subtitle,
+    required this.qtyController,
+    required this.unit,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E3042),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFEDE4D4).withAlpha(80),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+                if (subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      color: const Color(0xFFE0D7C9),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Quantity Input
+          Container(
+            width: 70,
+            height: 38,
+            decoration: BoxDecoration(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: const Color(0xFFEDE4D4).withAlpha(120),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: qtyController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    onChanged: onChanged,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: '0',
+                      hintStyle: GoogleFonts.poppins(
+                        color: Colors.white38,
+                        fontSize: 13,
+                      ),
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                      border: InputBorder.none,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Text(
+                    unit,
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      color: const Color(0xFFEDE4D4).withAlpha(180),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1931,12 +2029,15 @@ class AddedTileSelection {
   final String tileTypeName;
   final String tileSizeGroup;
   final String tileSizeName;
+  double quantity;
+  final TextEditingController qtyController;
 
-  const AddedTileSelection({
+  AddedTileSelection({
     required this.tileTypeName,
     required this.tileSizeGroup,
     required this.tileSizeName,
-  });
+    this.quantity = 0.0,
+  }) : qtyController = TextEditingController();
 
   String get key =>
       '${tileTypeName.trim()}|${tileSizeGroup.trim()}|${tileSizeName.trim()}';
@@ -1949,15 +2050,18 @@ class AddedPlumbingSelection {
   final String? size;
   final String? length;
   final String? coverSize;
+  double quantity;
+  final TextEditingController qtyController;
 
-  const AddedPlumbingSelection({
+  AddedPlumbingSelection({
     required this.categoryTitle,
     required this.kind,
     required this.materialName,
     this.size,
     this.length,
     this.coverSize,
-  });
+    this.quantity = 0.0,
+  }) : qtyController = TextEditingController();
 
   String get key =>
       '${categoryTitle.trim()}|${kind.trim()}|${materialName.trim()}|${(size ?? '').trim()}|${(length ?? '').trim()}|${(coverSize ?? '').trim()}';

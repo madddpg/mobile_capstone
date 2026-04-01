@@ -11,6 +11,7 @@ const {app: apiApp} = require("./api");
 exports.api = onRequest({cors: true}, apiApp);
 
 const db = admin.firestore();
+const { Timestamp } = require("firebase-admin/firestore");
 const auth = admin.auth();
 
 const OTP_TTL_MS = 5 * 60 * 1000;
@@ -71,7 +72,7 @@ function hashVerificationToken(token) {
 exports.sendEmailOtp = onCall(async (request) => {
   const email = readEmail(request);
   const now = Date.now();
-  const nowTimestamp = admin.firestore.Timestamp.now();
+  const nowTimestamp = Timestamp.now();
   const docRef = db.collection(OTP_COLLECTION).doc(email);
 
   logger.info("Generating email OTP", {email});
@@ -93,7 +94,7 @@ exports.sendEmailOtp = onCall(async (request) => {
     email,
     otp_code: otp,
     created_at: nowTimestamp,
-    expires_at: admin.firestore.Timestamp.fromMillis(now + OTP_TTL_MS),
+    expires_at: Timestamp.fromMillis(now + OTP_TTL_MS),
     attempt_count: 0,
     last_request_time: nowTimestamp,
   };
@@ -177,7 +178,7 @@ exports.verifyEmailOtp = onCall(async (request) => {
 
   const verificationToken = crypto.randomBytes(32).toString("hex");
   const verificationTokenHash = hashVerificationToken(verificationToken);
-  const verifiedAt = admin.firestore.Timestamp.now();
+  const verifiedAt = Timestamp.now();
 
   await docRef.set(
     {
@@ -188,7 +189,7 @@ exports.verifyEmailOtp = onCall(async (request) => {
       attempt_count: 0,
       otp_code: admin.firestore.FieldValue.delete(),
       verified_at: verifiedAt,
-      verification_expires_at: admin.firestore.Timestamp.fromMillis(
+      verification_expires_at: Timestamp.fromMillis(
         Date.now() + VERIFIED_REGISTRATION_WINDOW_MS,
       ),
       verification_token_hash: verificationTokenHash,

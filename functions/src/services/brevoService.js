@@ -15,8 +15,8 @@ async function sendBrevoEmail({ to, subject, htmlContent }) {
       "https://api.brevo.com/v3/smtp/email",
       {
         sender: {
-          name: BREVO_SENDER_NAME.value(),
-          email: BREVO_SENDER_EMAIL.value(),
+          name: BREVO_SENDER_NAME.value().trim(),
+          email: BREVO_SENDER_EMAIL.value().trim(),
         },
         to: [{ email: to }],
         subject: subject,
@@ -24,7 +24,7 @@ async function sendBrevoEmail({ to, subject, htmlContent }) {
       },
       {
         headers: {
-          "api-key": BREVO_API_KEY.value(),
+          "api-key": BREVO_API_KEY.value().trim(),
           "Content-Type": "application/json",
         },
       }

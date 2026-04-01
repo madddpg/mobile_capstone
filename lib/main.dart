@@ -4,9 +4,22 @@ import 'firebase_options.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconstruct/features/onboarding/presentation/screens/display_screen.dart';
 
+import 'package:flutter/foundation.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // Point to the local backend during development on Android
+  if (kDebugMode) {
+    try {
+      FirebaseFunctions.instance.useFunctionsEmulator('10.0.2.2', 5001);
+    } catch (e) {
+      debugPrint('Failed to initialize Firebase Emulator: $e');
+    }
+  }
+
   runApp(const MyApp());
 }
 

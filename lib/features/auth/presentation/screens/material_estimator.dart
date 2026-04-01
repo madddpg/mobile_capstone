@@ -22,6 +22,8 @@ class MaterialEstimatorScreen extends StatefulWidget {
 }
 
 class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
+  String? _selectedBudget;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -134,13 +136,13 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
               ),
               const SizedBox(height: 16),
               _buildInputLabel('Project Name:'),
-              _buildTextField(
-                'e.g., Living Room Renovation',
-                initialValue: widget.projectName,
-              ),
+              _buildTextField('e.g., Living Room Renovation'),
               const SizedBox(height: 16),
               _buildInputLabel('Project Type:'),
-              _buildTextField('Window Installation'),
+              _buildTextField(
+                'e.g., Window Installation',
+                initialValue: widget.projectName,
+              ),
               const SizedBox(height: 16),
               _buildInputLabel('Project Area:\n(sq meters)', maxLines: 2),
               _buildTextField('0.00'),
@@ -228,15 +230,39 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFEDE4D4), width: 1),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            '',
-            style: GoogleFonts.poppins(color: Colors.white, fontSize: 14),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _selectedBudget,
+          isExpanded: true,
+          dropdownColor: const Color(0xFF2C3E50),
+          icon: const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: Colors.white,
           ),
-          const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white),
-        ],
+          hint: Text(
+            'Select budget range',
+            style: GoogleFonts.poppins(
+              color: const Color(0xFFEDE4D4).withAlpha(153),
+              fontSize: 14,
+            ),
+          ),
+          items: ['Low Budget', 'Mid Budget', 'High Budget'].map((
+            String value,
+          ) {
+            return DropdownMenuItem<String>(
+              value: value,
+              child: Text(
+                value,
+                style: GoogleFonts.poppins(color: Colors.white, fontSize: 14),
+              ),
+            );
+          }).toList(),
+          onChanged: (newValue) {
+            setState(() {
+              _selectedBudget = newValue;
+            });
+          },
+        ),
       ),
     );
   }
@@ -247,8 +273,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       category: 'Tiles',
       kind: tile.tileSizeGroup,
       size: tile.tileSizeName,
-      quantity: 'TBD',
-      unit: 'sqm', // A default unit for tiles
+      quantity: tile.quantity,
     );
   }
 
@@ -259,8 +284,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       kind: plumbing.kind,
       size: plumbing.size,
       length: plumbing.length,
-      quantity: 'TBD',
-      unit: 'pcs', // A default unit for plumbing
+      quantity: plumbing.quantity,
     );
   }
 
@@ -385,8 +409,7 @@ class SelectedMaterialCard extends StatelessWidget {
   final String? kind;
   final String? size;
   final String? length;
-  final String quantity;
-  final String? unit;
+  final double quantity;
 
   const SelectedMaterialCard({
     super.key,
@@ -396,8 +419,27 @@ class SelectedMaterialCard extends StatelessWidget {
     this.size,
     this.length,
     required this.quantity,
-    this.unit,
   });
+
+  String getUnit(String category) {
+    if (category.toLowerCase().contains('plumb')) return 'meters';
+    switch (category.toLowerCase()) {
+      case 'tiles':
+      case 'flooring':
+      case 'floor surface':
+        return 'sqm';
+      case 'plumbing':
+      case 'pipes':
+      case 'wiring':
+        return 'meters';
+      case 'fixtures':
+        return 'pcs';
+      case 'paint':
+        return 'liters';
+      default:
+        return 'pcs';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -451,48 +493,19 @@ class SelectedMaterialCard extends StatelessWidget {
                       color: const Color(0xFFE0D7C9),
                     ),
                   ),
+                const SizedBox(height: 6),
+                Text(
+                  quantity > 0
+                      ? 'Qty: ${quantity.toStringAsFixed(quantity.truncateToDouble() == quantity ? 0 : 2)} ${getUnit(category)}'
+                      : 'Qty: Not set',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFFEDE4D4),
+                  ),
+                ),
               ],
             ),
-          ),
-          const SizedBox(width: 16),
-          // Right Side: Quantity
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                'Qty',
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  color: const Color(0xFFE0D7C9),
-                ),
-              ),
-              const SizedBox(height: 2),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text(
-                    quantity,
-                    style: GoogleFonts.poppins(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFFEDE4D4),
-                    ),
-                  ),
-                  if (unit != null && unit!.isNotEmpty) ...[
-                    const SizedBox(width: 4),
-                    Text(
-                      unit!,
-                      style: GoogleFonts.poppins(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: const Color(0xFFEDE4D4).withAlpha(204),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
           ),
         ],
       ),

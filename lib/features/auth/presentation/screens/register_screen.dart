@@ -1,8 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:iconstruct/features/auth/data/email_service.dart';
+import 'package:http/http.dart' as http;
 import 'package:iconstruct/features/auth/presentation/screens/email_verification_screen.dart';
-import 'package:iconstruct/features/auth/presentation/screens/login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -19,15 +19,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _confirmPasswordController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
-  final EmailService _emailService = EmailService();
-
   bool _loading = false;
-  bool _sendingOtp = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
-  bool _emailVerified = false;
-  String? _verifiedEmail;
-  String? _verificationToken;
+
   String? _emailError;
   String? _passwordError;
   String? _confirmPasswordError;
@@ -41,156 +36,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _confirmPasswordController.dispose();
     _scrollController.dispose();
     super.dispose();
-  }
-
-  Future<bool> _sendOtpAndVerify(String email) async {
-    _validateEmail(email);
-    if (_emailError != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Enter a valid email before sending OTP.'),
-        ),
-      );
-      return false;
-    }
-
-    setState(() => _sendingOtp = true);
-
-    try {
-      final result = await _emailService.sendOtp(email: email);
-      if (!mounted) return false;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(result.message)));
-      await _promptOtpVerification(email);
-      return _emailVerified &&
-          _verifiedEmail == email &&
-          _verificationToken != null;
-    } on EmailApiException catch (e) {
-      if (!mounted) return false;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
-      if (e.statusCode == 412) {
-        await _promptOtpVerification(email);
-        return _emailVerified &&
-            _verifiedEmail == email &&
-            _verificationToken != null;
-      }
-    } catch (e) {
-      if (!mounted) return false;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to send OTP. $e')));
-    } finally {
-      if (mounted) {
-        setState(() => _sendingOtp = false);
-      }
-    }
-
-    return _emailVerified &&
-        _verifiedEmail == email &&
-        _verificationToken != null;
-  }
-
-  Future<void> _handleRegister() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text;
-    final confirmPassword = _confirmPasswordController.text;
-    _validateEmail(email);
-    _validatePassword(password);
-    _validateConfirmPassword(confirmPassword);
-    if (_emailError != null ||
-        _passwordError != null ||
-        _confirmPasswordError != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Please fix the highlighted errors before registering.',
-          ),
-        ),
-      );
-      return;
-    }
-
-    if (!_emailVerified ||
-        _verifiedEmail != email ||
-        _verificationToken == null) {
-      final verificationCompleted = await _sendOtpAndVerify(email);
-      if (!mounted || !verificationCompleted) {
-        return;
-      }
-    }
-
-    setState(() => _loading = true);
-
-    try {
-      await _emailService.register(
-        email: email,
-        password: password,
-        verificationToken: _verificationToken!,
-      );
-      if (!mounted) return;
-      await _emailService.logout();
-      if (!mounted) return;
-      await Navigator.of(
-        context,
-      ).pushReplacement(MaterialPageRoute(builder: (_) => const LoginScreen()));
-    } on EmailApiException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
-    } catch (e) {
-      debugPrint('Register flow failed: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Registration failed. ${e.toString()}')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
-    }
-  }
-
-  Future<void> _promptOtpVerification(String email) async {
-    final verificationResult = await showEmailVerificationOtpModal(
-      context,
-      email: email,
-      finalizeForSignedInUser: false,
-    );
-
-    if (!mounted || verificationResult == null) {
-      return;
-    }
-
-    if (verificationResult.success &&
-        verificationResult.verificationToken != null) {
-      setState(() {
-        _emailVerified = true;
-        _verifiedEmail = email;
-        _verificationToken = verificationResult.verificationToken;
-      });
-    }
-  }
-
-  void _resetEmailVerificationIfNeeded(String email) {
-    if (_verifiedEmail == email) {
-      return;
-    }
-
-    setState(() {
-      _emailVerified = false;
-      _verifiedEmail = null;
-      _verificationToken = null;
-    });
-  }
-
-  void _handleEmailChanged(String value) {
-    final trimmed = value.trim();
-    _validateEmail(trimmed);
-    _resetEmailVerificationIfNeeded(trimmed);
   }
 
   void _validateEmail(String value) {
@@ -231,6 +76,83 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
   }
 
+  Future<void> _handleRegister() async {
+    final firstName = _firstNameController.text.trim();
+    final lastName = _lastNameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    final confirmPassword = _confirmPasswordController.text;
+
+    // Validate empty fields
+    if (firstName.isEmpty ||
+        lastName.isEmpty ||
+        email.isEmpty ||
+        password.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('All fields are required.')));
+      return;
+    }
+
+    _validateEmail(email);
+    _validatePassword(password);
+    _validateConfirmPassword(confirmPassword);
+
+    if (_emailError != null ||
+        _passwordError != null ||
+        _confirmPasswordError != null) {
+      return; // Stop if validation failed
+    }
+
+    setState(() => _loading = true);
+
+    try {
+      final response = await http.post(
+        Uri.parse(
+          'http://10.0.2.2:5000/api/auth/register',
+        ), // Update with correct Node JS API base URL
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'firstName': firstName,
+          'lastName': lastName,
+          'email': email,
+          'password': password,
+        }),
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        // Success
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Registration successful. OTP sent to email.'),
+          ),
+        );
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => EmailVerificationScreen(email: email),
+          ),
+        );
+      } else {
+        final errorData = jsonDecode(response.body);
+        final errorMessage = errorData['message'] ?? 'Registration failed.';
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(errorMessage)));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('A network error occurred.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -249,7 +171,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Back button
                 Container(
                   width: 40,
                   height: 40,
@@ -309,22 +230,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           label: 'Email',
                           controller: _emailController,
                           errorText: _emailError,
-                          onChanged: _handleEmailChanged,
+                          onChanged: _validateEmail,
                           keyboardType: TextInputType.emailAddress,
                           textInputAction: TextInputAction.next,
                         ),
-                        if (_emailVerified &&
-                            _verifiedEmail == _emailController.text.trim()) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            'Email verified. You can finish registration.',
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: const Color(0xFFF7E4C6),
-                            ),
-                          ),
-                        ],
                         const SizedBox(height: 12),
                         _RegisterField(
                           label: 'Password',
@@ -408,10 +317,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 borderRadius: BorderRadius.circular(14),
                               ),
                             ),
-                            onPressed: _loading || _sendingOtp
-                                ? null
-                                : _handleRegister,
-                            child: _loading || _sendingOtp
+                            onPressed: _loading ? null : _handleRegister,
+                            child: _loading
                                 ? const SizedBox(
                                     height: 18,
                                     width: 18,

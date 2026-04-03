@@ -6,6 +6,8 @@ import 'package:iconstruct/core/materials/models/material_category.dart';
 import 'package:iconstruct/core/materials/models/material_item.dart';
 import 'package:iconstruct/core/materials/services/firestore_materials_service.dart';
 import 'package:iconstruct/features/auth/presentation/screens/material_estimator.dart';
+import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
+import 'package:iconstruct/features/auth/presentation/screens/main_home_screen.dart';
 
 IconData getFilterIcon(String filter) {
   switch (filter.trim()) {
@@ -1474,13 +1476,27 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _BottomNavItem(
-              icon: Icons.home_rounded,
-              label: 'Home',
-              isActive: true,
+            GestureDetector(
+              onTap: () {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const MainHomeScreen(),
+                  ),
+                  (route) => false,
+                );
+              },
+              child: const _BottomNavItem(
+                icon: Icons.home_rounded,
+                label: 'Home',
+                isActive: true,
+              ),
             ),
             const SizedBox(width: 10),
-            const _BottomIconButton(imagePath: 'assets/images/hammer.png'),
+            _BottomIconButton(
+              imagePath: 'assets/images/hammer.png',
+              onTap: () {},
+            ),
             const SizedBox(width: 10),
             _BottomIconButton(
               icon: Icons.calculate_rounded,
@@ -1498,7 +1514,18 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
               },
             ),
             const SizedBox(width: 10),
-            const _BottomIconButton(icon: Icons.folder_rounded),
+            _BottomIconButton(
+              icon: Icons.folder_rounded,
+              onTap: () {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const SavedProjectsScreen(),
+                  ),
+                  (route) => false,
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -1746,7 +1773,7 @@ class _AddedMaterialItem extends StatelessWidget {
           const SizedBox(width: 12),
           // Quantity Input
           Container(
-            width: 70,
+            width: 140,
             height: 38,
             decoration: BoxDecoration(
               color: Colors.transparent,
@@ -1772,10 +1799,10 @@ class _AddedMaterialItem extends StatelessWidget {
                       color: Colors.white,
                     ),
                     decoration: InputDecoration(
-                      hintText: '0',
+                      hintText: 'Enter quantity (optional)',
                       hintStyle: GoogleFonts.poppins(
                         color: Colors.white38,
-                        fontSize: 13,
+                        fontSize: 10,
                       ),
                       isDense: true,
                       contentPadding: EdgeInsets.zero,

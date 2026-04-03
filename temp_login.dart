@@ -1,8 +1,7 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:iconstruct/features/auth/data/email_service.dart';
+import 'package:iconstruct/features/auth/presentation/screens/email_verification_screen.dart';
 import 'package:iconstruct/features/auth/presentation/screens/forgot_password_screen.dart';
 import 'package:iconstruct/features/auth/presentation/screens/home_screen.dart';
 
@@ -16,6 +15,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final EmailService _emailService = EmailService();
 
   bool _obscurePassword = true;
   bool _loading = false;
@@ -56,7 +56,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
-    final email = _emailController.text.trim();
+    final email = _emailController.text;
     final password = _passwordController.text;
 
     _validateEmail(email);
@@ -68,93 +68,51 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _loading = true);
 
     try {
-      // 1. Send POST request to Node.js backend
-      final response = await http.post(
-        Uri.parse('http://10.0.2.2:5000/api/auth/login'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email, 'password': password}),
+      final credential = await _emailService.login(
+        email: email,
+        password: password,
       );
-
-      if (!mounted) return;
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        // Backend Node.js login successful
-
-        // STEP 1: Try to sign in to Firebase Auth
-        UserCredential? userCredential;
-        try {
-          userCredential = await FirebaseAuth.instance
-              .signInWithEmailAndPassword(email: email, password: password);
-        } on FirebaseAuthException catch (e) {
-          // STEP 2: If Firebase user does NOT exist, create one
-          if (e.code == 'user-not-found' ||
-              e.code == 'invalid-credential' ||
-              e.code == 'wrong-password') {
-            try {
-              userCredential = await FirebaseAuth.instance
-                  .createUserWithEmailAndPassword(
-                    email: email,
-                    password: password,
-                  );
-            } catch (createError) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Firebase Auto-Creation Failed: $createError',
-                    ),
-                  ),
-                );
-              }
-              return;
-            }
-          } else {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Firebase Error: ${e.message}')),
-              );
-            }
-            return;
-          }
-        }
-
-        // STEP 3: After successful Firebase login, get UID
-        final uid = userCredential.user?.uid;
-        if (uid == null) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Failed to retrieve Firebase UID.')),
-            );
-          }
+      await credential.user?.reload();
+      final verified = credential.user?.emailVerified ?? false;
+      if (!verified) {
+        final result = await _emailService.sendCurrentUserOtp();
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(result.message)));
+        final verificationResult = await showEmailVerificationOtpModal(
+          context,
+          email: email.trim(),
+        );
+        if (!mounted) return;
+        if (verificationResult?.success == true) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+            (route) => route.isFirst,
+          );
           return;
         }
 
-        debugPrint('Logged in successfully. Firebase UID: $uid');
-
-        // Navigate to main app screen
-        if (!mounted) return;
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-          (route) => route.isFirst,
-        );
-      } else {
-        // Invalid credentials from Node.js
-        final errorData = jsonDecode(response.body);
-        final errorMessage =
-            errorData['message'] ?? 'Login failed. Please try again.';
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(errorMessage)));
+        await _emailService.logout();
+        return;
       }
-    } catch (e) {
+
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (route) => route.isFirst,
+      );
+    } on EmailApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'A network error occurred. Please check your connection.',
-          ),
-        ),
+        const SnackBar(content: Text('Login failed. Please try again.')),
       );
     } finally {
       if (mounted) {
@@ -225,7 +183,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            "Welcome back—let's build smarter.",
+                            "Welcome backâ€”let's build smarter.",
                             style: GoogleFonts.poppins(
                               fontSize: 15,
                               fontWeight: FontWeight.w500,
@@ -417,3 +375,4 @@ class _LoginField extends StatelessWidget {
     );
   }
 }
+

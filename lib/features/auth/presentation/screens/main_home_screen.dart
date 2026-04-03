@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'package:iconstruct/features/auth/presentation/screens/cost_estimation.dart';
+import 'package:iconstruct/features/auth/presentation/screens/material_estimator.dart';
+import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
+
 class MainHomeScreen extends StatefulWidget {
   const MainHomeScreen({super.key});
 
@@ -324,7 +328,7 @@ class _BottomPillNav extends StatelessWidget {
               selected: index == 0,
               icon: Icons.home_rounded,
               label: 'Home',
-              onTap: () => onChanged(0),
+              onTap: () {},
             ),
           ),
           Expanded(
@@ -332,7 +336,17 @@ class _BottomPillNav extends StatelessWidget {
             child: _NavIconOnly(
               selected: index == 1,
               imagePath: 'assets/images/hammer.png',
-              onTap: () => onChanged(1),
+              onTap: () {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CostEstimationScreen(
+                      projectName: 'Your Project Name',
+                    ),
+                  ),
+                  (route) => false,
+                );
+              },
             ),
           ),
           Expanded(
@@ -340,7 +354,17 @@ class _BottomPillNav extends StatelessWidget {
             child: _NavIconOnly(
               selected: index == 2,
               icon: Icons.calculate_rounded,
-              onTap: () => onChanged(2),
+              onTap: () {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const MaterialEstimatorScreen(
+                      projectName: 'Your Project Name',
+                    ),
+                  ),
+                  (route) => false,
+                );
+              },
             ),
           ),
           Expanded(
@@ -348,7 +372,15 @@ class _BottomPillNav extends StatelessWidget {
             child: _NavIconOnly(
               selected: index == 3,
               icon: Icons.folder_rounded,
-              onTap: () => onChanged(3),
+              onTap: () {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const SavedProjectsScreen(),
+                  ),
+                  (route) => false,
+                );
+              },
             ),
           ),
         ],

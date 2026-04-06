@@ -1,0 +1,84 @@
+﻿// POST /auth/verify-otp
+app.post("/auth/verify-otp", async (req, res) => {
+  try {
+    let { email, otp, password } = req.body;
+    
+    if (!email || !otp) {
+      return res.status(400).json({ message: "Missing required fields (email, otp)" });
+    }
+    
+    email = normalizeKey(email);
+
+    const userRef = db.collection("users").doc(email);
+    const userSnap = await userRef.get();
+
+    if (!userSnap.exists) {
+      // If user not in firestore users, check the otps collection if it's password reset
+      // or simply return 404
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const userData = userSnap.data();
+
+    if (userData.otp_code !== otp) {
+      return res.status(400).json({ message: "Incorrect OTP code" });
+    }
+
+    if (Date.now() > userData.otp_expires_at) {
+      return res.status(400).json({ message: "OTP expired. Please request a new one." });
+    }
+    
+    let firebaseUid;
+
+    if (password) {
+      // Registration flow
+      const isMatch = await bcrypt.compare(password, userData.password);
+      if (!isMatch) {
+        return res.status(401).json({ message: "Invalid password provided for verification" });
+      }
+
+      // Create Firebase Auth account ONLY ONCE
+      try {
+          const userRecord = await admin.auth().createUser({
+              email: email,
+              password: password, 
+              displayName: \\ \\,
+              emailVerified: true
+          });
+          firebaseUid = userRecord.uid;
+      } catch (e) {
+          if (e.code === 'auth/email-already-exists') {
+              const existingUser = await admin.auth().getUserByEmail(email);
+              firebaseUid = existingUser.uid;
+          } else {
+              throw e;
+          }
+      }
+    } else {
+      // Forgot Password flow or when password is not provided
+      try {
+          const existingUser = await admin.auth().getUserByEmail(email);
+          firebaseUid = existingUser.uid;
+      } catch (e) {
+          if (e.code === 'auth/user-not-found') {
+              return res.status(404).json({ message: "Cannot reset password for unregistered email" });
+          }
+          throw e;
+      }
+    }
+
+    // Update Firestore User as verified
+    await userRef.update({
+      isVerified: true,
+      otp_code: admin.firestore.FieldValue.delete(),
+      otp_expires_at: admin.firestore.FieldValue.delete(),
+      firebaseUid: firebaseUid,
+      verified_at: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return res.status(200).json({ message: "Email verified successfully.", uid: firebaseUid });
+  } catch (error) {
+    console.error("Verify OTP Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});

@@ -1,7 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:http/http.dart' as http;
+import 'package:iconstruct/features/auth/data/email_service.dart';
 import 'package:iconstruct/features/auth/presentation/screens/email_verification_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -18,6 +17,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final EmailService _emailService = EmailService();
 
   bool _loading = false;
   bool _obscurePassword = true;
@@ -83,7 +83,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final password = _passwordController.text;
     final confirmPassword = _confirmPasswordController.text;
 
-    // Validate empty fields
     if (firstName.isEmpty ||
         lastName.isEmpty ||
         email.isEmpty ||
@@ -101,55 +100,42 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (_emailError != null ||
         _passwordError != null ||
         _confirmPasswordError != null) {
-      return; // Stop if validation failed
+      return;
     }
 
     setState(() => _loading = true);
 
     try {
-      final response = await http.post(
-        Uri.parse(
-          'http://10.0.2.2:5000/api/auth/register',
-        ), // Update with correct Node JS API base URL
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'firstName': firstName,
-          'lastName': lastName,
-          'email': email,
-          'password': password,
-        }),
+      await _emailService.register(
+        firstName: firstName,
+        lastName: lastName,
+        email: email,
+        password: password,
       );
 
       if (!mounted) return;
 
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        // Success
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Registration successful. OTP sent to email.'),
-          ),
-        );
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => EmailVerificationScreen(email: email),
-          ),
-        );
-      } else {
-        final errorData = jsonDecode(response.body);
-        final errorMessage = errorData['message'] ?? 'Registration failed.';
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(errorMessage)));
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Registration successful. OTP sent to email.'),
+        ),
+      );
+
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) =>
+              EmailVerificationScreen(email: email, password: password),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('A network error occurred.')),
+        SnackBar(
+          content: Text(e.toString().replaceAll('EmailApiException: ', '')),
+        ),
       );
     } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -171,6 +157,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Back button
                 Container(
                   width: 40,
                   height: 40,

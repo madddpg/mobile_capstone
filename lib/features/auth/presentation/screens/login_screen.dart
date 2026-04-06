@@ -1,8 +1,6 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:iconstruct/features/auth/data/email_service.dart';
 import 'package:iconstruct/features/auth/presentation/screens/forgot_password_screen.dart';
 import 'package:iconstruct/features/auth/presentation/screens/home_screen.dart';
 
@@ -16,6 +14,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final EmailService _emailService = EmailService();
 
   bool _obscurePassword = true;
   bool _loading = false;
@@ -61,105 +60,42 @@ class _LoginScreenState extends State<LoginScreen> {
 
     _validateEmail(email);
     _validatePassword(password);
-    if (_emailError != null || _passwordError != null) {
-      return;
-    }
+    if (_emailError != null || _passwordError != null) return;
 
     setState(() => _loading = true);
 
     try {
-      // 1. Send POST request to Node.js backend
-      final response = await http.post(
-        Uri.parse('http://10.0.2.2:5000/api/auth/login'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email, 'password': password}),
+      final credential = await _emailService.login(
+        email: email,
+        password: password,
       );
+      final uid = credential.user?.uid;
 
       if (!mounted) return;
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        // Backend Node.js login successful
-
-        // STEP 1: Try to sign in to Firebase Auth
-        UserCredential? userCredential;
-        try {
-          userCredential = await FirebaseAuth.instance
-              .signInWithEmailAndPassword(email: email, password: password);
-        } on FirebaseAuthException catch (e) {
-          // STEP 2: If Firebase user does NOT exist, create one
-          if (e.code == 'user-not-found' ||
-              e.code == 'invalid-credential' ||
-              e.code == 'wrong-password') {
-            try {
-              userCredential = await FirebaseAuth.instance
-                  .createUserWithEmailAndPassword(
-                    email: email,
-                    password: password,
-                  );
-            } catch (createError) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Firebase Auto-Creation Failed: $createError',
-                    ),
-                  ),
-                );
-              }
-              return;
-            }
-          } else {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Firebase Error: ${e.message}')),
-              );
-            }
-            return;
-          }
-        }
-
-        // STEP 3: After successful Firebase login, get UID
-        final uid = userCredential.user?.uid;
-        if (uid == null) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Failed to retrieve Firebase UID.')),
-            );
-          }
-          return;
-        }
-
-        debugPrint('Logged in successfully. Firebase UID: $uid');
-
-        // Navigate to main app screen
-        if (!mounted) return;
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-          (route) => route.isFirst,
+      if (uid == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to retrieve Firebase UID.')),
         );
-      } else {
-        // Invalid credentials from Node.js
-        final errorData = jsonDecode(response.body);
-        final errorMessage =
-            errorData['message'] ?? 'Login failed. Please try again.';
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(errorMessage)));
+        return;
       }
+
+      debugPrint('Logged in successfully. Firebase UID: $uid');
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (route) => route.isFirst,
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'A network error occurred. Please check your connection.',
-          ),
+        SnackBar(
+          content: Text(e.toString().replaceAll('EmailApiException: ', '')),
         ),
       );
     } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
+      if (mounted) setState(() => _loading = false);
     }
   }
 

@@ -5,7 +5,7 @@ class ApiConfig {
   /// Toggle this to switch between environments (Dev vs Production)
   static const Environment currentEnv = Environment.prod;
 
-  /// Dynamically computes the correct Base URL based on environment and device
+  /// Dynamically computes the correct Base URL based on environment
   static String get baseUrl {
     switch (currentEnv) {
       case Environment.prod:
@@ -14,10 +14,11 @@ class ApiConfig {
       case Environment.staging:
         return 'https://api.yourstagingdomain.com/api';
       case Environment.dev:
-        return 'http://172.20.10.5:5000/api'; // Local fallback
+        // Adjust this if you use an emulator (e.g., http://10.0.2.2:5001/...)
+        return 'https://us-central1-iconstruct-58a87.cloudfunctions.net/api';
     }
   }
 
   /// Specific endpoints
-  static String get authUrl => '$baseUrl/auth';
+  static String get authUrl => baseUrl;
 }

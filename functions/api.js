@@ -183,8 +183,8 @@ app.get("/materials", async (req, res) => {
   }
 });
 
-// POST /auth/register
-app.post("/auth/register", async (req, res) => {
+// POST /register
+app.post("/register", async (req, res) => {
   try {
     const { firstName, lastName, email, password } = req.body;
 
@@ -231,8 +231,8 @@ app.post("/auth/register", async (req, res) => {
   }
 });
 
-// POST /auth/login
-app.post("/auth/login", async (req, res) => {
+// POST /login
+app.post("/login", async (req, res) => {
   try {
     console.log("LOGIN HIT", req.body);
 
@@ -280,8 +280,8 @@ app.post("/auth/login", async (req, res) => {
   }
 });
 
-// POST /auth/verify-otp
-app.post("/auth/verify-otp", async (req, res) => {
+// POST /verify-otp
+app.post("/verify-otp", async (req, res) => {
   try {
     let { email, otp, password } = req.body;
 
@@ -374,8 +374,8 @@ app.post("/auth/verify-otp", async (req, res) => {
   }
 });
 
-// POST /auth/resend-otp
-app.post("/auth/resend-otp", async (req, res) => {
+// POST /resend-otp
+app.post("/resend-otp", async (req, res) => {
   try {
     let { email } = req.body;
 
@@ -409,8 +409,8 @@ app.post("/auth/resend-otp", async (req, res) => {
   }
 });
 
-// POST /auth/forgot-password
-app.post("/auth/forgot-password", async (req, res) => {
+// POST /forgot-password
+app.post("/forgot-password", async (req, res) => {
   try {
     let { email } = req.body;
     if (!email) {
@@ -444,8 +444,8 @@ app.post("/auth/forgot-password", async (req, res) => {
   }
 });
 
-// POST /auth/reset-password
-app.post("/auth/reset-password", async (req, res) => {
+// POST /reset-password
+app.post("/reset-password", async (req, res) => {
   try {
     let { email, verificationToken, newPassword } = req.body;
 

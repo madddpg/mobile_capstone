@@ -486,6 +486,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
                                       onTap: () => _showPlumbingSizePicker(
                                         selectedPlumbing.sizes!,
                                         mapKey,
+                                        category.title,
                                       ),
                                     ),
                                     const SizedBox(height: 10),
@@ -501,6 +502,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
                                       onTap: () => _showPlumbingLengthPicker(
                                         selectedPlumbing.lengths!,
                                         mapKey,
+                                        category.title,
                                       ),
                                     ),
                                     const SizedBox(height: 10),
@@ -518,61 +520,12 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
                                       onTap: () => _showCoverSizePicker(
                                         selectedPlumbing.coverSizes!,
                                         mapKey,
+                                        category.title,
                                       ),
                                     ),
                                     const SizedBox(height: 10),
                                   ],
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: SizedBox(
-                                      width: 110,
-                                      height: 36,
-                                      child: ElevatedButton(
-                                        onPressed:
-                                            _canAddSelectedPlumbing(mapKey)
-                                            ? () => _addSelectedPlumbingToList(
-                                                mapKey,
-                                                category.title,
-                                              )
-                                            : null,
-                                        style: ElevatedButton.styleFrom(
-                                          padding: EdgeInsets.zero,
-                                          elevation: 4,
-                                          shadowColor: Colors.black54,
-                                          backgroundColor: const Color(
-                                            0xFFEDE4D4,
-                                          ),
-                                          foregroundColor: const Color(
-                                            0xFF1E3042,
-                                          ),
-                                          disabledBackgroundColor: const Color(
-                                            0xFFEDE4D4,
-                                          ).withAlpha(40),
-                                          disabledForegroundColor: const Color(
-                                            0xFF1E3042,
-                                          ).withAlpha(120),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              18,
-                                            ),
-                                            side: BorderSide(
-                                              color: const Color(
-                                                0xFF1E3042,
-                                              ).withAlpha(90),
-                                              width: 1.2,
-                                            ),
-                                          ),
-                                        ),
-                                        child: Text(
-                                          'Add',
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
+                                  // Add plumbing button removed, auto updates instead
                                 ],
                                 const SizedBox(height: 14),
                               ],
@@ -644,45 +597,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
                         onTap: _showTileSizePicker,
                       ),
                       const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: SizedBox(
-                          width: 110,
-                          height: 36,
-                          child: ElevatedButton(
-                            onPressed: _canAddSelectedTile()
-                                ? _addSelectedTileToList
-                                : null,
-                            style: ElevatedButton.styleFrom(
-                              padding: EdgeInsets.zero,
-                              elevation: 4,
-                              shadowColor: Colors.black54,
-                              backgroundColor: const Color(0xFFEDE4D4),
-                              foregroundColor: const Color(0xFF1E3042),
-                              disabledBackgroundColor: const Color(
-                                0xFFEDE4D4,
-                              ).withAlpha(40),
-                              disabledForegroundColor: const Color(
-                                0xFF1E3042,
-                              ).withAlpha(120),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                                side: BorderSide(
-                                  color: const Color(0xFF1E3042).withAlpha(90),
-                                  width: 1.2,
-                                ),
-                              ),
-                            ),
-                            child: Text(
-                              'Add',
-                              style: GoogleFonts.poppins(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+                      // Add tile button removed, auto updates instead
                     ],
 
                     if (_addedTiles.isNotEmpty) ...[
@@ -961,6 +876,8 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
       }
     });
 
+    _syncSelectedTileToAddedList();
+
     showDialog<void>(
       context: context,
       builder: (context) {
@@ -1019,7 +936,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
 
     final titleKey = categoryTitle.trim().toLowerCase();
     if (titleKey.contains('plumb')) {
-      _primePlumbingOptionUi(effectiveCategoryKey, item);
+      _primePlumbingOptionUi(effectiveCategoryKey, item, categoryTitle);
     }
 
     final type = (item.type ?? '').trim().toLowerCase();
@@ -1035,6 +952,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
       });
 
       _primeTileSizeUi();
+      _syncSelectedTileToAddedList();
     }
   }
 
@@ -1051,7 +969,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     return true;
   }
 
-  void _addSelectedTileToList() {
+  void _syncSelectedTileToAddedList() {
     final categoryTitle = _tileCategoryTitleForTileSize;
     if (categoryTitle == null) return;
 
@@ -1076,11 +994,29 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     );
 
     setState(() {
-      final alreadyAdded = _addedTiles.any((e) => e.key == selection.key);
-      if (!alreadyAdded) {
+      final index = _addedTiles.indexWhere(
+        (e) => e.tileTypeName == selection.tileTypeName,
+      );
+      if (index != -1) {
+        // Update existing tile while preserving quantity
+        final existing = _addedTiles[index];
+        final updatedSelection = AddedTileSelection(
+          tileTypeName: selection.tileTypeName,
+          tileSizeGroup: selection.tileSizeGroup,
+          tileSizeName: selection.tileSizeName,
+          quantity: existing.quantity,
+        );
+        updatedSelection.qtyController.text = existing.qtyController.text;
+        _addedTiles[index] = updatedSelection;
+      } else {
+        // Add new tile block
         _addedTiles.add(selection);
       }
     });
+  }
+
+  void _addSelectedTileToList() {
+    _syncSelectedTileToAddedList();
   }
 
   bool _canAddSelectedPlumbing(String mapKey) {
@@ -1099,7 +1035,9 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     return true;
   }
 
-  void _addSelectedPlumbingToList(String mapKey, String categoryTitle) {
+  void _syncSelectedPlumbingToAddedList(String mapKey, String categoryTitle) {
+    if (!_canAddSelectedPlumbing(mapKey)) return;
+
     final selected = _materials.getSelectedForCategory(mapKey);
     if (selected == null) return;
 
@@ -1129,13 +1067,32 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     );
 
     setState(() {
-      final alreadyAdded = _addedPlumbingMaterials.any(
-        (e) => e.key == selection.key,
+      final index = _addedPlumbingMaterials.indexWhere(
+        (e) =>
+            e.categoryTitle == selection.categoryTitle &&
+            e.kind == selection.kind,
       );
-      if (!alreadyAdded) {
+      if (index != -1) {
+        final existing = _addedPlumbingMaterials[index];
+        final updatedSelection = AddedPlumbingSelection(
+          categoryTitle: selection.categoryTitle,
+          kind: selection.kind,
+          materialName: selection.materialName,
+          size: selection.size,
+          length: selection.length,
+          coverSize: selection.coverSize,
+          quantity: existing.quantity,
+        );
+        updatedSelection.qtyController.text = existing.qtyController.text;
+        _addedPlumbingMaterials[index] = updatedSelection;
+      } else {
         _addedPlumbingMaterials.add(selection);
       }
     });
+  }
+
+  void _addSelectedPlumbingToList(String mapKey, String categoryTitle) {
+    _syncSelectedPlumbingToAddedList(mapKey, categoryTitle);
   }
 
   String _effectivePlumbingOption(String? current, List<String> options) {
@@ -1145,7 +1102,11 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     return options.first;
   }
 
-  void _primePlumbingOptionUi(String mapKey, MaterialItem item) {
+  void _primePlumbingOptionUi(
+    String mapKey,
+    MaterialItem item,
+    String categoryTitle,
+  ) {
     final itemKey = '${mapKey.trim()}|${item.name.trim()}';
     final isNewItem = itemKey != _selectedPlumbingMaterialKeyByKind[mapKey];
 
@@ -1177,6 +1138,8 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
         _selectedCoverSizeByKind[mapKey] = coverSizes.first;
       }
     });
+
+    _syncSelectedPlumbingToAddedList(mapKey, categoryTitle);
   }
 
   bool _isOptionValid(String? current, List<String> options) {
@@ -1321,6 +1284,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
                 onPressed: () {
                   Navigator.of(context).pop();
                   _selectMaterial(item, showDescriptionModal: false);
+                  _syncSelectedTileToAddedList();
                 },
                 child: Text(
                   item.description.trim().isNotEmpty
@@ -1338,7 +1302,11 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     );
   }
 
-  void _showPlumbingSizePicker(List<String> options, String mapKey) {
+  void _showPlumbingSizePicker(
+    List<String> options,
+    String mapKey,
+    String categoryTitle,
+  ) {
     if (options.isEmpty) return;
 
     showDialog<void>(
@@ -1362,6 +1330,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
                   setState(() {
                     _selectedPlumbingSizeByKind[mapKey] = size;
                   });
+                  _syncSelectedPlumbingToAddedList(mapKey, categoryTitle);
                 },
                 child: Text(
                   size,
@@ -1377,7 +1346,11 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     );
   }
 
-  void _showPlumbingLengthPicker(List<String> options, String mapKey) {
+  void _showPlumbingLengthPicker(
+    List<String> options,
+    String mapKey,
+    String categoryTitle,
+  ) {
     if (options.isEmpty) return;
 
     showDialog<void>(
@@ -1401,6 +1374,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
                   setState(() {
                     _selectedPlumbingLengthByKind[mapKey] = length;
                   });
+                  _syncSelectedPlumbingToAddedList(mapKey, categoryTitle);
                 },
                 child: Text(
                   length,
@@ -1416,7 +1390,11 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     );
   }
 
-  void _showCoverSizePicker(List<String> options, String mapKey) {
+  void _showCoverSizePicker(
+    List<String> options,
+    String mapKey,
+    String categoryTitle,
+  ) {
     if (options.isEmpty) return;
 
     showDialog<void>(
@@ -1440,6 +1418,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
                   setState(() {
                     _selectedCoverSizeByKind[mapKey] = size;
                   });
+                  _syncSelectedPlumbingToAddedList(mapKey, categoryTitle);
                 },
                 child: Text(
                   size,

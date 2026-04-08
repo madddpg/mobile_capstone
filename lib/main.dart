@@ -14,7 +14,7 @@ Future<void> main() async {
   // Point to the local backend during development on Android
   if (kDebugMode) {
     try {
-      FirebaseFunctions.instance.useFunctionsEmulator('10.0.2.2', 5001);
+      FirebaseFunctions.instance.useFunctionsEmulator('172.20.10.5', 5001);
     } catch (e) {
       debugPrint('Failed to initialize Firebase Emulator: $e');
     }

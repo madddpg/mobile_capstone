@@ -1,11 +1,8 @@
 const admin = require("firebase-admin");
-const serviceAccount = require("./serviceAccountKey.json");
 
 if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    projectId: serviceAccount.project_id,
-  });
+  // Use Default Application Credentials in production
+  admin.initializeApp();
 }
 
 module.exports = admin;

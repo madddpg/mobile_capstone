@@ -1,16 +1,26 @@
 const crypto = require("crypto");
 const logger = require("firebase-functions/logger");
 const { onCall, HttpsError, onRequest } = require("firebase-functions/v2/https");
+const { setGlobalOptions } = require("firebase-functions/v2");
 const { Timestamp } = require("firebase-admin/firestore");
 
 const admin = require("./firebaseAdmin");
+
+// Apply production scale defaults
+setGlobalOptions({
+  region: "us-central1",
+  maxInstances: 10,
+  concurrency: 80,
+  timeoutSeconds: 120
+});
+
 const { app: apiApp } = require("./api");
 
+// Deploy as an Express-wrapped Cloud Function
 exports.api = onRequest({ cors: true }, apiApp);
 
 const db = admin.firestore();
 const auth = admin.auth();
-const admin = require("./firebaseAdmin");
 
 const OTP_TTL_MS = 5 * 60 * 1000;
 const OTP_REQUEST_COOLDOWN_MS = 60 * 1000;

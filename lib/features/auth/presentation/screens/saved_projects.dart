@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:iconstruct/features/auth/presentation/screens/main_home_screen.dart';
-import 'package:iconstruct/features/auth/presentation/screens/cost_estimation.dart';
 import 'package:iconstruct/features/auth/presentation/screens/material_estimator.dart';
+import 'package:iconstruct/core/state/active_project_state.dart';
+import 'package:iconstruct/core/utils/hammer_nav.dart';
 
 // --- Data Model ---
 class ProjectModel {
@@ -27,44 +30,23 @@ class ProjectModel {
     required this.status,
     required this.lastUpdated,
   });
-}
 
-// --- Dummy Data ---
-final List<ProjectModel> dummyProjects = [
-  ProjectModel(
-    id: '1',
-    projectName: 'Window Installation',
-    projectType: 'Bathroom Renovation • Structural',
-    materialCount: 12,
-    projectArea: 24.50,
-    costLevel: 'Medium',
-    materials: ['Tiles', 'PVC Pipe', 'Faucet', 'Cement', 'Sealant', 'Grout'],
-    status: 'Draft',
-    lastUpdated: DateTime.now().subtract(const Duration(hours: 2)),
-  ),
-  ProjectModel(
-    id: '2',
-    projectName: 'Kitchen Remodel',
-    projectType: 'Interior • Custom Woodwork',
-    materialCount: 45,
-    projectArea: 120.0,
-    costLevel: 'High',
-    materials: ['Cabinetry', 'Marble Countertop', 'Sink', 'Screws', 'Paint'],
-    status: 'Ready',
-    lastUpdated: DateTime.now().subtract(const Duration(days: 1)),
-  ),
-  ProjectModel(
-    id: '3',
-    projectName: 'Patio Extension',
-    projectType: 'Exterior • Landscaping',
-    materialCount: 8,
-    projectArea: 40.0,
-    costLevel: 'Low',
-    materials: ['Pavers', 'Sand', 'Gravel', 'Edging'],
-    status: 'Posted',
-    lastUpdated: DateTime.now().subtract(const Duration(days: 3)),
-  ),
-];
+  factory ProjectModel.fromDocument(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    return ProjectModel(
+      id: doc.id,
+      projectName: data['projectName'] ?? 'Unknown Project',
+      projectType: data['projectType'] ?? '',
+      materialCount: data['materialsCount'] ?? 0,
+      projectArea: (data['totalAreaSqm'] ?? 0.0).toDouble(),
+      costLevel: data['costLevel'] ?? 'Unknown',
+      materials: List<String>.from(data['selectedMaterials'] ?? []),
+      status: data['status'] ?? 'Draft',
+      lastUpdated:
+          (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+    );
+  }
+}
 
 // --- Screen ---
 class SavedProjectsScreen extends StatelessWidget {
@@ -142,16 +124,74 @@ class SavedProjectsScreen extends StatelessWidget {
 
                   // Project List
                   Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.only(
-                        left: 24,
-                        right: 24,
-                        top: 8,
-                        bottom: 120, // Extra space for bottom nav
-                      ),
-                      itemCount: dummyProjects.length,
-                      itemBuilder: (context, index) {
-                        return ProjectCard(project: dummyProjects[index]);
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseAuth.instance.currentUser == null
+                          ? const Stream.empty()
+                          : FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(FirebaseAuth.instance.currentUser!.uid)
+                                .collection('saved_projects')
+                                .orderBy('updatedAt', descending: true)
+                                .snapshots(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                            child: CircularProgressIndicator(color: creamBg),
+                          );
+                        }
+
+                        if (snapshot.hasError) {
+                          return Center(
+                            child: Text(
+                              'Error loading projects.',
+                              style: TextStyle(color: creamBg.withAlpha(150)),
+                            ),
+                          );
+                        }
+
+                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                          return Center(
+                            child: Text(
+                              'No saved projects yet.',
+                              style: TextStyle(
+                                color: creamBg.withAlpha(150),
+                                fontSize: 16,
+                              ),
+                            ),
+                          );
+                        }
+
+                        final projects = snapshot.data!.docs
+                            .map((doc) => ProjectModel.fromDocument(doc))
+                            .toList();
+
+                        return AnimatedBuilder(
+                          animation: ActiveProjectState.instance,
+                          builder: (context, child) {
+                            return ListView.builder(
+                              padding: const EdgeInsets.only(
+                                left: 24,
+                                right: 24,
+                                top: 8,
+                                bottom: 120, // Extra space for bottom nav
+                              ),
+                              itemCount: projects.length,
+                              itemBuilder: (context, index) {
+                                final project = projects[index];
+                                return ProjectCard(
+                                  project: project,
+                                  isActive:
+                                      project.id ==
+                                      ActiveProjectState
+                                          .instance
+                                          .activeProject
+                                          ?.id,
+                                );
+                              },
+                            );
+                          },
+                        );
                       },
                     ),
                   ),
@@ -228,17 +268,7 @@ class SavedProjectsScreen extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     child: GestureDetector(
-                      onTap: () {
-                        Navigator.pushAndRemoveUntil(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const CostEstimationScreen(
-                              projectName: 'Your Project Name',
-                            ),
-                          ),
-                          (route) => false,
-                        );
-                      },
+                      onTap: () => handleHammerTap(context),
                       child: Image.asset(
                         'assets/images/hammer.png',
                         width: 24,
@@ -311,8 +341,9 @@ class SavedProjectsScreen extends StatelessWidget {
 // --- Reusable Card ---
 class ProjectCard extends StatelessWidget {
   final ProjectModel project;
+  final bool isActive;
 
-  const ProjectCard({super.key, required this.project});
+  const ProjectCard({super.key, required this.project, this.isActive = false});
 
   String _formatTimeAgo(DateTime time) {
     final diff = DateTime.now().difference(time);
@@ -370,208 +401,236 @@ class ProjectCard extends StatelessWidget {
         ? '$previewMaterials +$remainingCount more'
         : previewMaterials;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 24),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: 12,
-            offset: Offset(0, 6),
+    return GestureDetector(
+      onTap: () {
+        ActiveProjectState.instance.setActiveProject(project);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${project.projectName} set as Active Project'),
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 1. Top Row: Small Title Label & Action Menu
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Project Name',
-                style: TextStyle(
-                  color: textMuted,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 0.5,
-                ),
-              ),
-              // Three-dot Quick Actions Menu
-              SizedBox(
-                height: 24,
-                width: 24,
-                child: PopupMenuButton<String>(
-                  padding: EdgeInsets.zero,
-                  icon: const Icon(Icons.more_vert, color: textDark, size: 22),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  onSelected: (value) {
-                    // Quick Action Handler
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'edit',
-                      child: Row(
-                        children: [
-                          Icon(Icons.edit_outlined, size: 20),
-                          SizedBox(width: 10),
-                          Text('Edit'),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'post',
-                      child: Row(
-                        children: [
-                          Icon(Icons.upload_outlined, size: 20),
-                          SizedBox(width: 10),
-                          Text('Post'),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.delete_outline,
-                            color: Colors.red,
-                            size: 20,
-                          ),
-                          SizedBox(width: 10),
-                          Text('Delete', style: TextStyle(color: Colors.red)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          // 2. Project Title & Status Badge
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Text(
-                  project.projectName,
-                  style: const TextStyle(
-                    color: textDark,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    height: 1.2,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Status Badge
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: _getStatusColor(project.status),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  project.status.toUpperCase(),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 24),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(28),
+          border: isActive
+              ? Border.all(color: const Color(0xFF648DB6), width: 3)
+              : null,
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black26,
+              blurRadius: 12,
+              offset: Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 1. Top Row: Small Title Label & Action Menu
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Project Name',
                   style: TextStyle(
-                    color: _getStatusTextColor(project.status),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
+                    color: textMuted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
                     letterSpacing: 0.5,
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-
-          // 3. Project Type / Category
-          Text(
-            project.projectType,
-            style: const TextStyle(
-              color: textMuted,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // 4. Key Project Summary
-          Text(
-            '${project.materialCount} Materials • ${project.projectArea.toStringAsFixed(2)} sq.m • ${_getCostEmoji(project.costLevel)} ${project.costLevel} Cost',
-            style: const TextStyle(
-              color: textDark,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // 5. Material Preview (Inline stylized text)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.4),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.6),
-                width: 1,
-              ),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.inventory_2_outlined,
-                  size: 16,
-                  color: textMuted,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    materialsText,
-                    style: const TextStyle(
-                      color: textMuted,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
+                // Three-dot Quick Actions Menu
+                SizedBox(
+                  height: 24,
+                  width: 24,
+                  child: PopupMenuButton<String>(
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(
+                      Icons.more_vert,
+                      color: textDark,
+                      size: 22,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    onSelected: (value) {
+                      if (value == 'edit') {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => MaterialEstimatorScreen(
+                              projectName: project.projectName,
+                              existingProject: project,
+                            ),
+                          ),
+                        );
+                      }
+                      // Quick Action Handler
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit_outlined, size: 20),
+                            SizedBox(width: 10),
+                            Text('Edit'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'post',
+                        child: Row(
+                          children: [
+                            Icon(Icons.upload_outlined, size: 20),
+                            SizedBox(width: 10),
+                            Text('Post'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.delete_outline,
+                              color: Colors.red,
+                              size: 20,
+                            ),
+                            SizedBox(width: 10),
+                            Text('Delete', style: TextStyle(color: Colors.red)),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-          ),
 
-          const SizedBox(height: 16),
+            // 2. Project Title & Status Badge
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(
+                    project.projectName,
+                    style: const TextStyle(
+                      color: textDark,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      height: 1.2,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Status Badge
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _getStatusColor(project.status),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    project.status.toUpperCase(),
+                    style: TextStyle(
+                      color: _getStatusTextColor(project.status),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
 
-          // 6. Last Updated
-          Row(
-            children: [
-              const Icon(Icons.access_time, size: 14, color: Colors.grey),
-              const SizedBox(width: 6),
-              Text(
-                _formatTimeAgo(project.lastUpdated),
-                style: TextStyle(
-                  color: Colors.grey.shade600,
-                  fontSize: 12,
-                  fontStyle: FontStyle.italic,
-                  fontWeight: FontWeight.w500,
+            // 3. Project Type / Category
+            Text(
+              project.projectType,
+              style: const TextStyle(
+                color: textMuted,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // 4. Key Project Summary
+            Text(
+              '${project.materialCount} Materials • ${project.projectArea.toStringAsFixed(2)} sq.m • ${_getCostEmoji(project.costLevel)} ${project.costLevel} Cost',
+              style: const TextStyle(
+                color: textDark,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // 5. Material Preview (Inline stylized text)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.6),
+                  width: 1,
                 ),
               ),
-            ],
-          ),
-        ],
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.inventory_2_outlined,
+                    size: 16,
+                    color: textMuted,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      materialsText,
+                      style: const TextStyle(
+                        color: textMuted,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // 6. Last Updated
+            Row(
+              children: [
+                const Icon(Icons.access_time, size: 14, color: Colors.grey),
+                const SizedBox(width: 6),
+                Text(
+                  _formatTimeAgo(project.lastUpdated),
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 12,
+                    fontStyle: FontStyle.italic,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

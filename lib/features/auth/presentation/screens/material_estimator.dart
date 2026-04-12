@@ -1,21 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:iconstruct/features/auth/presentation/screens/cost_estimation.dart'
-    show AddedTileSelection, AddedPlumbingSelection, CostEstimationScreen;
+    show AddedTileSelection, AddedPlumbingSelection;
 import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
 import 'package:iconstruct/features/auth/presentation/screens/main_home_screen.dart';
+import 'package:iconstruct/core/utils/hammer_nav.dart';
 
 class MaterialEstimatorScreen extends StatefulWidget {
   final String projectName;
   final List<AddedTileSelection> tiles;
   final List<AddedPlumbingSelection> plumbingMaterials;
+  final ProjectModel? existingProject;
 
   const MaterialEstimatorScreen({
     super.key,
     required this.projectName,
     this.tiles = const [],
     this.plumbingMaterials = const [],
+    this.existingProject,
   });
 
   @override
@@ -26,12 +31,57 @@ class MaterialEstimatorScreen extends StatefulWidget {
 class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
   String? _selectedBudget;
   double _projectArea = 0.0;
+  String _projectName = '';
+  late String _projectType;
   final PageController _materialsPageController = PageController();
+
+  late final TextEditingController _projectNameController;
+  late final TextEditingController _projectTypeController;
+  late final TextEditingController _projectAreaController;
 
   int _currentMaterialPage = 0;
 
+  List<AddedTileSelection> _localTiles = [];
+  List<AddedPlumbingSelection> _localPlumbing = [];
+  List<String> _localMaterials = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _localTiles = List.from(widget.tiles);
+    _localPlumbing = List.from(widget.plumbingMaterials);
+
+    if (widget.existingProject != null) {
+      _projectName = widget.existingProject!.projectName;
+      _projectType = widget.existingProject!.projectType;
+      _projectArea = widget.existingProject!.projectArea;
+
+      final costLvl = widget.existingProject!.costLevel.toLowerCase();
+      if (costLvl.contains('low')) {
+        _selectedBudget = 'Low Budget';
+      } else if (costLvl.contains('high')) {
+        _selectedBudget = 'High Budget';
+      } else {
+        _selectedBudget = 'Mid Budget';
+      }
+
+      _localMaterials = List<String>.from(widget.existingProject!.materials);
+    } else {
+      _projectType = widget.projectName;
+    }
+
+    _projectNameController = TextEditingController(text: _projectName);
+    _projectTypeController = TextEditingController(text: _projectType);
+    _projectAreaController = TextEditingController(
+      text: _projectArea > 0 ? _projectArea.toString() : '',
+    );
+  }
+
   @override
   void dispose() {
+    _projectNameController.dispose();
+    _projectTypeController.dispose();
+    _projectAreaController.dispose();
     _materialsPageController.dispose();
     super.dispose();
   }
@@ -150,17 +200,31 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
           ),
           const SizedBox(height: 16),
           _buildInputLabel('Project Name:'),
-          _buildTextField('e.g., Living Room Renovation'),
+          _buildTextField(
+            'e.g., Living Room Renovation',
+            controller: _projectNameController,
+            onChanged: (val) {
+              setState(() {
+                _projectName = val;
+              });
+            },
+          ),
           const SizedBox(height: 16),
           _buildInputLabel('Project Type:'),
           _buildTextField(
             'e.g., Window Installation',
-            initialValue: widget.projectName,
+            controller: _projectTypeController,
+            onChanged: (val) {
+              setState(() {
+                _projectType = val;
+              });
+            },
           ),
           const SizedBox(height: 16),
           _buildInputLabel('Project Area:\n(sq meters)', maxLines: 2),
           _buildTextField(
             '0.00',
+            controller: _projectAreaController,
             onChanged: (val) {
               setState(() {
                 _projectArea = double.tryParse(val) ?? 0.0;
@@ -174,7 +238,9 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
           const SizedBox(height: 24),
           _buildInputLabel('Selected Materials:'),
           const SizedBox(height: 10),
-          if (widget.tiles.isEmpty && widget.plumbingMaterials.isEmpty)
+          if (_localTiles.isEmpty &&
+              _localPlumbing.isEmpty &&
+              _localMaterials.isEmpty)
             Text(
               'No materials selected.',
               style: GoogleFonts.poppins(
@@ -192,9 +258,10 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
 
   Widget _buildSelectedMaterialsSlider() {
     final List<Widget> allMaterials = [
-      for (final tile in widget.tiles) _buildTileCard(tile),
-      for (final plumbing in widget.plumbingMaterials)
-        _buildPlumbingCard(plumbing),
+      for (final material in _localMaterials)
+        _buildStringMaterialCard(material),
+      for (final tile in _localTiles) _buildTileCard(tile),
+      for (final plumbing in _localPlumbing) _buildPlumbingCard(plumbing),
     ];
 
     final int itemsPerPage = 4;
@@ -294,7 +361,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
 
           _buildSummaryRow(
             'Materials:',
-            '${widget.tiles.length + widget.plumbingMaterials.length} items',
+            '${_localTiles.length + _localPlumbing.length + _localMaterials.length} items',
           ),
 
           const SizedBox(height: 8),
@@ -338,14 +405,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
             children: [
               Expanded(
                 child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const SavedProjectsScreen(),
-                      ),
-                    );
-                  },
+                  onPressed: _saveProject,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFEDE4D4),
                     foregroundColor: const Color(0xFF2C3E50),
@@ -419,6 +479,91 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
     );
   }
 
+  Future<void> _saveProject() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please log in to save projects')),
+        );
+      }
+      return;
+    }
+
+    if (_projectName.trim().isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter a Project Name')),
+        );
+      }
+      return;
+    }
+
+    try {
+      final materialsList = [
+        ..._localMaterials,
+        ..._localTiles.map((t) => t.tileTypeName),
+        ..._localPlumbing.map((p) => p.materialName),
+      ];
+
+      // Convert selectedBudget strings to expected costLevel logic
+      String costLevel = 'medium';
+      if (_selectedBudget != null) {
+        if (_selectedBudget!.toLowerCase().contains('low')) {
+          costLevel = 'low';
+        } else if (_selectedBudget!.toLowerCase().contains('high')) {
+          costLevel = 'high';
+        }
+      }
+
+      final Map<String, dynamic> projectData = {
+        'projectName': _projectName,
+        'projectType': _projectType,
+        'costLevel': costLevel,
+        'selectedMaterials': materialsList,
+        'materialsCount': materialsList.length,
+        'totalAreaSqm': _projectArea,
+        'status': widget.existingProject?.status ?? 'draft',
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (widget.existingProject != null) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('saved_projects')
+            .doc(widget.existingProject!.id)
+            .update(projectData);
+      } else {
+        projectData['createdAt'] = FieldValue.serverTimestamp();
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('saved_projects')
+            .add(projectData);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Project saved successfully!')),
+        );
+        // By using `push` instead of `pushReplacement`, the current screen
+        // stays in the navigation stack, preserving values. When the user taps
+        // "Back" on SavedProjectsScreen, they will perfectly return here.
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const SavedProjectsScreen()),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error saving project: $e')));
+      }
+    }
+  }
+
   Widget _buildInputLabel(String label, {int maxLines = 1}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
@@ -434,7 +579,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
 
   Widget _buildTextField(
     String hintText, {
-    String? initialValue,
+    TextEditingController? controller,
     ValueChanged<String>? onChanged,
     TextInputType? keyboardType,
   }) {
@@ -446,9 +591,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         border: Border.all(color: const Color(0xFFEDE4D4), width: 1),
       ),
       child: TextField(
-        controller: initialValue != null
-            ? TextEditingController(text: initialValue)
-            : null,
+        controller: controller,
         onChanged: onChanged,
         keyboardType: keyboardType,
         style: GoogleFonts.poppins(color: Colors.white, fontSize: 14),
@@ -514,6 +657,20 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
     );
   }
 
+  Widget _buildStringMaterialCard(String material) {
+    return SelectedMaterialCard(
+      name: material,
+      category: 'Material',
+      quantity: 0,
+      projectArea: _projectArea,
+      onRemove: () {
+        setState(() {
+          _localMaterials.remove(material);
+        });
+      },
+    );
+  }
+
   Widget _buildTileCard(AddedTileSelection tile) {
     return SelectedMaterialCard(
       name: tile.tileTypeName,
@@ -524,7 +681,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       projectArea: _projectArea,
       onRemove: () {
         setState(() {
-          widget.tiles.remove(tile);
+          _localTiles.remove(tile);
         });
       },
     );
@@ -541,7 +698,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       projectArea: _projectArea,
       onRemove: () {
         setState(() {
-          widget.plumbingMaterials.remove(plumbing);
+          _localPlumbing.remove(plumbing);
         });
       },
     );
@@ -583,17 +740,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
             const SizedBox(width: 10),
             _BottomIconButton(
               imagePath: 'assets/images/hammer.png',
-              onTap: () {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CostEstimationScreen(
-                      projectName: 'Your Project Name',
-                    ),
-                  ),
-                  (route) => false,
-                );
-              },
+              onTap: () => handleHammerTap(context),
             ),
             const SizedBox(width: 10),
             const _BottomNavItem(

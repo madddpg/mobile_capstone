@@ -62,22 +62,40 @@ class SavedProjectsScreen extends StatelessWidget {
       body: Stack(
         children: [
           // 1. Background Layer (Cream fading to Light Blue)
+          // 1. Full dark blue background ONLY
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [creamBg, lightBlue],
-                stops: [0.5, 1.0],
+                colors: [
+                  Color(0xFFE0D7C9), // cream top
+                  Color(0xFF2C3E50), // dark blue mid
+                  Color(0xFF648DB6), // light blue bottom
+                ],
+                stops: [0.28, 0.55, 1.0],
+              ),
+            ),
+          ),
+
+          Positioned(
+            left: 0,
+            top: -200,
+            width: 393,
+            height: 585,
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFFE0D7C9), // YOUR cream
+                borderRadius: BorderRadius.all(Radius.circular(50)),
               ),
             ),
           ),
 
           // 2. Main Dark Blue Panel (Offset from left)
           Positioned(
-            top: 140,
+            top: 110,
             bottom: 0,
-            left: 55, // Indented from left to match prototype
+            left: 70,
             right: 0,
             child: Container(
               decoration: const BoxDecoration(

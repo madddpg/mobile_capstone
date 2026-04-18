@@ -183,21 +183,34 @@ app.get("/materials", async (req, res) => {
   }
 });
 
-// POST /register
+// Removed auth routes since we now rely entirely on Firebase Auth
+// and the callable functions exported in index.js. 
+
 app.post("/register", async (req, res) => {
-  try {
-    const { firstName, lastName, email, password } = req.body;
+  return res.status(410).json({ message: "Registration is handled natively via the Flutter app." });
+});
 
-    if (!email || !password || !firstName) {
-      return res.status(400).json({ message: "Missing required fields" });
-    }
+app.post("/login", async (req, res) => {
+  return res.status(410).json({ message: "Login is handled natively via the Flutter app." });
+});
 
-    const emailKey = normalizeKey(email);
-    const userRef = db.collection("users").doc(emailKey);
-    const existingUser = await userRef.get();
+app.post("/verify-otp", async (req, res) => {
+  return res.status(410).json({ message: "Use Firebase Cloud Functions verifyEmailOtp instead." });
+});
 
-    if (existingUser.exists) {
-      return res.status(409).json({ message: "Email already registered" });
+app.post("/resend-otp", async (req, res) => {
+  return res.status(410).json({ message: "Use Firebase Cloud Functions sendEmailOtp instead." });
+});
+
+app.post("/forgot-password", async (req, res) => {
+  return res.status(410).json({ message: "Use Firebase Cloud Functions sendEmailOtp instead." });
+});
+
+app.post("/reset-password", async (req, res) => {
+  return res.status(410).json({ message: "Use Firebase Cloud Functions resetPasswordWithToken instead." });
+});
+
+module.exports = { app };
     }
 
     const otp = generateOtp();

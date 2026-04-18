@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconstruct/features/auth/data/email_service.dart';
-import 'package:iconstruct/features/auth/presentation/screens/email_verification_screen.dart';
+import 'package:iconstruct/features/auth/presentation/widgets/otp_dialog.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -106,7 +106,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _loading = true);
 
     try {
-      await _emailService.register(
+      debugPrint('Registration started');
+      final uid = await _emailService.register(
         firstName: firstName,
         lastName: lastName,
         email: email,
@@ -121,11 +122,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       );
 
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) =>
-              EmailVerificationScreen(email: email, password: password),
-        ),
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => OtpDialog(email: email, uid: uid),
       );
     } catch (e) {
       if (!mounted) return;

@@ -6,12 +6,12 @@ import 'package:iconstruct/features/auth/presentation/screens/login_screen.dart'
 
 class EmailVerificationScreen extends StatefulWidget {
   final String email;
-  final String password;
+  final String uid;
 
   const EmailVerificationScreen({
     super.key,
     required this.email,
-    required this.password,
+    required this.uid,
   });
 
   @override
@@ -122,7 +122,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
       final result = await _emailService.verifyOtp(
         email: widget.email,
         otp: _enteredOtp,
-        password: widget.password,
+        uid: widget.uid,
       );
 
       if (!mounted) return;

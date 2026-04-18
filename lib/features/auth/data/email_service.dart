@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import '../../../core/api_config.dart';
 
 class EmailSendOtpResult {
@@ -96,7 +98,7 @@ class EmailService {
     }
   }
 
-  Future<void> register({
+  Future<String> register({
     required String firstName,
     required String lastName,
     required String email,
@@ -108,30 +110,92 @@ class EmailService {
     }
 
     try {
-      final response = await _post('/register', {
-        'firstName': firstName,
-        'lastName': lastName,
-        'email': trimmedEmail,
-        'password': password,
-      });
+      debugPrint('================ REGISTRATION FLOW ================');
+      debugPrint('Attempting Firebase Registration for email: $trimmedEmail');
 
-      final data = _safeDecode(response);
-      if (response.statusCode != 201 && response.statusCode != 200) {
+      // 1. Create the Firebase Auth user first
+      final userCredential = await _auth.createUserWithEmailAndPassword(
+        email: trimmedEmail,
+        password: password,
+      );
+      final uid = userCredential.user!.uid;
+
+      debugPrint('Registered successfully. Auth UID: $uid');
+      debugPrint('Auth Email: ${userCredential.user!.email}');
+
+      // 2. Create the Firestore profile aligned to the UID
+      debugPrint('Creating Firestore document at users/$uid');
+      await createUserDocument(
+        uid: uid,
+        firstName: firstName,
+        lastName: lastName,
+        email: trimmedEmail,
+      );
+
+      debugPrint('Firestore doc created successfully.');
+
+      // 3. Trigger OTP through Callable Cloud Function
+      debugPrint(
+        'Triggering OTP via Callable Function for email: $trimmedEmail',
+      );
+      final httpsCallable = FirebaseFunctions.instance.httpsCallable(
+        'sendEmailOtp',
+      );
+      await httpsCallable.call({'email': trimmedEmail});
+
+      debugPrint('OTP send success');
+
+      // 4. Sign out immediately so they aren't authenticated yet
+      await _auth.signOut();
+      debugPrint('signOut after registration');
+
+      debugPrint('================ REGISTRATION COMPLETE ================');
+      return uid;
+    } on FirebaseAuthException catch (e) {
+      debugPrint('Firebase Auth Error: ${e.code} - ${e.message}');
+      if (e.code == 'email-already-in-use') {
         throw EmailApiException(
-          data['message'] ?? 'Registration failed.',
-          statusCode: response.statusCode,
+          'The email address is already in use by another account.',
         );
+      } else if (e.code == 'weak-password') {
+        throw EmailApiException('The password provided is too weak.');
+      } else if (e.code == 'invalid-email') {
+        throw EmailApiException('The email address is badly formatted.');
       }
+      throw EmailApiException('Registration failed: ${e.message}');
     } catch (e) {
       if (e is EmailApiException) rethrow;
       throw EmailApiException('Registration failed. $e');
     }
   }
 
+  /// Helper method to create a clean user document ensuring duplicates are avoided
+  Future<void> createUserDocument({
+    required String uid,
+    required String firstName,
+    required String lastName,
+    required String email,
+  }) async {
+    final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
+
+    await userRef.set(
+      {
+        'firebaseUid': uid,
+        'firstName': firstName,
+        'lastName': lastName,
+        'email': email,
+        'isVerified': false,
+        'created_at': FieldValue.serverTimestamp(),
+        'verified_at': null,
+      },
+      SetOptions(merge: true),
+    ); // Prefer merge to not overwrite existing valid chunks
+  }
+
   Future<EmailOtpVerificationResult> verifyOtp({
     required String email,
     required String otp,
-    String? password,
+    String? uid,
   }) async {
     final trimmedEmail = email.trim();
     final trimmedOtp = otp.trim();
@@ -144,25 +208,34 @@ class EmailService {
     }
 
     try {
-      final requestBody = {'email': trimmedEmail, 'otp': trimmedOtp};
-      if (password != null && password.isNotEmpty) {
-        requestBody['password'] = password;
-      }
+      final httpsCallable = FirebaseFunctions.instance.httpsCallable(
+        'verifyEmailOtp',
+      );
+      final result = await httpsCallable.call({
+        'email': trimmedEmail,
+        'otp': trimmedOtp,
+      });
+      final data = result.data as Map<String, dynamic>;
 
-      final response = await _post('/verify-otp', requestBody);
-      final data = _safeDecode(response);
-
-      if (response.statusCode != 200) {
-        throw EmailApiException(
-          data['message'] ?? 'OTP Verification failed.',
-          statusCode: response.statusCode,
-        );
+      // Automatically update the user profile's verification status
+      if (uid != null) {
+        final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
+        await userRef.update({
+          'isVerified': true,
+          'verified_at': FieldValue.serverTimestamp(),
+        });
+        debugPrint('OTP success. Profile updated for UID $uid.');
       }
 
       return EmailOtpVerificationResult(
         success: true,
         message: data['message'] ?? 'Email verified successfully.',
-        verificationToken: data['uid'] as String?,
+        verificationToken: data['verificationToken'] as String?,
+      );
+    } on FirebaseFunctionsException catch (e) {
+      throw EmailApiException(
+        'OTP Verification failed: ${e.message}',
+        statusCode: e.code.hashCode,
       );
     } catch (e) {
       if (e is EmailApiException) rethrow;
@@ -181,35 +254,34 @@ class EmailService {
 
     try {
       if (isPasswordReset) {
-        final response = await _post('/forgot-password', {
+        final httpsCallable = FirebaseFunctions.instance.httpsCallable(
+          'sendEmailOtp',
+        );
+        // If your reset password flow triggers from the identical endpoint, or if you use resetPasswordWithToken:
+        await httpsCallable.call({
           'email': trimmedEmail,
+          // 'isPasswordReset': true // Add this on backend if needed
         });
-        final data = _safeDecode(response);
 
-        if (response.statusCode != 200) {
-          throw EmailApiException(
-            data['message'] ?? 'Failed to send OTP.',
-            statusCode: response.statusCode,
-          );
-        }
-        return EmailSendOtpResult(
+        return const EmailSendOtpResult(
           success: true,
-          message: data['message'] ?? 'OTP sent. Please check your inbox.',
+          message: 'OTP sent. Please check your inbox.',
         );
       }
 
-      final response = await _post('/resend-otp', {'email': trimmedEmail});
-      final data = _safeDecode(response);
+      final httpsCallable = FirebaseFunctions.instance.httpsCallable(
+        'sendEmailOtp',
+      );
+      await httpsCallable.call({'email': trimmedEmail});
 
-      if (response.statusCode != 200) {
-        throw EmailApiException(
-          data['message'] ?? 'Failed to resend OTP.',
-          statusCode: response.statusCode,
-        );
-      }
-      return EmailSendOtpResult(
+      return const EmailSendOtpResult(
         success: true,
-        message: data['message'] ?? 'OTP sent. Please check your inbox.',
+        message: 'OTP sent. Please check your inbox.',
+      );
+    } on FirebaseFunctionsException catch (e) {
+      throw EmailApiException(
+        'Failed to send OTP: ${e.message}',
+        statusCode: e.code.hashCode,
       );
     } catch (e) {
       if (e is EmailApiException) rethrow;
@@ -227,25 +299,62 @@ class EmailService {
     }
 
     try {
-      // 1. Verify locally with Node
-      final response = await _post('/login', {
-        'email': trimmedEmail,
-        'password': password,
-      });
-      final data = _safeDecode(response);
+      debugPrint('================ LOGIN FLOW ================');
+      debugPrint('Attempting login for email: $trimmedEmail');
 
-      if (response.statusCode != 200) {
-        throw EmailApiException(
-          data['message'] ?? 'Login failed.',
-          statusCode: response.statusCode,
-        );
-      }
-
-      // 2. Sign in with Firebase
-      return await _auth.signInWithEmailAndPassword(
+      // 1. Authenticate with Firebase Auth explicitly
+      final credential = await _auth.signInWithEmailAndPassword(
         email: trimmedEmail,
         password: password,
       );
+
+      final uid = credential.user?.uid;
+
+      if (uid == null) {
+        throw const EmailApiException('Login failed: User UID is null.');
+      }
+
+      debugPrint('Firebase Auth UID: $uid');
+      debugPrint('Auth Email: ${credential.user?.email}');
+
+      // 2. Fetch profile ONLY with user's UID
+      final userDocRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid);
+      final userDoc = await userDocRef.get();
+
+      debugPrint('Fetched Firestore doc ID: ${userDocRef.id}');
+      debugPrint('Firestore doc exists: ${userDoc.exists}');
+
+      // 3. Auto-create missing profile with merge-safe defaults
+      if (!userDoc.exists) {
+        debugPrint(
+          'Profile missing! Auto-creating Firestore document for $uid',
+        );
+        await userDocRef.set({
+          'firebaseUid': uid,
+          'email': trimmedEmail,
+          'firstName': '', // Defaults
+          'lastName': '', // Defaults
+          'isVerified': credential.user?.emailVerified ?? false,
+          'created_at': FieldValue.serverTimestamp(),
+          'verified_at': null,
+        }, SetOptions(merge: true));
+      }
+
+      debugPrint('================ LOGIN COMPLETE ================');
+
+      return credential;
+    } on FirebaseAuthException catch (e) {
+      // Catch specific Firebase Auth exceptions to handle "user not found" properly
+      if (e.code == 'user-not-found' ||
+          e.code == 'invalid-credential' ||
+          e.code == 'invalid-email') {
+        throw EmailApiException(
+          'Invalid email or password. User not found or incorrect credentials.',
+        );
+      }
+      throw EmailApiException('Firebase Login failed: ${e.message}');
     } catch (e) {
       if (e is EmailApiException) rethrow;
       throw EmailApiException('Login failed. $e');
@@ -265,19 +374,19 @@ class EmailService {
     }
 
     try {
-      final response = await _post('/reset-password', {
+      final httpsCallable = FirebaseFunctions.instance.httpsCallable(
+        'resetPasswordWithToken',
+      );
+      await httpsCallable.call({
         'email': trimmedEmail,
-        'verificationToken': verificationToken,
+        'token': verificationToken,
         'newPassword': newPassword,
       });
-
-      final data = _safeDecode(response);
-      if (response.statusCode != 200) {
-        throw EmailApiException(
-          data['message'] ?? 'Failed to reset password. Please try again.',
-          statusCode: response.statusCode,
-        );
-      }
+    } on FirebaseFunctionsException catch (e) {
+      throw EmailApiException(
+        'Failed to reset password: ${e.message}',
+        statusCode: e.code.hashCode,
+      );
     } catch (e) {
       if (e is EmailApiException) rethrow;
       throw EmailApiException('Failed to reset password. $e');

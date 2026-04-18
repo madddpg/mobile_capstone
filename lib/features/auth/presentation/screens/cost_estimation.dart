@@ -8,6 +8,7 @@ import 'package:iconstruct/core/materials/services/firestore_materials_service.d
 import 'package:iconstruct/features/auth/presentation/screens/material_estimator.dart';
 import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
 import 'package:iconstruct/features/auth/presentation/screens/main_home_screen.dart';
+import 'package:iconstruct/core/materials/services/favorites_service.dart';
 
 IconData getFilterIcon(String filter) {
   switch (filter.trim()) {
@@ -24,8 +25,13 @@ IconData getFilterIcon(String filter) {
 
 class CostEstimationScreen extends StatefulWidget {
   final String projectName;
+  final MaterialItem? preselectedMaterial;
 
-  const CostEstimationScreen({super.key, required this.projectName});
+  const CostEstimationScreen({
+    super.key,
+    required this.projectName,
+    this.preselectedMaterial,
+  });
 
   @override
   State<CostEstimationScreen> createState() => _CostEstimationScreenState();
@@ -82,6 +88,37 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     await _materials.loadForProject(projectQuery);
 
     if (!mounted) return;
+
+    if (widget.preselectedMaterial != null) {
+      final pm = widget.preselectedMaterial!;
+      // Find the exact item loaded from the category to ensure correct reference
+      final catItems = _materials.getItemsByCategory(pm.category);
+      final loadedItem = catItems.cast<MaterialItem?>().firstWhere(
+        (element) => element?.name == pm.name,
+        orElse: () => null,
+      );
+
+      if (loadedItem != null) {
+        final kindKey = (loadedItem.kind ?? '').trim();
+        _onMaterialSelected(
+          loadedItem.category,
+          loadedItem,
+          kindKey: kindKey.isEmpty ? 'Others' : kindKey,
+          showDescriptionModal: false,
+        );
+
+        final slides = _slideshowCategories(_materials.categories);
+        final tIndex = slides.indexWhere((c) => c.title == loadedItem.category);
+        if (tIndex != -1) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_categoryPageController.hasClients) {
+              _categoryPageController.jumpToPage(tIndex);
+            }
+          });
+        }
+      }
+    }
+
     if (_isBathroomRenovationProject(projectQuery)) {
       _primeTileSizeUi();
     }
@@ -923,6 +960,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     String categoryTitle,
     MaterialItem item, {
     String? kindKey,
+    bool showDescriptionModal = true,
   }) {
     final effectiveCategoryKey = kindKey != null
         ? '${categoryTitle.trim()}|$kindKey'
@@ -931,7 +969,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     _selectMaterial(
       item,
       categoryKey: effectiveCategoryKey,
-      showDescriptionModal: true,
+      showDescriptionModal: showDescriptionModal,
     );
 
     final titleKey = categoryTitle.trim().toLowerCase();
@@ -1643,9 +1681,75 @@ class _MaterialCardOption extends StatelessWidget {
                 ],
               ),
             ),
+            if (!item.category.contains('Tile Size'))
+              _FavoriteButton(item: item),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _FavoriteButton extends StatelessWidget {
+  final MaterialItem item;
+  const _FavoriteButton({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final service = FavoritesService();
+
+    return StreamBuilder<bool>(
+      stream: service.isFavorite(item),
+      builder: (context, snapshot) {
+        final isFavorite = snapshot.data ?? false;
+
+        return IconButton(
+          onPressed: () async {
+            try {
+              if (isFavorite) {
+                await service.removeFavorite(item);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Removed from favorites'),
+                      backgroundColor: Colors.red.shade400,
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                }
+              } else {
+                await service.addFavorite(item);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Added to favorites'),
+                      backgroundColor: Colors.green.shade400,
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                }
+              }
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Failed to update favorites')),
+                );
+              }
+            }
+          },
+          icon: Icon(
+            isFavorite
+                ? Icons.favorite_rounded
+                : Icons.favorite_outline_rounded,
+            color: isFavorite
+                ? Colors.red.shade400
+                : const Color(0xFFEDE4D4).withAlpha(160),
+            size: 24,
+          ),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+        );
+      },
     );
   }
 }

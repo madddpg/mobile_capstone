@@ -511,7 +511,9 @@ exports.onQuotationSubmitted = onDocumentCreated("projectPosts/{postId}/quotatio
         notification: { title, body: message },
         data: {
           postId: String(postId),
-          type: "quotation",
+          shopId: String(shopId),
+          notificationId: String(notificationRef.id),
+          type: "new_quotation",
           click_action: "FLUTTER_NOTIFICATION_CLICK"
         },
         tokens: fcmTokens

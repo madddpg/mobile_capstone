@@ -385,8 +385,12 @@ exports.onProjectPostCreated = onDocumentCreated("projectPosts/{postId}", async 
     const batch = db.batch(); // Batch to create in-app notifications
 
     // 2. Prepare payload parameters
-    const title = `New Project in ${postData.locationCity || "your area"}`;
-    const message = `A user posted a material request for ${postData.projectType} (${postData.materialsCount} items).`;
+    const title = "New Project Posted";
+    const message = postData.materialsCount
+      ? `A user posted a ${postData.projectType || 'project'} request with ${postData.materialsCount} materials.`
+      : `A user posted a new ${postData.projectType || 'project'} request.`;
+
+    let notificationCount = 0;
 
     // 3. Iterate shops to collect tokens and create in-app notifications
     shopsSnapshot.forEach((shopDoc) => {
@@ -394,8 +398,10 @@ exports.onProjectPostCreated = onDocumentCreated("projectPosts/{postId}", async 
       const shopData = shopDoc.data();
 
       // Collect FCM Tokens
-      if (shopData.fcmTokens && Array.isArray(shopData.fcmTokens)) {
+      if (Array.isArray(shopData.fcmTokens) && shopData.fcmTokens.length > 0) {
         fcmTokens.push(...shopData.fcmTokens);
+      } else if (typeof shopData.fcmToken === 'string' && shopData.fcmToken.trim() !== '') {
+        fcmTokens.push(shopData.fcmToken);
       }
 
       // Prepare in-app notification document
@@ -404,34 +410,47 @@ exports.onProjectPostCreated = onDocumentCreated("projectPosts/{postId}", async 
         type: "new_project_post",
         postId: postId,
         recipientId: shopId,
+        recipientType: "shop",
         title: title,
         message: message,
         isRead: false,
         createdAt: Timestamp.now(),
       });
+      notificationCount++;
     });
 
     // 4. Commit all in-app notifications atomically
     await batch.commit();
-    logger.info(`Created ${shopsSnapshot.size} in-app notifications.`);
+    logger.info(`Created ${notificationCount} in-app notifications.`);
 
     // 5. Send Multicast FCM (Limit: 500 tokens per multicast)
-    if (fcmTokens.length > 0) {
+    const uniqueTokens = [...new Set(fcmTokens.filter(token => token))];
+
+    if (uniqueTokens.length > 0) {
       const payload = {
         notification: {
           title: title,
           body: message,
         },
         data: {
+          type: "new_project_post",
           postId: String(postId),
-          projectType: String(postData.projectType),
-          click_action: "FLUTTER_NOTIFICATION_CLICK"
-        },
-        tokens: fcmTokens,
+        }
       };
 
-      const messagingResponse = await admin.messaging().sendEachForMulticast(payload);
-      logger.info(`FCM Sent. Success: ${messagingResponse.successCount}, Failures: ${messagingResponse.failureCount}`);
+      const CHUNK_SIZE = 500;
+      let successCount = 0;
+      let failureCount = 0;
+
+      for (let i = 0; i < uniqueTokens.length; i += CHUNK_SIZE) {
+        const chunk = uniqueTokens.slice(i, i + CHUNK_SIZE);
+        const multicastMessage = { ...payload, tokens: chunk };
+        
+        const messagingResponse = await admin.messaging().sendEachForMulticast(multicastMessage);
+        successCount += messagingResponse.successCount;
+        failureCount += messagingResponse.failureCount;
+      }
+      logger.info(`FCM completed for post ${postId}. Success: ${successCount}, Failures: ${failureCount}. Total Eligible Shops: ${shopsSnapshot.size}`);
     }
 
     return null;

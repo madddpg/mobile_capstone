@@ -645,8 +645,6 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         'materialsCount': materialsList.length,
         'totalAreaSqm': _projectArea,
         'budget': costLevel,
-        'locationCity': 'City (Update in Profile)',
-        'locationBarangay': 'Barangay',
         'status': 'open',
         'quotationCount': 0,
         'postedAt': FieldValue.serverTimestamp(),

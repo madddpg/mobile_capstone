@@ -368,40 +368,37 @@ exports.onProjectPostCreated = onDocumentCreated("projectPosts/{postId}", async 
   const postId = event.params.postId;
 
   try {
-    // Notify ALL approved shops, regardless of subscriptionStatus
     const shopsSnapshot = await db.collection("shops")
       .where("status", "==", "approved")
       .get();
 
+    console.log("Approved shops count:", shopsSnapshot.size);
+
     if (shopsSnapshot.empty) {
-      logger.info(`No approved shops found for post ${postId}`);
+      console.log(`No approved shops found for post ${postId}`);
       return null;
     }
 
-    const fcmTokens = [];
+    let allTokens = [];
     const batch = db.batch();
-
-    const title = "New Project Posted";
-    const message = postData.materialsCount
-      ? `A user posted a ${postData.projectType || "project"} request with ${postData.materialsCount} materials.`
-      : `A user posted a new ${postData.projectType || "project"} request.`;
-
     let notificationCount = 0;
+
+    const title = "New Project Opportunity";
+    const message = `A ${postData.projectType || "project"} project is now open for quotation.`;
 
     shopsSnapshot.forEach((shopDoc) => {
       const shopDocId = shopDoc.id;
       const shopData = shopDoc.data();
-
-      // Use shop account UID for website notification filtering
       const shopUid = shopData.uid || shopDocId;
 
-      if (Array.isArray(shopData.fcmTokens) && shopData.fcmTokens.length > 0) {
-        fcmTokens.push(...shopData.fcmTokens);
-      } else if (
-        typeof shopData.fcmToken === "string" &&
-        shopData.fcmToken.trim() !== ""
-      ) {
-        fcmTokens.push(shopData.fcmToken);
+      // Correctly extract ALL tokens from fcmTokens (array)
+      const tokens = shopData.fcmTokens || [];
+      if (Array.isArray(tokens)) {
+        tokens.forEach(token => {
+          if (token && typeof token === "string" && token.trim() !== "") {
+            allTokens.push(token.trim());
+          }
+        });
       }
 
       const notificationRef = db.collection("notifications").doc();
@@ -423,55 +420,48 @@ exports.onProjectPostCreated = onDocumentCreated("projectPosts/{postId}", async 
 
     await batch.commit();
 
-    logger.info(`Created ${notificationCount} shop notifications for post ${postId}.`);
+    console.log(`Created ${notificationCount} shop notifications for post ${postId}.`);
 
-    const uniqueTokens = [
-      ...new Set(
-        fcmTokens
-          .filter((token) => typeof token === "string")
-          .map((token) => token.trim())
-          .filter((token) => token.length > 0)
-      ),
-    ];
+    // Remove duplicates to prevent sending duplicate notifications
+    allTokens = [...new Set(allTokens)];
+    console.log("Collected tokens:", allTokens.length);
 
-    if (uniqueTokens.length === 0) {
-      logger.info(`No FCM tokens found for approved shops for post ${postId}.`);
-      return null;
+    if (allTokens.length > 0) {
+      const CHUNK_SIZE = 500;
+      let successCount = 0;
+      let failureCount = 0;
+
+      for (let i = 0; i < allTokens.length; i += CHUNK_SIZE) {
+        const chunk = allTokens.slice(i, i + CHUNK_SIZE);
+
+        const response = await admin.messaging().sendEachForMulticast({
+          notification: {
+            title,
+            body: message,
+          },
+          data: {
+            type: "new_project_post",
+            postId: String(postId),
+            projectName: String(postData.projectName || ""),
+            projectType: String(postData.projectType || ""),
+            click_action: "FLUTTER_NOTIFICATION_CLICK",
+          },
+          tokens: chunk,
+        });
+
+        successCount += response.successCount;
+        failureCount += response.failureCount;
+      }
+
+      console.log("FCM Success:", successCount);
+      console.log("FCM Failures:", failureCount);
+    } else {
+      console.log("No FCM tokens found for approved shops");
     }
-
-    const CHUNK_SIZE = 500;
-    let successCount = 0;
-    let failureCount = 0;
-
-    for (let i = 0; i < uniqueTokens.length; i += CHUNK_SIZE) {
-      const chunk = uniqueTokens.slice(i, i + CHUNK_SIZE);
-
-      const response = await admin.messaging().sendEachForMulticast({
-        notification: {
-          title,
-          body: message,
-        },
-        data: {
-          type: "new_project_post",
-          postId: String(postId),
-          projectName: String(postData.projectName || ""),
-          projectType: String(postData.projectType || ""),
-          click_action: "FLUTTER_NOTIFICATION_CLICK",
-        },
-        tokens: chunk,
-      });
-
-      successCount += response.successCount;
-      failureCount += response.failureCount;
-    }
-
-    logger.info(
-      `FCM completed for post ${postId}. Success: ${successCount}, Failures: ${failureCount}, Approved Shops: ${shopsSnapshot.size}`
-    );
 
     return null;
   } catch (error) {
-    logger.error("Error processing new project post:", error);
+    console.error("Error processing new project post:", error);
     return null;
   }
 });

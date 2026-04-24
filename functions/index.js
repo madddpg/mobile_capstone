@@ -366,6 +366,7 @@ exports.onProjectPostCreated = onDocumentCreated("projectPosts/{postId}", async 
 
   const postData = snapshot.data();
   const postId = event.params.postId;
+  console.log("🔥 Triggered postId:", postId);
 
   try {
     const shopsSnapshot = await db.collection("shops")
@@ -417,6 +418,8 @@ exports.onProjectPostCreated = onDocumentCreated("projectPosts/{postId}", async 
 
       notificationCount++;
     });
+
+    console.log("📦 Collected tokens:", allTokens.length);
 
     await batch.commit();
 

@@ -362,96 +362,112 @@ exports.resetPasswordWithToken = onCall(async (request) => {
 
 exports.onProjectPostCreated = onDocumentCreated("projectPosts/{postId}", async (event) => {
   const snapshot = event.data;
-  if (!snapshot) {
-    return;
-  }
-  
+  if (!snapshot) return null;
+
   const postData = snapshot.data();
   const postId = event.params.postId;
 
   try {
-    // 1. Query strictly eligible shops
+    // Notify ALL approved shops, regardless of subscriptionStatus
     const shopsSnapshot = await db.collection("shops")
       .where("status", "==", "approved")
-      .where("subscriptionStatus", "==", "active")
       .get();
 
     if (shopsSnapshot.empty) {
-      logger.info(`No eligible shops found for post ${postId}`);
+      logger.info(`No approved shops found for post ${postId}`);
       return null;
     }
 
     const fcmTokens = [];
-    const batch = db.batch(); // Batch to create in-app notifications
+    const batch = db.batch();
 
-    // 2. Prepare payload parameters
     const title = "New Project Posted";
     const message = postData.materialsCount
-      ? `A user posted a ${postData.projectType || 'project'} request with ${postData.materialsCount} materials.`
-      : `A user posted a new ${postData.projectType || 'project'} request.`;
+      ? `A user posted a ${postData.projectType || "project"} request with ${postData.materialsCount} materials.`
+      : `A user posted a new ${postData.projectType || "project"} request.`;
 
     let notificationCount = 0;
 
-    // 3. Iterate shops to collect tokens and create in-app notifications
     shopsSnapshot.forEach((shopDoc) => {
-      const shopId = shopDoc.id;
+      const shopDocId = shopDoc.id;
       const shopData = shopDoc.data();
 
-      // Collect FCM Tokens
+      // Use shop account UID for website notification filtering
+      const shopUid = shopData.uid || shopDocId;
+
       if (Array.isArray(shopData.fcmTokens) && shopData.fcmTokens.length > 0) {
         fcmTokens.push(...shopData.fcmTokens);
-      } else if (typeof shopData.fcmToken === 'string' && shopData.fcmToken.trim() !== '') {
+      } else if (
+        typeof shopData.fcmToken === "string" &&
+        shopData.fcmToken.trim() !== ""
+      ) {
         fcmTokens.push(shopData.fcmToken);
       }
 
-      // Prepare in-app notification document
       const notificationRef = db.collection("notifications").doc();
+
       batch.set(notificationRef, {
         type: "new_project_post",
-        postId: postId,
-        recipientId: shopId,
+        postId,
+        recipientId: shopUid,
+        recipientShopDocId: shopDocId,
         recipientType: "shop",
-        title: title,
-        message: message,
+        title,
+        message,
         isRead: false,
         createdAt: Timestamp.now(),
       });
+
       notificationCount++;
     });
 
-    // 4. Commit all in-app notifications atomically
     await batch.commit();
-    logger.info(`Created ${notificationCount} in-app notifications.`);
 
-    // 5. Send Multicast FCM (Limit: 500 tokens per multicast)
-    const uniqueTokens = [...new Set(fcmTokens.filter(token => token))];
+    logger.info(`Created ${notificationCount} shop notifications for post ${postId}.`);
 
-    if (uniqueTokens.length > 0) {
-      const payload = {
+    const uniqueTokens = [
+      ...new Set(
+        fcmTokens
+          .filter((token) => typeof token === "string")
+          .map((token) => token.trim())
+          .filter((token) => token.length > 0)
+      ),
+    ];
+
+    if (uniqueTokens.length === 0) {
+      logger.info(`No FCM tokens found for approved shops for post ${postId}.`);
+      return null;
+    }
+
+    const CHUNK_SIZE = 500;
+    let successCount = 0;
+    let failureCount = 0;
+
+    for (let i = 0; i < uniqueTokens.length; i += CHUNK_SIZE) {
+      const chunk = uniqueTokens.slice(i, i + CHUNK_SIZE);
+
+      const response = await admin.messaging().sendEachForMulticast({
         notification: {
-          title: title,
+          title,
           body: message,
         },
         data: {
           type: "new_project_post",
           postId: String(postId),
-        }
-      };
+          projectName: String(postData.projectName || ""),
+          projectType: String(postData.projectType || ""),
+          click_action: "FLUTTER_NOTIFICATION_CLICK",
+        },
+        tokens: chunk,
+      });
 
-      const CHUNK_SIZE = 500;
-      let successCount = 0;
-      let failureCount = 0;
-
-      for (let i = 0; i < uniqueTokens.length; i += CHUNK_SIZE) {
-        const chunk = uniqueTokens.slice(i, i + CHUNK_SIZE);
-        const multicastMessage = { ...payload, tokens: chunk };
-        
-        const messagingResponse = await admin.messaging().sendEachForMulticast(multicastMessage);
-        successCount += messagingResponse.successCount;
-        failureCount += messagingResponse.failureCount;
-      }
-      logger.info(`FCM completed for post ${postId}. Success: ${successCount}, Failures: ${failureCount}. Total Eligible Shops: ${shopsSnapshot.size}`);
+      successCount += response.successCount;
+      failureCount += response.failureCount;
     }
+
+    logger.info(
+      `FCM completed for post ${postId}. Success: ${successCount}, Failures: ${failureCount}, Approved Shops: ${shopsSnapshot.size}`
+    );
 
     return null;
   } catch (error) {

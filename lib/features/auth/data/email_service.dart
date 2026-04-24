@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import '../../../core/api_config.dart';
+import '../../../core/services/fcm_service.dart';
 
 class EmailSendOtpResult {
   final bool success;
@@ -341,6 +342,10 @@ class EmailService {
           'verified_at': null,
         }, SetOptions(merge: true));
       }
+
+      // Initialize FCM and store the push notification token securely into users/{uid}.fcmTokens
+      // Fire-and-forget or await depending on strictness. Using await to ensure token saves before proceeding.
+      await FCMService().initFCM(uid);
 
       debugPrint('================ LOGIN COMPLETE ================');
 

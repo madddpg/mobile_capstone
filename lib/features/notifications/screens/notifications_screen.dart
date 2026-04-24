@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconstruct/features/bidding/screens/posted_project_details_screen.dart';
+// Assuming you have a QuotationsScreen or similar:
+// import 'package:iconstruct/features/bidding/screens/quotations_screen.dart';
 
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
@@ -15,7 +17,7 @@ class NotificationsScreen extends StatelessWidget {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFF2F3E4F), Color(0xFF4F6B8A), Color(0xFF6F8FAF)],
+            colors: [Color(0xFF2C3E50), Color(0xFF648DB6), Color(0xFFE0D7C9)],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -168,6 +170,44 @@ class NotificationsScreen extends StatelessWidget {
   }
 }
 
+class NotificationBadge extends StatelessWidget {
+  final String projectType;
+
+  const NotificationBadge({super.key, required this.projectType});
+
+  String _formatProjectType(String type) {
+    if (type.isEmpty) return 'Unknown Project';
+    return type
+        .split('_')
+        .map(
+          (word) => word.isNotEmpty
+              ? '${word[0].toUpperCase()}${word.substring(1)}'
+              : '',
+        )
+        .join(' ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2C3E50).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF2C3E50).withOpacity(0.2)),
+      ),
+      child: Text(
+        _formatProjectType(projectType),
+        style: GoogleFonts.poppins(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: const Color(0xFF2C3E50),
+        ),
+      ),
+    );
+  }
+}
+
 class NotificationCard extends StatelessWidget {
   final String id;
   final Map<String, dynamic> data;
@@ -187,7 +227,7 @@ class NotificationCard extends StatelessWidget {
     } else if (difference.inHours >= 1) {
       return '${difference.inHours}h ago';
     } else if (difference.inMinutes >= 1) {
-      return '${difference.inMinutes}m ago';
+      return '${difference.inMinutes} mins ago';
     } else {
       return 'Just now';
     }
@@ -213,6 +253,14 @@ class NotificationCard extends StatelessWidget {
           builder: (context) => PostedProjectDetailsScreen(postId: postId),
         ),
       );
+    } else if (type == 'new_quotation' && postId.isNotEmpty) {
+      // NOTE: Ensure QuotationsScreen is imported if using.
+      // Navigator.push(
+      //   context,
+      //   MaterialPageRoute(
+      //     builder: (context) => QuotationsScreen(postId: postId),
+      //   ),
+      // );
     }
   }
 
@@ -221,6 +269,7 @@ class NotificationCard extends StatelessWidget {
     final String title = data['title'] ?? 'Notification';
     final String message = data['message'] ?? '';
     final bool isRead = data['isRead'] ?? false;
+    final String projectType = data['projectType'] ?? '';
     final Timestamp? createdAt = data['createdAt'] as Timestamp?;
     final String timeFormatted = _formatTimestamp(createdAt);
 
@@ -250,7 +299,7 @@ class NotificationCard extends StatelessWidget {
               height: 10,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isRead ? Colors.grey.shade400 : const Color(0xFF2F3E4F),
+                color: isRead ? Colors.grey.shade400 : const Color(0xFF2C3E50),
               ),
             ),
 
@@ -292,6 +341,10 @@ class NotificationCard extends StatelessWidget {
                       height: 1.4,
                     ),
                   ),
+                  if (projectType.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    NotificationBadge(projectType: projectType),
+                  ],
                 ],
               ),
             ),

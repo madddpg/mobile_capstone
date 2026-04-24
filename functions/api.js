@@ -211,40 +211,6 @@ app.post("/reset-password", async (req, res) => {
 });
 
 module.exports = { app };
-    }
-
-    const otp = generateOtp();
-    const now = Date.now();
-    const expiresAt = now + 5 * 60 * 1000;
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    await userRef.set({
-      firstName,
-      lastName: lastName || "",
-      email: emailKey,
-      password: hashedPassword,
-      otp_code: otp,
-      otp_expires_at: expiresAt,
-      isVerified: false,
-      created_at: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    sendOtpEmail(emailKey, otp).catch((err) => {
-      console.error("Failed to send OTP email in background:", err);
-    });
-
-    return res.status(201).json({
-      message: "Registration successful. OTP sent.",
-      email: emailKey,
-    });
-  } catch (error) {
-    console.error("Register Error:", error);
-    return res.status(500).json({ message: "Internal server error", error: error.message });
-  }
-});
-
-// POST /login
 app.post("/login", async (req, res) => {
   try {
     console.log("LOGIN HIT", req.body);

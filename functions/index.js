@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const logger = require("firebase-functions/logger");
 const { onCall, HttpsError, onRequest } = require("firebase-functions/v2/https");
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { Timestamp } = require("firebase-admin/firestore");
 
@@ -356,5 +357,143 @@ exports.resetPasswordWithToken = onCall(async (request) => {
       "internal",
       "Failed to reset password. Please try again."
     );
+  }
+});
+
+exports.onProjectPostCreated = onDocumentCreated("projectPosts/{postId}", async (event) => {
+  const snapshot = event.data;
+  if (!snapshot) {
+    return;
+  }
+  
+  const postData = snapshot.data();
+  const postId = event.params.postId;
+
+  try {
+    // 1. Query strictly eligible shops
+    const shopsSnapshot = await db.collection("shops")
+      .where("status", "==", "approved")
+      .where("subscriptionStatus", "==", "active")
+      .get();
+
+    if (shopsSnapshot.empty) {
+      logger.info(`No eligible shops found for post ${postId}`);
+      return null;
+    }
+
+    const fcmTokens = [];
+    const batch = db.batch(); // Batch to create in-app notifications
+
+    // 2. Prepare payload parameters
+    const title = `New Project in ${postData.locationCity || "your area"}`;
+    const message = `A user posted a material request for ${postData.projectType} (${postData.materialsCount} items).`;
+
+    // 3. Iterate shops to collect tokens and create in-app notifications
+    shopsSnapshot.forEach((shopDoc) => {
+      const shopId = shopDoc.id;
+      const shopData = shopDoc.data();
+
+      // Collect FCM Tokens
+      if (shopData.fcmTokens && Array.isArray(shopData.fcmTokens)) {
+        fcmTokens.push(...shopData.fcmTokens);
+      }
+
+      // Prepare in-app notification document
+      const notificationRef = db.collection("notifications").doc();
+      batch.set(notificationRef, {
+        type: "new_project_post",
+        postId: postId,
+        recipientId: shopId,
+        title: title,
+        message: message,
+        isRead: false,
+        createdAt: Timestamp.now(),
+      });
+    });
+
+    // 4. Commit all in-app notifications atomically
+    await batch.commit();
+    logger.info(`Created ${shopsSnapshot.size} in-app notifications.`);
+
+    // 5. Send Multicast FCM (Limit: 500 tokens per multicast)
+    if (fcmTokens.length > 0) {
+      const payload = {
+        notification: {
+          title: title,
+          body: message,
+        },
+        data: {
+          postId: String(postId),
+          projectType: String(postData.projectType),
+          click_action: "FLUTTER_NOTIFICATION_CLICK"
+        },
+        tokens: fcmTokens,
+      };
+
+      const messagingResponse = await admin.messaging().sendEachForMulticast(payload);
+      logger.info(`FCM Sent. Success: ${messagingResponse.successCount}, Failures: ${messagingResponse.failureCount}`);
+    }
+
+    return null;
+  } catch (error) {
+    logger.error("Error processing new project post:", error);
+    return null;
+  }
+});
+
+exports.onQuotationSubmitted = onDocumentCreated("projectPosts/{postId}/quotations/{shopId}", async (event) => {
+  const snapshot = event.data;
+  if (!snapshot) return;
+
+  const quotation = snapshot.data();
+  const postId = event.params.postId;
+  const shopId = event.params.shopId;
+  const userId = quotation.userId;
+
+  try {
+    const userDoc = await db.collection("users").doc(userId).get();
+    if (!userDoc.exists) return null;
+
+    const userData = userDoc.data();
+    const fcmTokens = userData.fcmTokens || []; // Assumes users store FCM tokens identically to shops
+
+    const title = "New Quotation Received";
+    const message = `${quotation.shopName} submitted a quotation loosely estimated at ₱${quotation.estimatedTotal} for your project.`;
+
+    const batch = db.batch();
+
+    // 1. Create In-App Notification
+    const notificationRef = db.collection("notifications").doc();
+    batch.set(notificationRef, {
+      type: "new_quotation",
+      postId: postId,
+      shopId: shopId,
+      recipientId: userId,
+      title: title,
+      message: message,
+      isRead: false,
+      createdAt: Timestamp.now(),
+    });
+
+    await batch.commit();
+
+    // 2. Send Push Notification
+    if (Array.isArray(fcmTokens) && fcmTokens.length > 0) {
+      const payload = {
+        notification: { title, body: message },
+        data: {
+          postId: String(postId),
+          type: "quotation",
+          click_action: "FLUTTER_NOTIFICATION_CLICK"
+        },
+        tokens: fcmTokens
+      };
+      
+      const messagingResponse = await admin.messaging().sendEachForMulticast(payload);
+      logger.info(`Quotation FCM Sent. Success: ${messagingResponse.successCount}`);
+    }
+
+  } catch (error) {
+    logger.error("Error processing new quotation:", error);
   }
 });

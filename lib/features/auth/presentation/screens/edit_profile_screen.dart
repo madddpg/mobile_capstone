@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:iconstruct/core/widgets/user_avatar.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final String firstName;
@@ -156,37 +157,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             child: Stack(
                               alignment: Alignment.bottomRight,
                               children: [
-                                Container(
-                                  width: 100,
-                                  height: 100,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: creamBg,
-                                      width: 4,
-                                    ),
-                                    image:
-                                        widget.profileImg != null &&
-                                            widget.profileImg!.isNotEmpty
-                                        ? DecorationImage(
-                                            image: NetworkImage(
-                                              widget.profileImg!,
-                                            ),
-                                            fit: BoxFit.cover,
-                                          )
-                                        : null,
-                                    color: creamBg,
-                                  ),
-                                  child:
-                                      widget.profileImg == null ||
-                                          widget.profileImg!.isEmpty
-                                      ? const Icon(
-                                          Icons.person_rounded,
-                                          size: 50,
-                                          color: darkBlue,
-                                        )
-                                      : null,
-                                ),
+                                const UserAvatar(size: 100, hasBorder: true),
                                 Container(
                                   padding: const EdgeInsets.all(4),
                                   decoration: const BoxDecoration(

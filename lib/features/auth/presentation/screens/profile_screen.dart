@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'package:iconstruct/features/auth/presentation/screens/login_screen.dart';
 import 'package:iconstruct/features/auth/presentation/screens/edit_profile_screen.dart';
@@ -9,12 +13,23 @@ import 'package:iconstruct/core/materials/services/favorites_service.dart';
 import 'package:iconstruct/core/materials/models/favorite_model.dart';
 import 'package:iconstruct/features/auth/presentation/screens/home_screen.dart';
 import 'package:iconstruct/features/auth/presentation/screens/cost_estimation.dart';
+import 'package:iconstruct/core/widgets/user_avatar.dart';
+import 'package:provider/provider.dart';
+import 'package:iconstruct/core/state/user_state/user_provider.dart';
 
 import 'package:iconstruct/core/state/active_project_state.dart';
 import 'package:iconstruct/core/materials/models/material_item.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  bool _isUploading = false;
+  final ImagePicker _picker = ImagePicker();
 
   Future<void> _logout(BuildContext context) async {
     await FirebaseAuth.instance.signOut();
@@ -22,6 +37,93 @@ class ProfileScreen extends StatelessWidget {
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (context) => const LoginScreen()),
       (route) => false,
+    );
+  }
+
+  Future<void> _pickAndUploadImage(ImageSource source) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final XFile? pickedFile = await _picker.pickImage(
+        source: source,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+
+      if (pickedFile == null) return;
+
+      setState(() {
+        _isUploading = true;
+      });
+
+      final File imageFile = File(pickedFile.path);
+      final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      final Reference storageRef = FirebaseStorage.instance.ref().child(
+        'user_profile_images/${user.uid}/$timestamp.jpg',
+      );
+
+      final UploadTask uploadTask = storageRef.putFile(imageFile);
+      final TaskSnapshot snapshot = await uploadTask;
+      final String downloadUrl = await snapshot.ref.getDownloadURL();
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({
+            'profileImage': downloadUrl,
+            'profileImageUpdatedAt': FieldValue.serverTimestamp(),
+          });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile image updated successfully.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to upload image: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+        });
+      }
+    }
+  }
+
+  void _showImagePickerOptions() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_rounded),
+              title: const Text('Take a photo'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickAndUploadImage(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded),
+              title: const Text('Choose from gallery'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickAndUploadImage(ImageSource.gallery);
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -33,293 +135,277 @@ class ProfileScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: creamBg,
-      body: user == null
-          ? const Center(child: Text('User not logged in.'))
-          : StreamBuilder<DocumentSnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(user.uid)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: darkBlue),
-                  );
-                }
+      body: Consumer<UserProvider>(
+        builder: (context, userProvider, child) {
+          final currentUserModel = userProvider.currentUser;
 
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Text(
-                      'Error loading profile data.',
-                      style: GoogleFonts.poppins(color: darkBlue),
+          if (user == null) {
+            return const Center(child: Text('User not logged in.'));
+          }
+
+          if (currentUserModel == null) {
+            return const Center(
+              child: CircularProgressIndicator(color: darkBlue),
+            );
+          }
+
+          final firstName = currentUserModel.firstName;
+          final lastName = currentUserModel.lastName;
+          final fullName = currentUserModel.fullName;
+          final email = currentUserModel.email;
+          final profileImg = currentUserModel.profileImageUrl;
+
+          return Stack(
+            children: [
+              // 1. Top Dark Blue Header Banner
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 340,
+                child: Container(
+                  decoration: const BoxDecoration(
+                    color: darkBlue,
+                    borderRadius: BorderRadius.only(
+                      bottomLeft: Radius.circular(50),
+                      bottomRight: Radius.circular(50),
                     ),
-                  );
-                }
+                  ),
+                ),
+              ),
 
-                final userData =
-                    snapshot.data?.data() as Map<String, dynamic>? ?? {};
-
-                final firstName = userData['firstName'] ?? 'User';
-                final lastName = userData['lastName'] ?? '';
-                final fullName = '$firstName $lastName'.trim();
-                final email = userData['email'] ?? user.email ?? '';
-                final profileImg = userData['profileImage'] as String?;
-
-                return Stack(
-                  children: [
-                    // 1. Top Dark Blue Header Banner
-                    Positioned(
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      height: 280,
-                      child: Container(
-                        decoration: const BoxDecoration(
-                          color: darkBlue,
-                          borderRadius: BorderRadius.only(
-                            bottomLeft: Radius.circular(50),
-                            bottomRight: Radius.circular(50),
-                          ),
+              // 2. Safe Area Content
+              Positioned.fill(
+                child: SafeArea(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Header area with Back button and Title
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 10,
                         ),
-                      ),
-                    ),
-
-                    // 2. Safe Area Content
-                    Positioned.fill(
-                      child: SafeArea(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                        child: Row(
                           children: [
-                            // Header area with Back button and Title
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 10,
-                              ),
-                              child: Row(
-                                children: [
-                                  GestureDetector(
-                                    onTap: () => Navigator.pop(context),
-                                    child: Container(
-                                      width: 44,
-                                      height: 44,
-                                      decoration: BoxDecoration(
-                                        color: creamBg.withAlpha(50),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(
-                                        Icons.arrow_back_ios_new,
-                                        color: creamBg,
-                                        size: 20,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Text(
-                                    'Profile',
-                                    style: GoogleFonts.poppins(
-                                      color: creamBg,
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-
-                            // Profile Avatar
-                            Center(
-                              child: Stack(
-                                alignment: Alignment.bottomRight,
-                                children: [
-                                  Container(
-                                    width: 110,
-                                    height: 110,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: creamBg,
-                                        width: 4,
-                                      ),
-                                      image:
-                                          profileImg != null &&
-                                              profileImg.isNotEmpty
-                                          ? DecorationImage(
-                                              image: NetworkImage(profileImg),
-                                              fit: BoxFit.cover,
-                                            )
-                                          : null,
-                                      color: creamBg,
-                                    ),
-                                    child:
-                                        profileImg == null || profileImg.isEmpty
-                                        ? const Icon(
-                                            Icons.person_rounded,
-                                            size: 60,
-                                            color: darkBlue,
-                                          )
-                                        : null,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-
-                            // Name and Email
-                            Center(
-                              child: Text(
-                                fullName.isEmpty
-                                    ? 'iConstruct Builder'
-                                    : fullName,
-                                style: GoogleFonts.poppins(
+                            GestureDetector(
+                              onTap: () => Navigator.pop(context),
+                              child: Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: creamBg.withAlpha(50),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.arrow_back_ios_new,
                                   color: creamBg,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: -0.5,
+                                  size: 20,
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Center(
-                              child: Text(
-                                email,
-                                style: GoogleFonts.poppins(
-                                  color: creamBg.withAlpha(200),
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w400,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 40),
-
-                            // Scrollable Cards
-                            Expanded(
-                              child: SingleChildScrollView(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 24,
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // Edit Profile Button
-                                    SizedBox(
-                                      width: double.infinity,
-                                      height: 54,
-                                      child: ElevatedButton(
-                                        onPressed: () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (context) =>
-                                                  EditProfileScreen(
-                                                    firstName: firstName,
-                                                    lastName: lastName,
-                                                    profileImg: profileImg,
-                                                  ),
-                                            ),
-                                          );
-                                        },
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: darkBlue,
-                                          foregroundColor: creamBg,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              16,
-                                            ),
-                                          ),
-                                          elevation: 8,
-                                          shadowColor: Colors.black.withAlpha(
-                                            100,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          'Edit Profile',
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 32),
-
-                                    _buildSectionTitle('Personal Information'),
-                                    const SizedBox(height: 12),
-                                    _buildInfoCard(
-                                      children: [
-                                        _buildInfoRow(
-                                          Icons.badge_outlined,
-                                          'First Name',
-                                          firstName,
-                                        ),
-                                        const Divider(height: 1),
-                                        _buildInfoRow(
-                                          Icons.badge_outlined,
-                                          'Last Name',
-                                          lastName,
-                                        ),
-                                        const Divider(height: 1),
-                                        _buildInfoRow(
-                                          Icons.email_outlined,
-                                          'Email',
-                                          email,
-                                        ),
-                                      ],
-                                    ),
-
-                                    const SizedBox(height: 32),
-
-                                    _buildSectionTitle('Favorite Materials'),
-                                    const SizedBox(height: 12),
-                                    _buildFavoriteMaterialsSection(
-                                      darkBlue,
-                                      creamBg,
-                                    ),
-
-                                    const SizedBox(height: 32),
-
-                                    _buildSectionTitle('Account'),
-                                    const SizedBox(height: 12),
-                                    _buildInfoCard(
-                                      children: [
-                                        _buildActionTile(
-                                          icon: Icons.lock_outline_rounded,
-                                          title: 'Change Password',
-                                          onTap: () {
-                                            // To implement later
-                                          },
-                                        ),
-                                        const Divider(height: 1),
-                                        _buildActionTile(
-                                          icon: Icons.description_outlined,
-                                          title: 'Terms & Conditions',
-                                          onTap: () {
-                                            // To implement later
-                                          },
-                                        ),
-                                        const Divider(height: 1),
-                                        _buildActionTile(
-                                          icon: Icons.logout_rounded,
-                                          title: 'Logout',
-                                          isDestructive: true,
-                                          onTap: () => _logout(context),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 40),
-                                  ],
-                                ),
+                            const SizedBox(width: 16),
+                            Text(
+                              'Profile',
+                              style: GoogleFonts.poppins(
+                                color: creamBg,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ),
-                  ],
-                );
-              },
-            ),
+                      const SizedBox(height: 20),
+
+                      // Profile Avatar
+                      Center(
+                        child: Stack(
+                          alignment: Alignment.bottomRight,
+                          children: [
+                            Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                UserAvatar(
+                                  size: 110,
+                                  hasBorder: true,
+                                  onTap: _isUploading
+                                      ? null
+                                      : _showImagePickerOptions,
+                                ),
+                                if (_isUploading)
+                                  const CircularProgressIndicator(
+                                    color: creamBg,
+                                  ),
+                              ],
+                            ),
+                            if (!_isUploading)
+                              GestureDetector(
+                                onTap: _showImagePickerOptions,
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: darkBlue,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: creamBg,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    Icons.camera_alt_rounded,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Name and Email
+                      Center(
+                        child: Text(
+                          fullName.isEmpty ? 'iConstruct Builder' : fullName,
+                          style: GoogleFonts.poppins(
+                            color: creamBg,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Center(
+                        child: Text(
+                          email,
+                          style: GoogleFonts.poppins(
+                            color: creamBg.withAlpha(200),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 40),
+
+                      // Scrollable Cards
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Edit Profile Button
+                              SizedBox(
+                                width: double.infinity,
+                                height: 54,
+                                child: ElevatedButton(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => EditProfileScreen(
+                                          firstName: firstName,
+                                          lastName: lastName,
+                                          profileImg: profileImg,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: darkBlue,
+                                    foregroundColor: creamBg,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    elevation: 8,
+                                    shadowColor: Colors.black.withAlpha(100),
+                                  ),
+                                  child: Text(
+                                    'Edit Profile',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 32),
+
+                              _buildSectionTitle('Personal Information'),
+                              const SizedBox(height: 12),
+                              _buildInfoCard(
+                                children: [
+                                  _buildInfoRow(
+                                    Icons.badge_outlined,
+                                    'First Name',
+                                    firstName,
+                                  ),
+                                  const Divider(height: 1),
+                                  _buildInfoRow(
+                                    Icons.badge_outlined,
+                                    'Last Name',
+                                    lastName,
+                                  ),
+                                  const Divider(height: 1),
+                                  _buildInfoRow(
+                                    Icons.email_outlined,
+                                    'Email',
+                                    email,
+                                  ),
+                                ],
+                              ),
+
+                              const SizedBox(height: 32),
+
+                              _buildSectionTitle('Favorite Materials'),
+                              const SizedBox(height: 12),
+                              _buildFavoriteMaterialsSection(darkBlue, creamBg),
+
+                              const SizedBox(height: 32),
+
+                              _buildSectionTitle('Account'),
+                              const SizedBox(height: 12),
+                              _buildInfoCard(
+                                children: [
+                                  _buildActionTile(
+                                    icon: Icons.lock_outline_rounded,
+                                    title: 'Change Password',
+                                    onTap: () {
+                                      // To implement later
+                                    },
+                                  ),
+                                  const Divider(height: 1),
+                                  _buildActionTile(
+                                    icon: Icons.description_outlined,
+                                    title: 'Terms & Conditions',
+                                    onTap: () {
+                                      // To implement later
+                                    },
+                                  ),
+                                  const Divider(height: 1),
+                                  _buildActionTile(
+                                    icon: Icons.logout_rounded,
+                                    title: 'Logout',
+                                    isDestructive: true,
+                                    onTap: () => _logout(context),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 40),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 

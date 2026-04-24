@@ -8,6 +8,7 @@ import 'package:iconstruct/features/auth/presentation/screens/cost_estimation.da
 import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
 import 'package:iconstruct/features/auth/presentation/screens/main_home_screen.dart';
 import 'package:iconstruct/core/utils/hammer_nav.dart';
+import 'package:iconstruct/features/bidding/screens/posted_project_details_screen.dart';
 
 class MaterialEstimatorScreen extends StatefulWidget {
   final String projectName;
@@ -429,7 +430,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
 
               Expanded(
                 child: ElevatedButton(
-                  onPressed: () {},
+                  onPressed: _postProjectForBidding,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFEDE4D4),
                     foregroundColor: const Color(0xFF2C3E50),
@@ -560,6 +561,142 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error saving project: $e')));
+      }
+    }
+  }
+
+  Future<void> _postProjectForBidding() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please log in to post projects')),
+        );
+      }
+      return;
+    }
+
+    if (_projectName.trim().isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter a Project Name')),
+        );
+      }
+      return;
+    }
+
+    final materialsList = [
+      ..._localMaterials,
+      ..._localTiles.map((t) => t.tileTypeName),
+      ..._localPlumbing.map((p) => p.materialName),
+    ];
+
+    if (materialsList.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cannot post a project without materials'),
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      String costLevel = 'medium';
+      if (_selectedBudget != null) {
+        if (_selectedBudget!.toLowerCase().contains('low')) {
+          costLevel = 'low';
+        } else if (_selectedBudget!.toLowerCase().contains('high')) {
+          costLevel = 'high';
+        }
+      }
+
+      final firestore = FirebaseFirestore.instance;
+      final batch = firestore.batch();
+
+      final String uid = user.uid;
+      DocumentReference savedProjectRef;
+      if (widget.existingProject != null) {
+        savedProjectRef = firestore
+            .collection('users')
+            .doc(uid)
+            .collection('saved_projects')
+            .doc(widget.existingProject!.id);
+      } else {
+        savedProjectRef = firestore
+            .collection('users')
+            .doc(uid)
+            .collection('saved_projects')
+            .doc();
+      }
+
+      final DocumentReference newPostRef = firestore
+          .collection('projectPosts')
+          .doc();
+
+      final Map<String, dynamic> projectPostData = {
+        'postId': newPostRef.id,
+        'userId': uid,
+        'projectId': savedProjectRef.id,
+        'projectName': _projectName,
+        'projectType': _projectType,
+        'materials': materialsList,
+        'materialsCount': materialsList.length,
+        'totalAreaSqm': _projectArea,
+        'budget': costLevel,
+        'locationCity': 'City (Update in Profile)',
+        'locationBarangay': 'Barangay',
+        'status': 'open',
+        'quotationCount': 0,
+        'postedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      final Map<String, dynamic> savedProjectData = {
+        'projectName': _projectName,
+        'projectType': _projectType,
+        'costLevel': costLevel,
+        'selectedMaterials': materialsList,
+        'materialsCount': materialsList.length,
+        'totalAreaSqm': _projectArea,
+        'status': 'posted',
+        'postId': newPostRef.id,
+        'postedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (widget.existingProject == null) {
+        savedProjectData['createdAt'] = FieldValue.serverTimestamp();
+        batch.set(savedProjectRef, savedProjectData);
+      } else {
+        batch.update(savedProjectRef, savedProjectData);
+      }
+
+      // Add to public projectPosts collection
+      batch.set(newPostRef, projectPostData);
+
+      await batch.commit();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Project successfully posted for bidding!'),
+          ),
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                PostedProjectDetailsScreen(postId: newPostRef.id),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error posting project: $e')));
       }
     }
   }

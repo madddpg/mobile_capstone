@@ -8,6 +8,8 @@ import 'package:iconstruct/core/materials/services/firestore_materials_service.d
 import 'package:iconstruct/features/auth/presentation/screens/material_estimator.dart';
 import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
 import 'package:iconstruct/features/auth/presentation/screens/main_home_screen.dart';
+import 'package:iconstruct/features/auth/presentation/screens/profile_screen.dart';
+import 'package:iconstruct/core/widgets/user_avatar.dart';
 import 'package:iconstruct/core/materials/services/favorites_service.dart';
 
 IconData getFilterIcon(String filter) {
@@ -234,14 +236,16 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Color(0xFF2C3E50),
-              ),
-              child: const Icon(Icons.person, color: Colors.white, size: 20),
+            UserAvatar(
+              size: 36,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ProfileScreen(),
+                  ),
+                );
+              },
             ),
             Container(
               width: 28,

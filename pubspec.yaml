@@ -41,6 +41,10 @@ dependencies:
   firebase_auth: ^5.0.0
   cloud_firestore: ^5.0.0
   cloud_functions: ^5.0.0
+  image_picker: ^1.2.1
+  firebase_storage: ^12.4.10
+  provider: ^6.1.5+1
+  flutter_launcher_icons: ^0.14.4
 
 dev_dependencies:
   flutter_test:
@@ -70,6 +74,7 @@ flutter:
     - assets/images/display 2.jpg
     - assets/images/display 3.jpg
     - assets/images/hammer.png
+    - assets/images/logo.png
 
   fonts:
     - family: Poppins
@@ -88,7 +93,14 @@ flutter:
     - family: Bungee-Regular
       fonts:
         - asset: assets/fonts/Bungee-Regular.ttf
-       
+
+
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/logo.png"
+
 
   # To add assets to your application, add an assets section, like this:
   # assets:

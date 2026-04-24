@@ -68,76 +68,16 @@ class _DisplayScreenState extends State<DisplayScreen>
                       // Logo mark
                       Container(
                         margin: const EdgeInsets.only(bottom: 18),
-                        width: 82,
-                        height: 58,
+                        padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF4E7CB),
-                          borderRadius: BorderRadius.circular(18),
+                          borderRadius: BorderRadius.circular(20),
                         ),
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            Positioned(
-                              bottom: 10,
-                              left: 10,
-                              right: 10,
-                              child: Container(
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF263645),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              bottom: 18,
-                              left: 12,
-                              child: Container(
-                                width: 12,
-                                height: 16,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF263645),
-                                  borderRadius: BorderRadius.circular(3),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              bottom: 20,
-                              left: 30,
-                              child: Container(
-                                width: 10,
-                                height: 14,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF263645),
-                                  borderRadius: BorderRadius.circular(3),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              bottom: 22,
-                              left: 46,
-                              child: Container(
-                                width: 10,
-                                height: 12,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF263645),
-                                  borderRadius: BorderRadius.circular(3),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              top: 10,
-                              left: 18,
-                              child: Container(
-                                width: 10,
-                                height: 10,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFF263645),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            ),
-                          ],
+                        child: Image.asset(
+                          'assets/images/logo.png',
+                          width: 100,
+                          height: 100,
+                          fit: BoxFit.contain,
                         ),
                       ),
                       const Text(

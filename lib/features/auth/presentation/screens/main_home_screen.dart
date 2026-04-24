@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:iconstruct/features/auth/presentation/screens/material_estimator.dart';
 import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
 import 'package:iconstruct/features/auth/presentation/screens/profile_screen.dart';
+import 'package:iconstruct/core/widgets/user_avatar.dart';
 import 'package:iconstruct/core/utils/hammer_nav.dart';
 
 class MainHomeScreen extends StatefulWidget {
@@ -64,8 +65,8 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _TopIconButton(
-                        icon: Icons.account_circle,
+                      UserAvatar(
+                        size: 38,
                         onTap: () {
                           Navigator.push(
                             context,

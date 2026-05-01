@@ -5,12 +5,13 @@ import 'package:iconstruct/core/materials/material_recommendation_controller.dar
 import 'package:iconstruct/core/materials/models/material_category.dart';
 import 'package:iconstruct/core/materials/models/material_item.dart';
 import 'package:iconstruct/core/materials/services/firestore_materials_service.dart';
+import 'package:iconstruct/core/materials/services/favorites_service.dart';
+import 'package:iconstruct/core/widgets/user_avatar.dart';
+
 import 'package:iconstruct/features/auth/presentation/screens/material_estimator.dart';
 import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
 import 'package:iconstruct/features/auth/presentation/screens/main_home_screen.dart';
 import 'package:iconstruct/features/auth/presentation/screens/profile_screen.dart';
-import 'package:iconstruct/core/widgets/user_avatar.dart';
-import 'package:iconstruct/core/materials/services/favorites_service.dart';
 
 IconData getFilterIcon(String filter) {
   switch (filter.trim()) {
@@ -44,25 +45,8 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
   final ScrollController _materialsScrollController = ScrollController();
   final PageController _categoryPageController = PageController();
 
-  // Title of the category currently used for tile-size selection.
-  // This used to be hard-coded to "Floor Surface" but Firestore categories can
-  // have different titles (e.g. "Tiles").
-  String? _tileCategoryTitleForTileSize;
-
-  final List<AddedTileSelection> _addedTiles = <AddedTileSelection>[];
-  final List<AddedPlumbingSelection> _addedPlumbingMaterials =
+  final List<AddedPlumbingSelection> _selectedProducts =
       <AddedPlumbingSelection>[];
-
-  final Map<String, String> _selectedPlumbingMaterialKeyByKind = {};
-  final Map<String, String> _selectedPlumbingSizeByKind = {};
-  final Map<String, String> _selectedPlumbingLengthByKind = {};
-  final Map<String, String> _selectedCoverSizeByKind = {};
-
-  String? _selectedTileSizeGroup;
-
-  static const String _tileSizeGroupSmall = 'Small Tiles';
-  static const String _tileSizeGroupMedium = 'Medium Tiles';
-  static const String _tileSizeGroupLarge = 'Large Tiles';
 
   @override
   void initState() {
@@ -81,96 +65,27 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
   }
 
   Future<void> _loadProjectMaterials() async {
-    // The UI sometimes inserts newlines into the project name for display.
-    // The backend expects either a stable slug (e.g. "bathroom") or a
-    // normalized name ("bathroom renovation"), so collapse whitespace.
     final projectQuery = widget.projectName
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
+
     await _materials.loadForProject(projectQuery);
 
     if (!mounted) return;
 
     if (widget.preselectedMaterial != null) {
       final pm = widget.preselectedMaterial!;
-      // Find the exact item loaded from the category to ensure correct reference
       final catItems = _materials.getItemsByCategory(pm.category);
+
       final loadedItem = catItems.cast<MaterialItem?>().firstWhere(
         (element) => element?.name == pm.name,
         orElse: () => null,
       );
 
       if (loadedItem != null) {
-        final kindKey = (loadedItem.kind ?? '').trim();
-        _onMaterialSelected(
-          loadedItem.category,
-          loadedItem,
-          kindKey: kindKey.isEmpty ? 'Others' : kindKey,
-          showDescriptionModal: false,
-        );
-
-        final slides = _slideshowCategories(_materials.categories);
-        final tIndex = slides.indexWhere((c) => c.title == loadedItem.category);
-        if (tIndex != -1) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_categoryPageController.hasClients) {
-              _categoryPageController.jumpToPage(tIndex);
-            }
-          });
-        }
+        _onProductClicked(loadedItem.category, loadedItem);
       }
     }
-
-    if (_isBathroomRenovationProject(projectQuery)) {
-      _primeTileSizeUi();
-    }
-  }
-
-  bool _isBathroomRenovationProject(String projectQuery) {
-    final key = projectQuery.trim().toLowerCase();
-    return key.contains('bathroom') && key.contains('renovation');
-  }
-
-  void _primeTileSizeUi() {
-    if (_materials.categories.isEmpty) return;
-
-    String? tileCategoryTitle = _tileCategoryTitleForTileSize;
-    tileCategoryTitle ??= _findTileCategoryTitle();
-
-    final nextGroup = _selectedTileSizeGroup ?? _tileSizeGroupSmall;
-    final shouldUpdateState =
-        (tileCategoryTitle != _tileCategoryTitleForTileSize) ||
-        (nextGroup != _selectedTileSizeGroup);
-
-    if (shouldUpdateState) {
-      setState(() {
-        _tileCategoryTitleForTileSize = tileCategoryTitle;
-        _selectedTileSizeGroup = nextGroup;
-      });
-    }
-
-    // Default to the first size option so the dropdown has a value.
-    if (_materials.getSelectedForCategory('Tile Size') == null) {
-      final options = _tileSizeOptionsForGroup(nextGroup);
-      if (options.isNotEmpty) {
-        _materials.selectItem(options.first);
-      }
-    }
-  }
-
-  String? _findTileCategoryTitle() {
-    for (final cat in _materials.categories) {
-      final titleKey = cat.title.trim().toLowerCase();
-      if (titleKey.contains('tile')) return cat.title;
-
-      final hasTileItem = cat.items.any((item) {
-        final typeKey = (item.type ?? '').trim().toLowerCase();
-        final nameKey = item.name.trim().toLowerCase();
-        return typeKey == 'floor' && nameKey.contains('tile');
-      });
-      if (hasTileItem) return cat.title;
-    }
-    return null;
   }
 
   @override
@@ -198,10 +113,10 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
         child: SafeArea(
           child: Stack(
             children: [
-              _buildBackgroundPanel(context),
+              _buildBackgroundPanel(),
               _buildHeader(context),
               _buildContentCard(context),
-              _buildFloatingFilter(context),
+              _buildFloatingFilter(),
               _buildBottomNav(context),
             ],
           ),
@@ -210,8 +125,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     );
   }
 
-  Widget _buildBackgroundPanel(BuildContext context) {
-    // Beige background panel from the design: W=393, H=585, x=0, y=-178.
+  Widget _buildBackgroundPanel() {
     return const Positioned(
       left: 0,
       top: -200,
@@ -275,58 +189,6 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     );
   }
 
-  IconData getCategoryIcon(String categoryTitle) {
-    final t = categoryTitle.trim().toLowerCase();
-
-    if (t.startsWith('floor surface')) return Icons.grid_view;
-    if (t.startsWith('floor installation')) return Icons.construction;
-
-    if (t.startsWith('wall surface')) return Icons.view_agenda;
-    if (t.startsWith('wall finishing')) return Icons.brush;
-
-    // Sensible fallbacks for other project-defined categories.
-    if (t.contains('installation')) return Icons.construction;
-    if (t.contains('finishing')) return Icons.brush;
-    if (t.contains('surface')) return Icons.grid_view;
-    return Icons.category;
-  }
-
-  void _onFilterSelected(String value) {
-    _materials.setSelectedFilter(value);
-
-    if (_categoryPageController.hasClients) {
-      _categoryPageController.jumpToPage(0);
-    }
-
-    if (!_materialsScrollController.hasClients) return;
-    _materialsScrollController.animateTo(
-      0,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOutCubic,
-    );
-  }
-
-  Future<void> _showNextMaterialSlide(int slideCount) async {
-    if (slideCount <= 0) return;
-    if (!_categoryPageController.hasClients) return;
-
-    final current = (_categoryPageController.page ?? 0).round();
-    final next = (current + 1) % slideCount;
-
-    await _categoryPageController.animateToPage(
-      next,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOutCubic,
-    );
-
-    if (!_materialsScrollController.hasClients) return;
-    await _materialsScrollController.animateTo(
-      0,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOutCubic,
-    );
-  }
-
   Widget _buildContentCard(BuildContext context) {
     return Positioned(
       top: 110,
@@ -360,10 +222,10 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
             const Divider(color: Color(0xFFEDE4D4), thickness: 1),
             const SizedBox(height: 12),
             Text(
-              'Based on your selections, iConstruct \nprovides the following recommendations.',
+              'Select products for your project.\nSizes will appear after clicking a product.',
               style: GoogleFonts.poppins(
                 fontSize: 12,
-                color: Color(0xFFE0D7C9),
+                color: const Color(0xFFE0D7C9),
                 height: 1.4,
               ),
             ),
@@ -377,8 +239,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     );
   }
 
-  // Sidebar with filter options.
-  Widget _buildFloatingFilter(BuildContext context) {
+  Widget _buildFloatingFilter() {
     return Positioned(
       top: 360,
       left: 10,
@@ -387,6 +248,34 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
         onChanged: _onFilterSelected,
       ),
     );
+  }
+
+  void _onFilterSelected(String value) {
+    _materials.setSelectedFilter(value);
+
+    if (_categoryPageController.hasClients) {
+      _categoryPageController.jumpToPage(0);
+    }
+
+    if (!_materialsScrollController.hasClients) return;
+
+    _materialsScrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  IconData getCategoryIcon(String categoryTitle) {
+    final t = categoryTitle.trim().toLowerCase();
+
+    if (t.contains('floor')) return Icons.grid_view;
+    if (t.contains('wall')) return Icons.view_agenda;
+    if (t.contains('install')) return Icons.construction;
+    if (t.contains('finish')) return Icons.brush;
+    if (t.contains('plumb')) return Icons.plumbing;
+    if (t.contains('electric')) return Icons.electrical_services;
+    return Icons.category;
   }
 
   Widget _buildMaterialsBody(BuildContext context) {
@@ -408,8 +297,8 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
         alignment: Alignment.topLeft,
         child: Text(
           _materials.errorMessage?.trim().isNotEmpty == true
-              ? 'Could not load materials.\n${_materials.errorMessage}'
-              : 'No materials available for this project yet.',
+              ? 'Could not load products.\n${_materials.errorMessage}'
+              : 'No products available for this project yet.',
           style: GoogleFonts.poppins(
             fontSize: 12,
             color: const Color(0xFFE0D7C9),
@@ -419,14 +308,13 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
       );
     }
 
-    final list = _materials.filteredCategories;
+    final slides = _materials.filteredCategories;
 
-    final slides = _slideshowCategories(list);
     if (slides.isEmpty) {
       return Align(
         alignment: Alignment.topLeft,
         child: Text(
-          'No materials match this filter.',
+          'No products match this filter.',
           style: GoogleFonts.poppins(
             fontSize: 12,
             color: const Color(0xFFE0D7C9),
@@ -445,208 +333,31 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
             itemCount: slides.length,
             itemBuilder: (context, index) {
               final category = slides[index];
-              final isPlumbingCategory = category.title
-                  .trim()
-                  .toLowerCase()
-                  .contains('plumb');
-
-              final selectedName = !isPlumbingCategory
-                  ? _materials.getSelectedForCategory(category.title)?.name
-                  : null;
-
               final items = _materials.getItemsByCategory(category.title);
+              final selectedName = _materials
+                  .getSelectedForCategory(category.title)
+                  ?.name;
 
               return SingleChildScrollView(
                 controller: _materialsScrollController,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (!isPlumbingCategory)
-                      _FilterSection(
-                        title: category.title,
-                        leadingIcon: getCategoryIcon(category.title),
-                        items: items,
-                        selectedName: selectedName,
-                        onSelect: (item) =>
-                            _onMaterialSelected(category.title, item),
-                      )
-                    else ...[
-                      Row(
-                        children: [
-                          Icon(
-                            getCategoryIcon(category.title),
-                            size: 16,
-                            color: const Color(0xFFEDE4D4),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              category.title,
-                              style: GoogleFonts.poppins(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: const Color(0xFFEDE4D4),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      for (final entry in _groupItemsByKind(items).entries)
-                        Builder(
-                          builder: (context) {
-                            final kindKey = entry.key;
-                            final mapKey = '${category.title.trim()}|$kindKey';
-                            final selectedPlumbing = _materials
-                                .getSelectedForCategory(mapKey);
-                            final selectedMaterialName = selectedPlumbing?.name;
+                    _FilterSection(
+                      title: category.title,
+                      leadingIcon: getCategoryIcon(category.title),
+                      items: items,
+                      selectedName: selectedName,
+                      onSelect: (item) =>
+                          _onProductClicked(category.title, item),
+                    ),
 
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _FilterSection(
-                                  title: entry.key,
-                                  items: entry.value,
-                                  selectedName: selectedMaterialName,
-                                  onSelect: (item) => _onMaterialSelected(
-                                    category.title,
-                                    item,
-                                    kindKey: kindKey,
-                                  ),
-                                ),
-                                if (selectedPlumbing != null) ...[
-                                  const SizedBox(height: 10),
-                                  if (selectedPlumbing.sizes != null &&
-                                      selectedPlumbing.sizes!.isNotEmpty) ...[
-                                    _DropdownSection(
-                                      title: 'Select size:',
-                                      value: _effectivePlumbingOption(
-                                        _selectedPlumbingSizeByKind[mapKey],
-                                        selectedPlumbing.sizes!,
-                                      ),
-                                      onTap: () => _showPlumbingSizePicker(
-                                        selectedPlumbing.sizes!,
-                                        mapKey,
-                                        category.title,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                  ],
-                                  if (selectedPlumbing.lengths != null &&
-                                      selectedPlumbing.lengths!.isNotEmpty) ...[
-                                    _DropdownSection(
-                                      title: 'Select length:',
-                                      value: _effectivePlumbingOption(
-                                        _selectedPlumbingLengthByKind[mapKey],
-                                        selectedPlumbing.lengths!,
-                                      ),
-                                      onTap: () => _showPlumbingLengthPicker(
-                                        selectedPlumbing.lengths!,
-                                        mapKey,
-                                        category.title,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                  ],
-                                  if (selectedPlumbing.coverSizes != null &&
-                                      selectedPlumbing
-                                          .coverSizes!
-                                          .isNotEmpty) ...[
-                                    _DropdownSection(
-                                      title: 'Select cover size:',
-                                      value: _effectivePlumbingOption(
-                                        _selectedCoverSizeByKind[mapKey],
-                                        selectedPlumbing.coverSizes!,
-                                      ),
-                                      onTap: () => _showCoverSizePicker(
-                                        selectedPlumbing.coverSizes!,
-                                        mapKey,
-                                        category.title,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                  ],
-                                  // Add plumbing button removed, auto updates instead
-                                ],
-                                const SizedBox(height: 14),
-                              ],
-                            );
-                          },
-                        ),
-                      if (_addedPlumbingMaterials.isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        const Divider(color: Color(0xFFEDE4D4), thickness: 1),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Added Plumbing:',
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFFEDE4D4),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Column(
-                          children: [
-                            for (final entry in _addedPlumbingMaterials)
-                              _AddedMaterialItem(
-                                title: entry.materialName.trim(),
-                                subtitle: entry.displayLabel
-                                    .replaceFirst(entry.materialName.trim(), '')
-                                    .replaceFirst(' • ', '')
-                                    .trim(),
-                                unit: 'Qty.',
-                                qtyController: entry.qtyController,
-                                onChanged: (val) {
-                                  entry.quantity = double.tryParse(val) ?? 0.0;
-                                },
-                              ),
-                          ],
-                        ),
-                      ],
-                    ],
-                    if (_tileCategoryTitleForTileSize != null &&
-                        category.title == _tileCategoryTitleForTileSize) ...[
-                      const SizedBox(height: 12),
-                      _FilterSection(
-                        title: 'Tile Size',
-                        leadingIcon: Icons.straighten,
-                        items: const [
-                          MaterialItem(
-                            name: _tileSizeGroupSmall,
-                            category: 'Tile Size Group',
-                            description: '',
-                          ),
-                          MaterialItem(
-                            name: _tileSizeGroupMedium,
-                            category: 'Tile Size Group',
-                            description: '',
-                          ),
-                          MaterialItem(
-                            name: _tileSizeGroupLarge,
-                            category: 'Tile Size Group',
-                            description: '',
-                          ),
-                        ],
-                        selectedName: _selectedTileSizeGroup,
-                        onSelect: _onTileSizeGroupSelected,
-                      ),
-                      const SizedBox(height: 12),
-                      _DropdownSection(
-                        title: 'Select size:',
-                        value: _selectedTileSizeValue(),
-                        onTap: _showTileSizePicker,
-                      ),
-                      const SizedBox(height: 8),
-                      // Add tile button removed, auto updates instead
-                    ],
-
-                    if (_addedTiles.isNotEmpty) ...[
-                      const SizedBox(height: 16),
+                    if (_selectedProducts.isNotEmpty) ...[
+                      const SizedBox(height: 18),
                       const Divider(color: Color(0xFFEDE4D4), thickness: 1),
                       const SizedBox(height: 12),
                       Text(
-                        'Added Tiles:',
+                        'Selected Products:',
                         style: GoogleFonts.poppins(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
@@ -654,22 +365,26 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      Column(
-                        children: [
-                          for (final tile in _addedTiles)
-                            _AddedMaterialItem(
-                              title: tile.tileTypeName,
-                              subtitle:
-                                  '${tile.tileSizeGroup} • ${tile.tileSizeName}',
-                              unit: 'Qty.',
-                              qtyController: tile.qtyController,
-                              onChanged: (val) {
-                                tile.quantity = double.tryParse(val) ?? 0.0;
-                              },
-                            ),
-                        ],
-                      ),
+                      for (final selected in _selectedProducts)
+                        _AddedMaterialItem(
+                          title: selected.materialName,
+                          subtitle: selected.displayLabel
+                              .replaceFirst(selected.materialName, '')
+                              .replaceFirst(' • ', '')
+                              .trim(),
+                          unit: selected.unit,
+                          qtyController: selected.qtyController,
+                          onChanged: (val) {
+                            selected.quantity = double.tryParse(val) ?? 0.0;
+                          },
+                          onRemove: () {
+                            setState(() {
+                              _selectedProducts.remove(selected);
+                            });
+                          },
+                        ),
                     ],
+
                     const SizedBox(height: 20),
                   ],
                 ),
@@ -677,7 +392,9 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
             },
           ),
         ),
-        const SizedBox(height: 28),
+
+        const SizedBox(height: 20),
+
         Align(
           alignment: Alignment.centerRight,
           child: SizedBox(
@@ -704,25 +421,16 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
             ),
           ),
         ),
+
         const SizedBox(height: 10),
+
         Align(
           alignment: Alignment.centerRight,
           child: SizedBox(
             width: 150,
             height: 40,
             child: ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => MaterialEstimatorScreen(
-                      projectName: widget.projectName,
-                      tiles: _addedTiles,
-                      plumbingMaterials: _addedPlumbingMaterials,
-                    ),
-                  ),
-                );
-              },
+              onPressed: _goToEstimator,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFEDE4D4),
                 foregroundColor: const Color(0xFF1E3042),
@@ -732,7 +440,6 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
                 elevation: 6,
                 shadowColor: Colors.black.withAlpha(100),
               ),
-
               child: Text(
                 'Estimate Now',
                 style: GoogleFonts.poppins(
@@ -743,737 +450,272 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
             ),
           ),
         ),
+
         const SizedBox(height: 10),
       ],
     );
   }
 
-  List<MaterialCategory> _slideshowCategories(List<MaterialCategory> input) {
-    final projectQuery = widget.projectName
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-    if (!_isBathroomRenovationProject(projectQuery)) return input;
+  Future<void> _showNextMaterialSlide(int slideCount) async {
+    if (slideCount <= 0) return;
+    if (!_categoryPageController.hasClients) return;
 
-    final tiles = <MaterialCategory>[];
-    final plumbing = <MaterialCategory>[];
-    final rest = <MaterialCategory>[];
+    final current = (_categoryPageController.page ?? 0).round();
+    final next = (current + 1) % slideCount;
 
-    for (final cat in input) {
-      final key = cat.title.trim().toLowerCase();
-      if (key.contains('tile')) {
-        tiles.add(cat);
-      } else if (key.contains('plumb')) {
-        plumbing.add(cat);
-      } else {
-        rest.add(cat);
-      }
-    }
+    await _categoryPageController.animateToPage(
+      next,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
+    );
 
-    return <MaterialCategory>[...tiles, ...plumbing, ...rest];
+    if (!_materialsScrollController.hasClients) return;
+
+    await _materialsScrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
+    );
   }
 
-  Map<String, List<MaterialItem>> _groupItemsByKind(List<MaterialItem> items) {
-    final grouped = <String, List<MaterialItem>>{};
-
-    for (final item in items) {
-      final rawKind = (item.kind ?? '').trim();
-      final key = rawKind.isEmpty ? 'Others' : rawKind;
-      grouped.putIfAbsent(key, () => <MaterialItem>[]).add(item);
-    }
-
-    return grouped;
+  void _goToEstimator() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MaterialEstimatorScreen(
+          projectName: widget.projectName,
+          tiles: const [],
+          plumbingMaterials: _selectedProducts,
+        ),
+      ),
+    );
   }
 
-  String _selectedTileSizeValue() {
-    final group = _selectedTileSizeGroup;
-    if (group == null) return '';
-
-    final options = _tileSizeOptionsForGroup(group);
-    if (options.isEmpty) return '';
-
-    final selected = _materials.getSelectedForCategory('Tile Size');
-    if (selected == null) return options.first.name;
-
-    final isInGroup = options.any((e) => e.name == selected.name);
-    return isInGroup ? selected.name : options.first.name;
+  void _onProductClicked(String categoryTitle, MaterialItem item) {
+    _materials.selectItemForCategory(categoryTitle, item);
+    _showProductSelectionDialog(categoryTitle, item);
   }
 
-  List<MaterialItem> _tileSizeOptionsForGroup(String group) {
-    if (group == _tileSizeGroupSmall) {
-      return const [
-        MaterialItem(
-          name: '25 × 25 mm',
-          category: 'Tile Size',
-          description: '1” × 1”',
-        ),
-        MaterialItem(
-          name: '50 × 50 mm',
-          category: 'Tile Size',
-          description: '2” × 2”',
-        ),
-        MaterialItem(
-          name: '100 × 100 mm',
-          category: 'Tile Size',
-          description: '4” × 4”',
-        ),
-      ];
-    }
-
-    if (group == _tileSizeGroupMedium) {
-      return const [
-        MaterialItem(
-          name: '200 × 200 mm',
-          category: 'Tile Size',
-          description: '8” × 8”',
-        ),
-        MaterialItem(
-          name: '300 × 300 mm',
-          category: 'Tile Size',
-          description: '12” × 12”',
-        ),
-        MaterialItem(
-          name: '300 × 600 mm',
-          category: 'Tile Size',
-          description: '12” × 24”',
-        ),
-      ];
-    }
-
-    if (group == _tileSizeGroupLarge) {
-      return const [
-        MaterialItem(
-          name: '600 × 600 mm',
-          category: 'Tile Size',
-          description: '24” × 24”',
-        ),
-        MaterialItem(
-          name: '600 × 1200 mm',
-          category: 'Tile Size',
-          description: '24” × 48”',
-        ),
-        MaterialItem(
-          name: '800 × 800 mm',
-          category: 'Tile Size',
-          description: '',
-        ),
-        MaterialItem(
-          name: '1200 × 1200 mm',
-          category: 'Tile Size',
-          description: '',
-        ),
-      ];
-    }
-
-    return const <MaterialItem>[];
-  }
-
-  String _tileSizeGroupDescription(String group) {
-    if (group == _tileSizeGroupSmall) {
-      return 'Small Tile Sizes\n\n'
-          'Used for decorative areas, mosaics, and detailed designs.\n\n'
-          'Sizes:\n'
-          '• 25 × 25 mm (1” × 1”)\n'
-          '• 50 × 50 mm (2” × 2”)\n'
-          '• 100 × 100 mm (4” × 4”)\n\n'
-          'Common for: shower floors (better grip), accent walls, mosaic designs.';
-    }
-
-    if (group == _tileSizeGroupMedium) {
-      return 'Medium Tile Sizes\n\n'
-          'Most commonly used tiles in bathrooms.\n\n'
-          'Sizes:\n'
-          '• 200 × 200 mm (8” × 8”)\n'
-          '• 300 × 300 mm (12” × 12”)\n'
-          '• 300 × 600 mm (12” × 24”)\n\n'
-          'Common for: bathroom walls, main floors, shower walls.\n'
-          'Easy to install and balances aesthetics with practicality.';
-    }
-
-    return 'Large Tile Sizes\n\n'
-        'Used for a modern, spacious, and seamless look.\n\n'
-        'Sizes:\n'
-        '• 600 × 600 mm (24” × 24”)\n'
-        '• 600 × 1200 mm (24” × 48”)\n'
-        '• 800 × 800 mm\n'
-        '• 1200 × 1200 mm\n\n'
-        'Common for: large bathroom floors, minimal grout lines (cleaner look).\n'
-        'Best for bigger bathrooms.';
-  }
-
-  void _onTileSizeGroupSelected(MaterialItem item) {
-    final group = item.name;
-    if (group != _tileSizeGroupSmall &&
-        group != _tileSizeGroupMedium &&
-        group != _tileSizeGroupLarge) {
-      return;
-    }
-
-    setState(() {
-      _selectedTileSizeGroup = group;
-
-      final options = _tileSizeOptionsForGroup(group);
-      if (options.isNotEmpty) {
-        _materials.selectItem(options.first);
-      }
-    });
-
-    _syncSelectedTileToAddedList();
+  void _showProductSelectionDialog(String categoryTitle, MaterialItem item) {
+    final sizes = item.sizes ?? const <String>[];
+    String? selectedSize = sizes.isNotEmpty ? sizes.first : null;
+    final qtyController = TextEditingController(text: '1');
 
     showDialog<void>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFFEDE4D4),
-          title: Text(
-            '$group Sizes',
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF2C3E50),
-            ),
-          ),
-          content: Text(
-            _tileSizeGroupDescription(group),
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              height: 1.4,
-              color: const Color(0xFF2C3E50),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                'Close',
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFFEDE4D4),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              title: Text(
+                item.name,
                 style: GoogleFonts.poppins(
+                  fontSize: 17,
                   fontWeight: FontWeight.w700,
                   color: const Color(0xFF2C3E50),
                 ),
               ),
-            ),
-          ],
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (item.imageUrl.trim().isNotEmpty) ...[
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: AspectRatio(
+                          aspectRatio: 16 / 9,
+                          child: Image.network(
+                            item.imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: const Color(0xFF2C3E50).withAlpha(15),
+                                alignment: Alignment.center,
+                                child: const Icon(
+                                  Icons.broken_image,
+                                  color: Color(0xFF2C3E50),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    if (item.description.trim().isNotEmpty) ...[
+                      Text(
+                        item.description,
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          height: 1.4,
+                          color: const Color(0xFF2C3E50),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    Text(
+                      'Unit: ${item.unit}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF2C3E50),
+                      ),
+                    ),
+
+                    if (sizes.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      Text(
+                        'Select size:',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF2C3E50),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        value: selectedSize,
+                        dropdownColor: const Color(0xFFEDE4D4),
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                        ),
+                        items: sizes.map((size) {
+                          return DropdownMenuItem<String>(
+                            value: size,
+                            child: Text(size),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setModalState(() {
+                            selectedSize = value;
+                          });
+                        },
+                      ),
+                    ],
+
+                    const SizedBox(height: 14),
+
+                    Text(
+                      'Quantity:',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF2C3E50),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: qtyController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Enter quantity',
+                        suffixText: item.unit,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(
+                    'Cancel',
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF2C3E50),
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2C3E50),
+                    foregroundColor: const Color(0xFFEDE4D4),
+                  ),
+                  onPressed: () {
+                    final qty = double.tryParse(qtyController.text) ?? 1.0;
+
+                    _addOrUpdateSelectedProduct(
+                      categoryTitle: categoryTitle,
+                      item: item,
+                      selectedSize: selectedSize,
+                      quantity: qty,
+                    );
+
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Add'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
   }
 
-  void _onMaterialSelected(
-    String categoryTitle,
-    MaterialItem item, {
-    String? kindKey,
-    bool showDescriptionModal = true,
+  void _addOrUpdateSelectedProduct({
+    required String categoryTitle,
+    required MaterialItem item,
+    required String? selectedSize,
+    required double quantity,
   }) {
-    final effectiveCategoryKey = kindKey != null
-        ? '${categoryTitle.trim()}|$kindKey'
-        : categoryTitle;
-
-    _selectMaterial(
-      item,
-      categoryKey: effectiveCategoryKey,
-      showDescriptionModal: showDescriptionModal,
-    );
-
-    final titleKey = categoryTitle.trim().toLowerCase();
-    if (titleKey.contains('plumb')) {
-      _primePlumbingOptionUi(effectiveCategoryKey, item, categoryTitle);
-    }
-
-    final type = (item.type ?? '').trim().toLowerCase();
-    final itemCategoryKey = item.category.trim().toLowerCase();
-    final nameKey = item.name.trim().toLowerCase();
-
-    // Heuristic: show tile size selection for floor tile categories.
-    if (type == 'floor' &&
-        (itemCategoryKey.contains('tile') || nameKey.contains('tile'))) {
-      setState(() {
-        _tileCategoryTitleForTileSize = categoryTitle;
-        _selectedTileSizeGroup ??= _tileSizeGroupSmall;
-      });
-
-      _primeTileSizeUi();
-      _syncSelectedTileToAddedList();
-    }
-  }
-
-  bool _canAddSelectedTile() {
-    final categoryTitle = _tileCategoryTitleForTileSize;
-    if (categoryTitle == null) return false;
-
-    final tileType = _materials.getSelectedForCategory(categoryTitle);
-    final group = _selectedTileSizeGroup;
-    if (tileType == null) return false;
-    if (group == null) return false;
-    final sizeName = _selectedTileSizeValue().trim();
-    if (sizeName.isEmpty) return false;
-    return true;
-  }
-
-  void _syncSelectedTileToAddedList() {
-    final categoryTitle = _tileCategoryTitleForTileSize;
-    if (categoryTitle == null) return;
-
-    final tileType = _materials.getSelectedForCategory(categoryTitle);
-    final group = _selectedTileSizeGroup;
-    if (tileType == null || group == null) return;
-
-    final sizeOptions = _tileSizeOptionsForGroup(group);
-    if (sizeOptions.isEmpty) return;
-
-    final selectedSize = _materials.getSelectedForCategory('Tile Size');
-    final size =
-        (selectedSize != null &&
-            sizeOptions.any((e) => e.name == selectedSize.name))
-        ? selectedSize
-        : sizeOptions.first;
-
-    final selection = AddedTileSelection(
-      tileTypeName: tileType.name,
-      tileSizeGroup: group,
-      tileSizeName: size.name,
-    );
-
-    setState(() {
-      final index = _addedTiles.indexWhere(
-        (e) => e.tileTypeName == selection.tileTypeName,
-      );
-      if (index != -1) {
-        // Update existing tile while preserving quantity
-        final existing = _addedTiles[index];
-        final updatedSelection = AddedTileSelection(
-          tileTypeName: selection.tileTypeName,
-          tileSizeGroup: selection.tileSizeGroup,
-          tileSizeName: selection.tileSizeName,
-          quantity: existing.quantity,
-        );
-        updatedSelection.qtyController.text = existing.qtyController.text;
-        _addedTiles[index] = updatedSelection;
-      } else {
-        // Add new tile block
-        _addedTiles.add(selection);
-      }
-    });
-  }
-
-  void _addSelectedTileToList() {
-    _syncSelectedTileToAddedList();
-  }
-
-  bool _canAddSelectedPlumbing(String mapKey) {
-    final selected = _materials.getSelectedForCategory(mapKey);
-    if (selected == null) return false;
-    if (selected.name.trim().isEmpty) return false;
-
-    final sizes = selected.sizes;
-    final lengths = selected.lengths;
-    final coverSizes = selected.coverSizes;
-
-    if (sizes != null && sizes.isEmpty) return false;
-    if (lengths != null && lengths.isEmpty) return false;
-    if (coverSizes != null && coverSizes.isEmpty) return false;
-
-    return true;
-  }
-
-  void _syncSelectedPlumbingToAddedList(String mapKey, String categoryTitle) {
-    if (!_canAddSelectedPlumbing(mapKey)) return;
-
-    final selected = _materials.getSelectedForCategory(mapKey);
-    if (selected == null) return;
-
-    final size = _selectedPlumbingSizeByKind[mapKey];
-    final length = _selectedPlumbingLengthByKind[mapKey];
-    final coverSize = _selectedCoverSizeByKind[mapKey];
-
-    final effectiveSize = (selected.sizes != null && selected.sizes!.isNotEmpty)
-        ? _effectivePlumbingOption(size, selected.sizes!)
-        : null;
-    final effectiveLength =
-        (selected.lengths != null && selected.lengths!.isNotEmpty)
-        ? _effectivePlumbingOption(length, selected.lengths!)
-        : null;
-    final effectiveCoverSize =
-        (selected.coverSizes != null && selected.coverSizes!.isNotEmpty)
-        ? _effectivePlumbingOption(coverSize, selected.coverSizes!)
-        : null;
-
     final selection = AddedPlumbingSelection(
       categoryTitle: categoryTitle,
-      kind: (selected.kind ?? '').trim(),
-      materialName: selected.name,
-      size: effectiveSize,
-      length: effectiveLength,
-      coverSize: effectiveCoverSize,
+      kind: (item.type ?? '').trim(),
+      materialName: item.name,
+      size: selectedSize,
+      unit: item.unit,
+      quantity: quantity,
     );
 
     setState(() {
-      final index = _addedPlumbingMaterials.indexWhere(
+      final index = _selectedProducts.indexWhere(
         (e) =>
             e.categoryTitle == selection.categoryTitle &&
-            e.kind == selection.kind,
+            e.materialName == selection.materialName &&
+            (e.size ?? '') == (selection.size ?? ''),
       );
+
       if (index != -1) {
-        final existing = _addedPlumbingMaterials[index];
-        final updatedSelection = AddedPlumbingSelection(
+        final existing = _selectedProducts[index];
+        final updated = AddedPlumbingSelection(
           categoryTitle: selection.categoryTitle,
           kind: selection.kind,
           materialName: selection.materialName,
           size: selection.size,
-          length: selection.length,
-          coverSize: selection.coverSize,
-          quantity: existing.quantity,
+          unit: selection.unit,
+          quantity: selection.quantity,
         );
-        updatedSelection.qtyController.text = existing.qtyController.text;
-        _addedPlumbingMaterials[index] = updatedSelection;
+        updated.qtyController.text = quantity.toString();
+        _selectedProducts[index] = updated;
+        existing.qtyController.dispose();
       } else {
-        _addedPlumbingMaterials.add(selection);
+        selection.qtyController.text = quantity.toString();
+        _selectedProducts.add(selection);
       }
     });
-  }
-
-  void _addSelectedPlumbingToList(String mapKey, String categoryTitle) {
-    _syncSelectedPlumbingToAddedList(mapKey, categoryTitle);
-  }
-
-  String _effectivePlumbingOption(String? current, List<String> options) {
-    if (options.isEmpty) return '';
-    final v = (current ?? '').trim();
-    if (v.isNotEmpty && options.contains(v)) return v;
-    return options.first;
-  }
-
-  void _primePlumbingOptionUi(
-    String mapKey,
-    MaterialItem item,
-    String categoryTitle,
-  ) {
-    final itemKey = '${mapKey.trim()}|${item.name.trim()}';
-    final isNewItem = itemKey != _selectedPlumbingMaterialKeyByKind[mapKey];
-
-    final sizes = item.sizes ?? const <String>[];
-    final lengths = item.lengths ?? const <String>[];
-    final coverSizes = item.coverSizes ?? const <String>[];
-
-    setState(() {
-      _selectedPlumbingMaterialKeyByKind[mapKey] = itemKey;
-
-      if (sizes.isEmpty) {
-        _selectedPlumbingSizeByKind.remove(mapKey);
-      } else if (isNewItem ||
-          !_isOptionValid(_selectedPlumbingSizeByKind[mapKey], sizes)) {
-        _selectedPlumbingSizeByKind[mapKey] = sizes.first;
-      }
-
-      if (lengths.isEmpty) {
-        _selectedPlumbingLengthByKind.remove(mapKey);
-      } else if (isNewItem ||
-          !_isOptionValid(_selectedPlumbingLengthByKind[mapKey], lengths)) {
-        _selectedPlumbingLengthByKind[mapKey] = lengths.first;
-      }
-
-      if (coverSizes.isEmpty) {
-        _selectedCoverSizeByKind.remove(mapKey);
-      } else if (isNewItem ||
-          !_isOptionValid(_selectedCoverSizeByKind[mapKey], coverSizes)) {
-        _selectedCoverSizeByKind[mapKey] = coverSizes.first;
-      }
-    });
-
-    _syncSelectedPlumbingToAddedList(mapKey, categoryTitle);
-  }
-
-  bool _isOptionValid(String? current, List<String> options) {
-    final v = (current ?? '').trim();
-    return v.isNotEmpty && options.contains(v);
-  }
-
-  void _selectMaterial(
-    MaterialItem item, {
-    String? categoryKey,
-    required bool showDescriptionModal,
-  }) {
-    setState(() {
-      if (categoryKey == null || categoryKey.trim().isEmpty) {
-        _materials.selectItem(item);
-      } else {
-        _materials.selectItemForCategory(categoryKey, item);
-      }
-    });
-
-    if (!showDescriptionModal) return;
-    _showMaterialDescription(item);
-  }
-
-  void _showMaterialDescription(MaterialItem item) {
-    final description = item.description.trim();
-    final imageUrl = (item.imageUrl ?? '').trim();
-    if (description.isEmpty && imageUrl.isEmpty) return;
-
-    showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFFEDE4D4),
-          title: Text(
-            item.name,
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF2C3E50),
-            ),
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (imageUrl.isNotEmpty) ...[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: AspectRatio(
-                      aspectRatio: 16 / 9,
-                      child: Image.network(
-                        imageUrl,
-                        fit: BoxFit.cover,
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return const Center(
-                            child: SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                color: Color(0xFF2C3E50),
-                              ),
-                            ),
-                          );
-                        },
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            color: const Color(0xFF2C3E50).withAlpha(15),
-                            alignment: Alignment.center,
-                            child: Text(
-                              'Could not load image.',
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                color: const Color(0xFF2C3E50),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                if (description.isNotEmpty)
-                  Text(
-                    description,
-                    style: GoogleFonts.poppins(
-                      fontSize: 13,
-                      height: 1.4,
-                      color: const Color(0xFF2C3E50),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                'Close',
-                style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF2C3E50),
-                ),
-              ),
-            ),
-          ],
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-        );
-      },
-    );
-  }
-
-  void _showTileSizePicker() {
-    final group = _selectedTileSizeGroup;
-    if (group == null) return;
-
-    final options = _tileSizeOptionsForGroup(group);
-    if (options.isEmpty) return;
-
-    showDialog<void>(
-      context: context,
-      builder: (context) {
-        return SimpleDialog(
-          backgroundColor: const Color(0xFFEDE4D4),
-          title: Text(
-            'Select size',
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF2C3E50),
-            ),
-          ),
-          children: [
-            for (final item in options)
-              SimpleDialogOption(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  _selectMaterial(item, showDescriptionModal: false);
-                  _syncSelectedTileToAddedList();
-                },
-                child: Text(
-                  item.description.trim().isNotEmpty
-                      ? '${item.name} (${item.description})'
-                      : item.name,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: const Color(0xFF2C3E50),
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showPlumbingSizePicker(
-    List<String> options,
-    String mapKey,
-    String categoryTitle,
-  ) {
-    if (options.isEmpty) return;
-
-    showDialog<void>(
-      context: context,
-      builder: (context) {
-        return SimpleDialog(
-          backgroundColor: const Color(0xFFEDE4D4),
-          title: Text(
-            'Select size',
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF2C3E50),
-            ),
-          ),
-          children: [
-            for (final size in options)
-              SimpleDialogOption(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  setState(() {
-                    _selectedPlumbingSizeByKind[mapKey] = size;
-                  });
-                  _syncSelectedPlumbingToAddedList(mapKey, categoryTitle);
-                },
-                child: Text(
-                  size,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: const Color(0xFF2C3E50),
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showPlumbingLengthPicker(
-    List<String> options,
-    String mapKey,
-    String categoryTitle,
-  ) {
-    if (options.isEmpty) return;
-
-    showDialog<void>(
-      context: context,
-      builder: (context) {
-        return SimpleDialog(
-          backgroundColor: const Color(0xFFEDE4D4),
-          title: Text(
-            'Select length',
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF2C3E50),
-            ),
-          ),
-          children: [
-            for (final length in options)
-              SimpleDialogOption(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  setState(() {
-                    _selectedPlumbingLengthByKind[mapKey] = length;
-                  });
-                  _syncSelectedPlumbingToAddedList(mapKey, categoryTitle);
-                },
-                child: Text(
-                  length,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: const Color(0xFF2C3E50),
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showCoverSizePicker(
-    List<String> options,
-    String mapKey,
-    String categoryTitle,
-  ) {
-    if (options.isEmpty) return;
-
-    showDialog<void>(
-      context: context,
-      builder: (context) {
-        return SimpleDialog(
-          backgroundColor: const Color(0xFFEDE4D4),
-          title: Text(
-            'Select cover size',
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF2C3E50),
-            ),
-          ),
-          children: [
-            for (final size in options)
-              SimpleDialogOption(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  setState(() {
-                    _selectedCoverSizeByKind[mapKey] = size;
-                  });
-                  _syncSelectedPlumbingToAddedList(mapKey, categoryTitle);
-                },
-                child: Text(
-                  size,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: const Color(0xFF2C3E50),
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
-    );
   }
 
   Widget _buildBottomNav(BuildContext context) {
@@ -1497,7 +739,8 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            GestureDetector(
+            _BottomIconButton(
+              icon: Icons.home_rounded,
               onTap: () {
                 Navigator.pushAndRemoveUntil(
                   context,
@@ -1507,11 +750,6 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
                   (route) => false,
                 );
               },
-              child: const _BottomNavItem(
-                icon: Icons.home_rounded,
-                label: 'Home',
-                isActive: true,
-              ),
             ),
             const SizedBox(width: 10),
             _BottomIconButton(
@@ -1519,20 +757,10 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
               onTap: () {},
             ),
             const SizedBox(width: 10),
-            _BottomIconButton(
+            const _BottomNavItem(
               icon: Icons.calculate_rounded,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => MaterialEstimatorScreen(
-                      projectName: widget.projectName,
-                      tiles: _addedTiles,
-                      plumbingMaterials: _addedPlumbingMaterials,
-                    ),
-                  ),
-                );
-              },
+              label: 'Estimate',
+              isActive: true,
             ),
             const SizedBox(width: 10),
             _BottomIconButton(
@@ -1571,8 +799,15 @@ class _FilterSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isTileSection = title.trim().toLowerCase().contains('tile');
-    final headerGap = isTileSection ? 6.0 : 10.0;
+    if (items.isEmpty) {
+      return Text(
+        'No products in this category.',
+        style: GoogleFonts.poppins(
+          fontSize: 12,
+          color: const Color(0xFFE0D7C9),
+        ),
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1595,7 +830,7 @@ class _FilterSection extends StatelessWidget {
             ),
           ],
         ),
-        SizedBox(height: headerGap),
+        const SizedBox(height: 10),
         Column(
           children: [
             for (int i = 0; i < items.length; i++) ...[
@@ -1603,9 +838,6 @@ class _FilterSection extends StatelessWidget {
                 item: items[i],
                 isSelected: items[i].name == selectedName,
                 onTap: () => onSelect(items[i]),
-                showDescriptionLine:
-                    items[i].category == 'Tile Size' &&
-                    items[i].description.trim().isNotEmpty,
               ),
               if (i != items.length - 1) const SizedBox(height: 10),
             ],
@@ -1620,21 +852,18 @@ class _MaterialCardOption extends StatelessWidget {
   final MaterialItem item;
   final bool isSelected;
   final VoidCallback onTap;
-  final bool showDescriptionLine;
 
   const _MaterialCardOption({
     required this.item,
     required this.isSelected,
     required this.onTap,
-    required this.showDescriptionLine,
   });
 
   @override
   Widget build(BuildContext context) {
-    final imageUrl = (item.imageUrl ?? '').trim();
+    final imageUrl = item.imageUrl.trim();
     final title = item.name.trim();
-    final subtitle = showDescriptionLine ? item.description.trim() : '';
-    final showImage = !item.category.contains('Tile Size');
+    final description = item.description.trim();
 
     final borderColor = isSelected
         ? const Color(0xFFEDE4D4)
@@ -1652,16 +881,14 @@ class _MaterialCardOption extends StatelessWidget {
         ),
         child: Row(
           children: [
-            if (showImage) ...[
-              _MaterialThumb(imageUrl: imageUrl),
-              const SizedBox(width: 12),
-            ],
+            _MaterialThumb(imageUrl: imageUrl),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    title,
+                    title.isEmpty ? 'Unnamed Product' : title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.poppins(
@@ -1670,10 +897,10 @@ class _MaterialCardOption extends StatelessWidget {
                       color: const Color(0xFFEDE4D4),
                     ),
                   ),
-                  if (subtitle.isNotEmpty) ...[
+                  if (description.isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Text(
-                      subtitle,
+                      description,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.poppins(
@@ -1685,8 +912,7 @@ class _MaterialCardOption extends StatelessWidget {
                 ],
               ),
             ),
-            if (!item.category.contains('Tile Size'))
-              _FavoriteButton(item: item),
+            _FavoriteButton(item: item),
           ],
         ),
       ),
@@ -1696,6 +922,7 @@ class _MaterialCardOption extends StatelessWidget {
 
 class _FavoriteButton extends StatelessWidget {
   final MaterialItem item;
+
   const _FavoriteButton({required this.item});
 
   @override
@@ -1733,7 +960,7 @@ class _FavoriteButton extends StatelessWidget {
                   );
                 }
               }
-            } catch (e) {
+            } catch (_) {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Failed to update favorites')),
@@ -1805,6 +1032,7 @@ class _AddedMaterialItem extends StatelessWidget {
   final TextEditingController qtyController;
   final String unit;
   final ValueChanged<String> onChanged;
+  final VoidCallback onRemove;
 
   const _AddedMaterialItem({
     required this.title,
@@ -1812,6 +1040,7 @@ class _AddedMaterialItem extends StatelessWidget {
     required this.qtyController,
     required this.unit,
     required this.onChanged,
+    required this.onRemove,
   });
 
   @override
@@ -1848,6 +1077,7 @@ class _AddedMaterialItem extends StatelessWidget {
                   Text(
                     subtitle,
                     maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.poppins(
                       fontSize: 11,
                       color: const Color(0xFFE0D7C9),
@@ -1857,8 +1087,9 @@ class _AddedMaterialItem extends StatelessWidget {
               ],
             ),
           ),
+
           const SizedBox(width: 12),
-          // Quantity Input
+
           Container(
             width: 140,
             height: 38,
@@ -1886,7 +1117,7 @@ class _AddedMaterialItem extends StatelessWidget {
                       color: Colors.white,
                     ),
                     decoration: InputDecoration(
-                      hintText: 'Enter quantity (optional)',
+                      hintText: 'Enter quantity',
                       hintStyle: GoogleFonts.poppins(
                         color: Colors.white38,
                         fontSize: 10,
@@ -1897,7 +1128,7 @@ class _AddedMaterialItem extends StatelessWidget {
                     ),
                   ),
                 ),
-                Container(
+                Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: Text(
                     unit,
@@ -1908,6 +1139,15 @@ class _AddedMaterialItem extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+
+          IconButton(
+            onPressed: onRemove,
+            icon: const Icon(
+              Icons.close_rounded,
+              color: Color(0xFFEDE4D4),
+              size: 18,
             ),
           ),
         ],
@@ -2000,69 +1240,6 @@ class _FloatingFilterButton extends StatelessWidget {
   }
 }
 
-class _DropdownSection extends StatelessWidget {
-  final String title;
-  final String value;
-  final VoidCallback onTap;
-
-  const _DropdownSection({
-    required this.title,
-    required this.value,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: GoogleFonts.poppins(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: const Color(0xFFEDE4D4),
-          ),
-        ),
-        const SizedBox(height: 10),
-        SizedBox(
-          width: 134,
-          height: 36,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: onTap,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E3042),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFEDE4D4), width: 3),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    value,
-                    style: GoogleFonts.poppins(
-                      fontSize: 11,
-                      color: const Color(0xFFEDE4D4).withAlpha(191),
-                    ),
-                  ),
-                  const Icon(
-                    Icons.keyboard_arrow_down,
-                    color: Color(0xFFEDE4D4),
-                    size: 20,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _BottomNavItem extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -2132,7 +1309,7 @@ class _BottomIconButton extends StatelessWidget {
                   fit: BoxFit.contain,
                   color: const Color(0xFF2C3E50),
                 )
-              : Icon(icon, size: 24, color: const Color(0xFF2C3E50)),
+              : Icon(icon!, size: 24, color: const Color(0xFF2C3E50)),
         ),
       ),
     );
@@ -2151,7 +1328,7 @@ class AddedTileSelection {
     required this.tileSizeGroup,
     required this.tileSizeName,
     this.quantity = 0.0,
-  }) : qtyController = TextEditingController();
+  }) : qtyController = TextEditingController(text: quantity.toString());
 
   String get key =>
       '${tileTypeName.trim()}|${tileSizeGroup.trim()}|${tileSizeName.trim()}';
@@ -2164,6 +1341,7 @@ class AddedPlumbingSelection {
   final String? size;
   final String? length;
   final String? coverSize;
+  final String unit;
   double quantity;
   final TextEditingController qtyController;
 
@@ -2174,21 +1352,28 @@ class AddedPlumbingSelection {
     this.size,
     this.length,
     this.coverSize,
+    this.unit = 'Qty.',
     this.quantity = 0.0,
-  }) : qtyController = TextEditingController();
+  }) : qtyController = TextEditingController(text: quantity.toString());
 
   String get key =>
       '${categoryTitle.trim()}|${kind.trim()}|${materialName.trim()}|${(size ?? '').trim()}|${(length ?? '').trim()}|${(coverSize ?? '').trim()}';
 
   String get displayLabel {
-    final kindLabel = kind.trim().isEmpty ? 'Others' : kind.trim();
-    final parts = <String>[materialName.trim(), kindLabel];
+    final parts = <String>[];
+
+    final kindLabel = kind.trim();
     final s = (size ?? '').trim();
     final l = (length ?? '').trim();
     final c = (coverSize ?? '').trim();
+
+    if (kindLabel.isNotEmpty) parts.add(kindLabel);
     if (s.isNotEmpty) parts.add(s);
     if (l.isNotEmpty) parts.add(l);
     if (c.isNotEmpty) parts.add(c);
-    return parts.join(' • ');
+
+    return parts.isEmpty
+        ? materialName.trim()
+        : '${materialName.trim()} • ${parts.join(' • ')}';
   }
 }

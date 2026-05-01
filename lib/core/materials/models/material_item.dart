@@ -9,7 +9,11 @@ class MaterialItem {
   final List<String>? coverSizes;
   final String? type;
   final String imageUrl;
+
+  // Keep price because Firestore has it,
+  // but DO NOT display it in user-facing UI.
   final double price;
+
   final String unit;
   final String projectType;
   final String subType;
@@ -88,45 +92,68 @@ class MaterialItem {
   static List<String>? _asStringList(dynamic value) {
     if (value == null) return null;
     if (value is! List) return null;
+
     final list = value
         .map((e) => (e ?? '').toString().trim())
         .where((e) => e.isNotEmpty)
         .toList(growable: false);
+
     return list.isEmpty ? null : list;
   }
 
+  static double _asDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString()) ?? 0.0;
+  }
+
+  static bool _asBool(dynamic value) {
+    if (value is bool) return value;
+    if (value is String) {
+      return value.toLowerCase().trim() == 'true';
+    }
+    return false;
+  }
+
   factory MaterialItem.fromJson(Map<String, dynamic> json, [String? docId]) {
-    final rawType = (json['type'] ?? json['placement']);
-    final rawKind = (json['kind'] ?? json['Kind']);
-    final rawCategory = json['category']?.toString() ?? '';
+    final rawType = json['type'] ?? json['placement'];
+    final rawKind = json['kind'] ?? json['Kind'];
+    final rawCategory = json['category']?.toString().trim() ?? '';
+
+    final projectIdValue = json['projectId']?.toString().trim() ?? '';
+    final projectTypeValue =
+        json['projectType']?.toString().trim().isNotEmpty == true
+        ? json['projectType'].toString().trim()
+        : projectIdValue;
 
     return MaterialItem(
       id: docId ?? json['id']?.toString(),
-      name: json['name']?.toString() ?? 'Unnamed Product',
+      name: json['name']?.toString().trim().isNotEmpty == true
+          ? json['name'].toString().trim()
+          : 'Unnamed Product',
       category: rawCategory.isEmpty ? 'Others' : rawCategory,
       description: json['description']?.toString() ?? '',
       kind: (rawKind ?? '').toString().trim().isEmpty
           ? null
-          : (rawKind ?? '').toString(),
+          : (rawKind ?? '').toString().trim(),
       sizes: _asStringList(json['sizes']),
       lengths: _asStringList(json['lengths']),
       coverSizes: _asStringList(json['coverSizes'] ?? json['cover_sizes']),
       type: (rawType ?? '').toString().trim().isEmpty
           ? null
-          : (rawType ?? '').toString(),
+          : (rawType ?? '').toString().trim(),
       imageUrl:
           json['imageUrl']?.toString() ?? json['image_url']?.toString() ?? '',
-      price: (json['price'] != null) ? (json['price'] as num).toDouble() : 0.0,
-      unit: json['unit']?.toString() ?? 'per piece',
-      projectType:
-          json['projectType']?.toString() ??
-          json['projectId']?.toString() ??
-          '',
+      price: _asDouble(json['price']),
+      unit: json['unit']?.toString().trim().isNotEmpty == true
+          ? json['unit'].toString().trim()
+          : 'per piece',
+      projectType: projectTypeValue,
       subType: json['subType']?.toString() ?? '',
       shopId: json['shopId']?.toString() ?? '',
-      inStock: json['inStock'] as bool? ?? false,
+      inStock: _asBool(json['inStock']),
       categoryId: json['categoryId']?.toString() ?? '',
-      projectId: json['projectId']?.toString() ?? '',
+      projectId: projectIdValue,
       projectName: json['projectName']?.toString() ?? '',
     );
   }
@@ -144,7 +171,11 @@ class MaterialItem {
       if (type != null) 'type': type,
       'placement': type,
       'imageUrl': imageUrl,
+
+      // Keep this for backend/shop/admin data only.
+      // Do not display this in user screens.
       'price': price,
+
       'unit': unit,
       'projectType': projectType,
       'subType': subType,

@@ -6,6 +6,7 @@ import 'package:iconstruct/features/auth/presentation/screens/main_home_screen.d
 import 'package:iconstruct/features/auth/presentation/screens/material_estimator.dart';
 import 'package:iconstruct/core/state/active_project_state.dart';
 import 'package:iconstruct/core/utils/hammer_nav.dart';
+import 'package:iconstruct/features/bidding/screens/project_bids_screen.dart';
 
 // --- Data Model ---
 class ProjectModel {
@@ -15,7 +16,7 @@ class ProjectModel {
   final int materialCount;
   final double projectArea;
   final String costLevel; // Low, Medium, High
-  final List<String> materials;
+  final List<dynamic> materials;
   final String status; // Draft, Ready, Posted
   final DateTime lastUpdated;
   final String? postId;
@@ -42,7 +43,11 @@ class ProjectModel {
       materialCount: data['materialsCount'] ?? 0,
       projectArea: (data['totalAreaSqm'] ?? 0.0).toDouble(),
       costLevel: data['costLevel'] ?? 'Unknown',
-      materials: List<String>.from(data['selectedMaterials'] ?? []),
+      // Materials may be stored as a list of strings (legacy) or
+      // as a list of structured maps containing name/quantity/unit, etc.
+      materials: List<dynamic>.from(
+        data['materials'] ?? data['selectedMaterials'] ?? [],
+      ),
       status: data['status'] ?? 'Draft',
       lastUpdated:
           (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
@@ -573,21 +578,36 @@ class ProjectCard extends StatelessWidget {
     const Color textDark = Color(0xFF2A3E4E);
     const Color textMuted = Color(0xFF5A6E7E);
 
-    // Prepare material preview string
-    final previewMaterials = project.materials.take(3).join(', ');
-    final remainingCount = project.materials.length - 3;
+    // Prepare material preview string (support structured items)
+    final previewMaterials = project.materials
+        .take(3)
+        .map((m) => m is Map ? (m['name'] ?? '').toString() : m.toString())
+        .where((s) => s.isNotEmpty)
+        .join(', ');
+    final remainingCount = project.materials.length > 3
+        ? project.materials.length - 3
+        : 0;
     final materialsText = remainingCount > 0
         ? '$previewMaterials +$remainingCount more'
         : previewMaterials;
 
     return GestureDetector(
       onTap: () {
-        ActiveProjectState.instance.setActiveProject(project);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${project.projectName} set as Active Project'),
-          ),
-        );
+        if (project.postId == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('This project is not posted yet.')),
+          );
+        } else {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ProjectBidsScreen(
+                postId: project.postId!,
+                projectName: project.projectName,
+              ),
+            ),
+          );
+        }
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 24),

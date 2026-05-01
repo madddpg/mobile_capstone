@@ -66,7 +66,11 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         _selectedBudget = 'Mid Budget';
       }
 
-      _localMaterials = List<String>.from(widget.existingProject!.materials);
+      _localMaterials = List<String>.from(
+        (widget.existingProject!.materials as List<dynamic>)
+            .map((m) => m is Map ? (m['name'] ?? '').toString() : m.toString())
+            .where((s) => s.isNotEmpty),
+      );
     } else {
       _projectType = widget.projectName;
     }
@@ -513,9 +517,33 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
 
     try {
       final materialsList = [
-        ..._localMaterials,
-        ..._localTiles.map((t) => t.tileTypeName),
-        ..._localPlumbing.map((p) => p.materialName),
+        ..._localMaterials.map(
+          (name) => {
+            'name': name,
+            'quantity': 0,
+            'unit': '',
+            'size': null,
+            'category': 'Material',
+          },
+        ),
+        ..._localTiles.map(
+          (t) => {
+            'name': t.tileTypeName,
+            'quantity': t.quantity,
+            'unit': 'Qty.',
+            'size': t.tileSizeName,
+            'category': 'Tiles',
+          },
+        ),
+        ..._localPlumbing.map(
+          (p) => {
+            'name': p.materialName,
+            'quantity': p.quantity,
+            'unit': p.unit,
+            'size': p.size,
+            'category': p.categoryTitle,
+          },
+        ),
       ];
 
       // Convert selectedBudget strings to expected costLevel logic
@@ -532,7 +560,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         'projectName': _projectName,
         'projectType': _projectType,
         'costLevel': costLevel,
-        'selectedMaterials': materialsList,
+        'materials': materialsList,
         'materialsCount': materialsList.length,
         'totalAreaSqm': _projectArea,
         'status': widget.existingProject?.status ?? 'draft',
@@ -597,9 +625,33 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
     }
 
     final materialsList = [
-      ..._localMaterials,
-      ..._localTiles.map((t) => t.tileTypeName),
-      ..._localPlumbing.map((p) => p.materialName),
+      ..._localMaterials.map(
+        (name) => {
+          'name': name,
+          'quantity': 0,
+          'unit': '',
+          'size': null,
+          'category': 'Material',
+        },
+      ),
+      ..._localTiles.map(
+        (t) => {
+          'name': t.tileTypeName,
+          'quantity': t.quantity,
+          'unit': 'Qty.',
+          'size': t.tileSizeName,
+          'category': 'Tiles',
+        },
+      ),
+      ..._localPlumbing.map(
+        (p) => {
+          'name': p.materialName,
+          'quantity': p.quantity,
+          'unit': p.unit,
+          'size': p.size,
+          'category': p.categoryTitle,
+        },
+      ),
     ];
 
     if (materialsList.isEmpty) {
@@ -666,7 +718,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         'projectName': _projectName,
         'projectType': _projectType,
         'costLevel': costLevel,
-        'selectedMaterials': materialsList,
+        'materials': materialsList,
         'materialsCount': materialsList.length,
         'totalAreaSqm': _projectArea,
         'status': 'posted',

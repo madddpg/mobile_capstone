@@ -1,6 +1,3 @@
-// main_home_screen.dart
-// Fixed version: main card + separate Top Hardware Shops card
-
 import 'package:flutter/material.dart';
 
 import 'package:iconstruct/features/auth/presentation/screens/material_estimator.dart';
@@ -122,7 +119,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                                 ),
                                 SizedBox(height: 6),
                                 Text(
-                                  'where builders connect to smarter solutions.',
+                                  'Where builders connect to smarter solutions.',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     fontFamily: 'Inter',
@@ -164,6 +161,14 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                         ),
                       );
                     },
+                    onPostProject: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SavedProjectsScreen(),
+                        ),
+                      );
+                    },
                     onTopShops: () {
                       Navigator.push(
                         context,
@@ -175,9 +180,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                   ),
 
                   const SizedBox(height: 28),
-
                   const _TopShopsSection(),
-
                   const SizedBox(height: 40),
                 ],
               ),
@@ -224,6 +227,7 @@ class _MainCard extends StatelessWidget {
   final VoidCallback onSeeLocations;
   final VoidCallback onEstimateMaterials;
   final VoidCallback onSavedProjects;
+  final VoidCallback onPostProject;
   final VoidCallback onTopShops;
 
   const _MainCard({
@@ -232,6 +236,7 @@ class _MainCard extends StatelessWidget {
     required this.onSeeLocations,
     required this.onEstimateMaterials,
     required this.onSavedProjects,
+    required this.onPostProject,
     required this.onTopShops,
   });
 
@@ -256,14 +261,6 @@ class _MainCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _ActionTile(
-            icon: Icons.map_outlined,
-            title: 'See Locations',
-            subtitle:
-                'Find and connect with trusted hardware shops and suppliers near your construction site.',
-            onTap: onSeeLocations,
-          ),
-          const _ThinDivider(),
-          _ActionTile(
             icon: Icons.calculate_outlined,
             title: 'Estimate Materials',
             subtitle:
@@ -271,6 +268,7 @@ class _MainCard extends StatelessWidget {
             onTap: onEstimateMaterials,
           ),
           const _ThinDivider(),
+
           _ActionTile(
             icon: Icons.folder_open_outlined,
             title: 'Saved Projects',
@@ -279,23 +277,25 @@ class _MainCard extends StatelessWidget {
             onTap: onSavedProjects,
           ),
           const _ThinDivider(),
+
           _ActionTile(
-            icon: Icons.store_mall_directory_outlined,
-            title: 'Top Hardware Shops',
+            icon: Icons.campaign_outlined,
+            title: 'Post for Bidding',
             subtitle:
-                'Discover the most active and top-ranked hardware shops submitting quotations.',
-            onTap: onTopShops,
+                'Publish your project and receive quotations from nearby hardware shops based on your material requirements.',
+            onTap: onPostProject,
           ),
+          const _ThinDivider(),
+
+          _ActionTile(
+            icon: Icons.receipt_long_outlined,
+            title: 'View Quotations',
+            subtitle:
+                'Compare bids from hardware shops, review pricing per material, and choose the best offer for your project.',
+            onTap: () {},
+          ),
+
           const Spacer(),
-          Text(
-            'Need Inspiration?',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              color: cream,
-            ),
-          ),
           const SizedBox(height: 24),
         ],
       ),

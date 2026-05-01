@@ -26,134 +26,69 @@ class FirestoreMaterialsService {
     return underscored.replaceAll(RegExp(r'[^a-z0-9_]'), '');
   }
 
-  String _asString(dynamic value) => (value ?? '').toString();
-
-  List<String>? _asStringList(dynamic value) {
-    if (value == null) return null;
-    if (value is! List) return null;
-    final list = value
-        .map((e) => _asString(e).trim())
-        .where((e) => e.isNotEmpty)
-        .toList(growable: false);
-    return list.isEmpty ? null : list;
-  }
-
-  String _humanizeDocId(String value) {
-    final cleaned = value
-        .replaceAll('_', ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-    if (cleaned.isEmpty) return value;
-
-    final words = cleaned.split(' ');
-    final buffer = StringBuffer();
-    for (var i = 0; i < words.length; i++) {
-      final w = words[i];
-      if (w.isEmpty) continue;
-      final lower = w.toLowerCase();
-      final cased = lower[0].toUpperCase() + lower.substring(1);
-      if (buffer.isNotEmpty) buffer.write(' ');
-      buffer.write(cased);
-    }
-    return buffer.toString();
-  }
-
-  /// Fetches categories and items for the given project.
-  ///
-  /// Firestore structure expected:
-  /// materials/{projectDocId}/categories/{categoryDoc}
-  /// - title: string (optional)
-  /// - items: array of maps
+  /// Fetches items for the given project. Grouped into categories.
   Future<List<MaterialCategory>> fetchMaterialsForProject(
     String projectQuery,
   ) async {
     final projectDocId = _projectDocIdFromQuery(projectQuery);
 
+    print('Debugging FirestoreMaterialsService:');
+    print(' - Selected project name: $projectQuery');
+    print(' - Normalized projectId: $projectDocId');
+
     QuerySnapshot<Map<String, dynamic>> snap;
     try {
       snap = await _firestore
-          .collection('materials')
-          .doc(projectDocId)
-          .collection('categories')
+          .collection('products')
+          .where('inStock', isEqualTo: true)
+          .where(
+            Filter.or(
+              Filter('projectId', isEqualTo: projectDocId),
+              Filter('projectName', isEqualTo: projectQuery),
+            ),
+          )
           .get();
     } on FirebaseException catch (e) {
       final message = (e.message == null || e.message!.trim().isEmpty)
           ? e.code
           : e.message!.trim();
-      throw Exception(
-        'Failed to load materials from Firestore (materials/$projectDocId/categories). $message',
-      );
+      throw Exception('Failed to load products from Firestore. $message');
     }
+
+    print(' - Number of products fetched: ${snap.docs.length}');
 
     if (snap.docs.isEmpty) return const <MaterialCategory>[];
 
-    final categories = <({int order, MaterialCategory category})>[];
+    final productItems = snap.docs
+        .map((doc) => MaterialItem.fromJson(doc.data(), doc.id))
+        .toList();
 
-    for (final doc in snap.docs) {
-      final data = doc.data();
+    for (final item in productItems) {
+      print(
+        ' - Fetched product: ${item.name} | Category: ${item.category} | Price: ${item.price}',
+      );
+    }
 
-      final titleFromData = data['title'] ?? data['name'];
-      final title = (titleFromData == null)
-          ? _humanizeDocId(doc.id)
-          : _asString(titleFromData).trim();
-      if (title.isEmpty) continue;
+    // Sort products by name
+    productItems.sort(
+      (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+    );
 
-      final order = int.tryParse(_asString(data['order'])) ?? 0;
+    final categoryMap = <String, List<MaterialItem>>{};
+    for (final item in productItems) {
+      final title = item.category.isNotEmpty ? item.category : 'Others';
+      categoryMap.putIfAbsent(title, () => []).add(item);
+    }
 
-      final rawItems = data['items'];
-      final items = <MaterialItem>[];
-
-      if (rawItems is List) {
-        for (final raw in rawItems) {
-          if (raw is! Map) continue;
-          final map = Map<String, dynamic>.from(raw);
-
-          final name = _asString(map['name']).trim();
-          if (name.isEmpty) continue;
-
-          final description = _asString(map['description']).trim();
-          final type = _asString(map['type'] ?? map['placement']).trim();
-          final kind = _asString(map['kind']).trim();
-
-          final sizes = _asStringList(map['sizes']);
-          final lengths = _asStringList(map['lengths']);
-          final coverSizes = _asStringList(
-            map['coverSizes'] ?? map['cover_sizes'],
-          );
-
-          final imageUrl = _asString(
-            map['imageUrl'] ?? map['image_url'],
-          ).trim();
-
-          items.add(
-            MaterialItem(
-              name: name,
-              category: title,
-              description: description,
-              kind: kind.isEmpty ? null : kind,
-              sizes: sizes,
-              lengths: lengths,
-              coverSizes: coverSizes,
-              type: type.isEmpty ? null : type,
-              imageUrl: imageUrl.isEmpty ? null : imageUrl,
-            ),
-          );
-        }
-      }
-
-      categories.add((
-        order: order,
-        category: MaterialCategory(title: title, items: items),
-      ));
+    final categories = <MaterialCategory>[];
+    for (final entry in categoryMap.entries) {
+      categories.add(MaterialCategory(title: entry.key, items: entry.value));
     }
 
     categories.sort((a, b) {
-      if (a.order != b.order) return a.order.compareTo(b.order);
-      return a.category.title.toLowerCase().compareTo(
-        b.category.title.toLowerCase(),
-      );
+      return a.title.toLowerCase().compareTo(b.title.toLowerCase());
     });
 
-    return categories.map((e) => e.category).toList(growable: false);
+    return categories;
   }
 }

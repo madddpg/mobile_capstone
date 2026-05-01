@@ -31,10 +31,11 @@ class QuotationsScreen extends StatelessWidget {
             .orderBy('estimatedTotal', descending: false)
             .snapshots(),
         builder: (context, snapshot) {
-          if (!snapshot.hasData)
+          if (!snapshot.hasData) {
             return const Center(
               child: CircularProgressIndicator(color: navyColor),
             );
+          }
 
           final docs = snapshot.data!.docs;
 

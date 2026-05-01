@@ -32,8 +32,9 @@ class _MainDisplayScreenState extends State<MainDisplayScreen>
     ),
     _Slide(
       imagePath: 'assets/images/display 3.jpg',
-      title: 'Connect to  nearby\nHardware Shops',
-      subtitle: 'Find and connect with hardware shops near your location.',
+      title: 'Plan Your\nConstruction Projects',
+      subtitle:
+          'Estimate quantity, cost, and materials before starting your work.',
     ),
   ];
 

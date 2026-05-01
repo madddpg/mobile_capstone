@@ -352,7 +352,7 @@ class _BottomNavItem extends StatelessWidget {
     this.imagePath,
     required this.label,
     this.isActive = false,
-  });
+  }) : assert(icon != null || imagePath != null);
 
   @override
   Widget build(BuildContext context) {
@@ -384,6 +384,7 @@ class _BottomNavItem extends StatelessWidget {
                   ? PostedProjectDetailsScreen.creamBg
                   : PostedProjectDetailsScreen.navyCard,
             ),
+
           if (isActive) ...[
             const SizedBox(width: 8),
             Text(

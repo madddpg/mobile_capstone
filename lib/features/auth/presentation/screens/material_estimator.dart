@@ -90,55 +90,66 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            stops: [0.0, 0.56, 1.0],
-            colors: [Color(0xFFE0D7C9), Color(0xFF2C3E50), Color(0xFF648DB6)],
-          ),
-        ),
-        child: SafeArea(
-          child: Stack(
-            children: [
-              _buildBackgroundPanel(context),
-              Positioned.fill(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(72, 135, 0, 140),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildContentCard(context),
-                      const SizedBox(height: 32),
-                      _buildCostSummary(context),
-                      const SizedBox(height: 32),
-                    ],
-                  ),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color(0xFFE0D7C9), // cream
+                    Color(0xFF2C3E50),
+                    Color(0xFF648DB6),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
                 ),
               ),
-              _buildHeader(context),
-              _buildBottomNav(context),
-            ],
+            ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBackgroundPanel(BuildContext context) {
-    return const Positioned(
-      left: 0,
-      top: -200,
-      width: 393,
-      height: 585,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Color(0xFFEDE4D4),
-          borderRadius: BorderRadius.all(Radius.circular(50)),
-        ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              height: 180,
+              decoration: const BoxDecoration(
+                color: Color(0xFFE0D7C9),
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(60),
+                  bottomRight: Radius.circular(60),
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: SingleChildScrollView(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 100),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(72, 0, 0, 140),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildContentCard(context),
+                            const SizedBox(height: 32),
+                            _buildCostSummary(context),
+                            const SizedBox(height: 32),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                _buildHeader(context),
+                _buildBottomNav(context),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

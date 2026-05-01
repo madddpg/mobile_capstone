@@ -28,6 +28,7 @@ class _DisplayScreenState extends State<DisplayScreen>
     );
 
     _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
+
     _scale = Tween<double>(
       begin: 0.96,
       end: 1.0,
@@ -37,6 +38,7 @@ class _DisplayScreenState extends State<DisplayScreen>
 
     _navTimer = Timer(const Duration(milliseconds: 3000), () {
       if (!mounted) return;
+
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const MainDisplayScreen()),
       );
@@ -56,6 +58,7 @@ class _DisplayScreenState extends State<DisplayScreen>
       body: Stack(
         children: [
           const _DisplayBackground(),
+
           SafeArea(
             child: Center(
               child: FadeTransition(
@@ -65,21 +68,15 @@ class _DisplayScreenState extends State<DisplayScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Logo mark
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 18),
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF4E7CB),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Image.asset(
-                          'assets/images/logo.png',
-                          width: 100,
-                          height: 100,
-                          fit: BoxFit.contain,
-                        ),
+                      Image.asset(
+                        'assets/images/logo.png',
+                        width: 120,
+                        height: 120,
+                        fit: BoxFit.contain,
                       ),
+
+                      const SizedBox(height: 18),
+
                       const Text(
                         'iConstruct',
                         style: TextStyle(
@@ -90,7 +87,9 @@ class _DisplayScreenState extends State<DisplayScreen>
                           letterSpacing: 4,
                         ),
                       ),
+
                       const SizedBox(height: 8),
+
                       const Text(
                         'Plan smarter. Build better.',
                         style: TextStyle(

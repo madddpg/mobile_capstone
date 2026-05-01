@@ -18,6 +18,7 @@ class ProjectModel {
   final List<String> materials;
   final String status; // Draft, Ready, Posted
   final DateTime lastUpdated;
+  final String? postId;
 
   ProjectModel({
     required this.id,
@@ -29,6 +30,7 @@ class ProjectModel {
     required this.materials,
     required this.status,
     required this.lastUpdated,
+    this.postId,
   });
 
   factory ProjectModel.fromDocument(DocumentSnapshot doc) {
@@ -44,6 +46,7 @@ class ProjectModel {
       status: data['status'] ?? 'Draft',
       lastUpdated:
           (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      postId: data['postId'],
     );
   }
 }
@@ -406,6 +409,164 @@ class ProjectCard extends StatelessWidget {
     }
   }
 
+  void _handlePostProject(BuildContext context) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    if (project.status.toLowerCase() == 'posted' || project.postId != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('This project is already posted for bidding.'),
+        ),
+      );
+      return;
+    }
+
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+      final newPostRef = FirebaseFirestore.instance
+          .collection('projectPosts')
+          .doc();
+      final savedProjectRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('saved_projects')
+          .doc(project.id);
+
+      final Map<String, dynamic> projectPostData = {
+        'postId': newPostRef.id,
+        'userId': uid,
+        'projectId': project.id,
+        'projectName': project.projectName,
+        'projectType': project.projectType,
+        'materials': project
+            .materials, // assuming it's exactly the correct property string map
+        'materialsCount': project.materialCount,
+        'totalAreaSqm': project.projectArea,
+        'budget': project.costLevel,
+        'status': 'open',
+        'quotationCount': 0,
+        'postedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      batch.set(newPostRef, projectPostData);
+
+      batch.update(savedProjectRef, {
+        'status': 'posted',
+        'postId': newPostRef.id,
+        'postedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit();
+
+      if (context.mounted) {
+        Navigator.pop(context); // Remove loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Project successfully posted for bidding!'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // Remove loading
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error posting project: $e')));
+      }
+    }
+  }
+
+  void _handleDeleteProject(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          backgroundColor: const Color(0xFFEDE4D4), // Matching cream UI
+          title: const Text(
+            'Delete local project?',
+            style: TextStyle(
+              color: Color(0xFF2A3E4E),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(
+            project.status.toLowerCase() == 'posted'
+                ? 'This project is already posted for bidding. Deleting this will only remove your saved local copy, not the active bidding board post. Proceed?'
+                : 'Are you sure you want to permanently delete this saved project?',
+            style: const TextStyle(color: Color(0xFF5A6E7E)),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Color(0xFF5A6E7E)),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade400,
+              ),
+              onPressed: () async {
+                Navigator.pop(context); // Close dialog
+                try {
+                  await FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(uid)
+                      .collection('saved_projects')
+                      .doc(project.id)
+                      .delete();
+
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Project deleted successfully.'),
+                      ),
+                    );
+
+                    // Clear the active state if the deleted project was the currently active project
+                    if (isActive) {
+                      ActiveProjectState.instance.setActiveProject(null);
+                    }
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error deleting project: $e')),
+                    );
+                  }
+                }
+              },
+              child: const Text(
+                'Delete',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     const Color cardBg = Color(0xFFEDE4D4); // Match cream background precisely
@@ -476,20 +637,6 @@ class ProjectCard extends StatelessWidget {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    onSelected: (value) {
-                      if (value == 'edit') {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => MaterialEstimatorScreen(
-                              projectName: project.projectName,
-                              existingProject: project,
-                            ),
-                          ),
-                        );
-                      }
-                      // Quick Action Handler
-                    },
                     itemBuilder: (context) => [
                       const PopupMenuItem(
                         value: 'edit',
@@ -526,6 +673,23 @@ class ProjectCard extends StatelessWidget {
                         ),
                       ),
                     ],
+                    onSelected: (value) {
+                      if (value == 'edit') {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => MaterialEstimatorScreen(
+                              projectName: project.projectName,
+                              existingProject: project,
+                            ),
+                          ),
+                        );
+                      } else if (value == 'post') {
+                        _handlePostProject(context);
+                      } else if (value == 'delete') {
+                        _handleDeleteProject(context);
+                      }
+                    },
                   ),
                 ),
               ],
@@ -582,6 +746,60 @@ class ProjectCard extends StatelessWidget {
             ),
 
             const SizedBox(height: 16),
+
+            if (project.postId != null &&
+                project.status.toLowerCase() == 'posted')
+              StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('projectPosts')
+                    .doc(project.postId)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData || !snapshot.data!.exists) {
+                    return const SizedBox.shrink();
+                  }
+
+                  final data = snapshot.data!.data() as Map<String, dynamic>;
+                  final int count = data['quotationCount'] ?? 0;
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: count > 0
+                          ? Colors.green.shade100
+                          : Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.local_offer_outlined,
+                          size: 16,
+                          color: count > 0
+                              ? Colors.green.shade700
+                              : Colors.grey.shade700,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '$count bid${count == 1 ? '' : 's'}',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: count > 0
+                                ? Colors.green.shade700
+                                : Colors.grey.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
 
             // 4. Key Project Summary
             Text(

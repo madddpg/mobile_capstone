@@ -144,15 +144,11 @@ class MaterialRecommendationController extends ChangeNotifier {
   }
 
   List<MaterialItem> getRecommendedItemsForCategory(String category) {
-    return getItemsByCategory(
-      category,
-    ).where((e) => e.isRecommended).toList(growable: false);
+    return getItemsByCategory(category).toList(growable: false);
   }
 
   List<MaterialItem> getAlternativeItemsForCategory(String category) {
-    return getItemsByCategory(
-      category,
-    ).where((e) => !e.isRecommended).toList(growable: false);
+    return getItemsByCategory(category).toList(growable: false);
   }
 
   /// Helper: first 4 items for a given category.

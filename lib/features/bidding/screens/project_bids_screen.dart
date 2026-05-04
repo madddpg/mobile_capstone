@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:iconstruct/features/bidding/screens/accept_offer_screen.dart';
 
 class ProjectBidsScreen extends StatelessWidget {
   final String postId;
@@ -63,6 +64,41 @@ class ProjectBidsScreen extends StatelessWidget {
     return null;
   }
 
+  Widget _buildStatusBadge(String status) {
+    Color bgColor;
+    Color textColor;
+
+    switch (status.toLowerCase()) {
+      case 'accepted':
+        bgColor = Colors.green.shade100;
+        textColor = const Color(0xFF2E7D32);
+        break;
+      case 'rejected':
+        bgColor = Colors.red.shade100;
+        textColor = const Color(0xFFC62828);
+        break;
+      default:
+        bgColor = Colors.orange.shade100;
+        textColor = const Color(0xFFEF6C00);
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        status == 'accepted'
+            ? 'Accepted'
+            : status == 'rejected'
+            ? 'Rejected'
+            : 'Pending',
+        style: TextStyle(color: textColor),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     const Color creamBg = Color(0xFFEDE4D4);
@@ -106,6 +142,7 @@ class ProjectBidsScreen extends StatelessWidget {
               projectSnapshot.data!.data() as Map<String, dynamic>? ?? {};
 
           final projectMaterials = _parseMaterials(projectData['materials']);
+          final selectedQuotationId = projectData['selectedQuotationId'];
 
           return StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
@@ -145,6 +182,7 @@ class ProjectBidsScreen extends StatelessWidget {
                 itemCount: quotations.length,
                 itemBuilder: (context, index) {
                   final data = quotations[index].data() as Map<String, dynamic>;
+                  final quotationId = quotations[index].id;
 
                   final shopName = (data['shopName'] ?? 'Unknown Shop')
                       .toString();
@@ -153,6 +191,11 @@ class ProjectBidsScreen extends StatelessWidget {
 
                   final totalAmount =
                       data['totalAmount'] ?? data['amount'] ?? 0;
+
+                  final status = data['status'] ?? 'pending';
+
+                  final isAccepted = selectedQuotationId == quotationId;
+                  final hasAcceptedOffer = selectedQuotationId != null;
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 16),
@@ -171,13 +214,21 @@ class ProjectBidsScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          shopName,
-                          style: const TextStyle(
-                            color: darkBlue,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                          ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                shopName,
+                                style: const TextStyle(
+                                  color: darkBlue,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                ),
+                              ),
+                            ),
+                            _buildStatusBadge(status),
+                          ],
                         ),
 
                         const SizedBox(height: 14),
@@ -315,6 +366,91 @@ class ProjectBidsScreen extends StatelessWidget {
                             ),
                           ],
                         ),
+
+                        const SizedBox(height: 16),
+
+                        // Accept Offer Button
+                        if (status.toLowerCase() == 'pending' &&
+                            !hasAcceptedOffer)
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                final result = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('Accept this offer?'),
+                                    content: const Text(
+                                      'This will mark this hardware shop\'s quotation as your selected offer. No payment or transaction will be made inside the app.',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, true),
+                                        child: const Text('Continue'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+
+                                if (result == true && context.mounted) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => AcceptOfferScreen(
+                                        postId: postId,
+                                        quotationId: quotationId,
+                                        shopName: shopName,
+                                        shopId: data['shopId'] ?? '',
+                                        totalAmount: _toDouble(totalAmount),
+                                      ),
+                                    ),
+                                  );
+                                }
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: darkBlue,
+                                foregroundColor: creamBg,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                              ),
+                              child: const Text(
+                                'Accept Offer',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          )
+                        else if (isAccepted)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Center(
+                              child: Text(
+                                'Offer Accepted',
+                                style: TextStyle(
+                                  color: Colors.green.shade800,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   );

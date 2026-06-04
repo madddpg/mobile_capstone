@@ -1,6 +1,6 @@
-require("dotenv").config();
-
-const axios = require("axios").default;
+const path = require("path");
+require("dotenv").config({ path: path.resolve(__dirname, "../../.env") });
+const axios = require("axios");
 
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 
@@ -14,8 +14,8 @@ async function sendBrevoEmail({ to, subject, htmlContent, textContent }) {
       "https://api.brevo.com/v3/smtp/email",
       {
         sender: {
-          name: "iConstruct",
-          email: "ahmadpaguta2005@gmail.com",
+          name: process.env.BREVO_SENDER_NAME || "iConstruct",
+          email: process.env.BREVO_SENDER_EMAIL || "ahmadpaguta2005@gmail.com",
         },
         to: [{ email: to }],
         subject,
@@ -50,5 +50,32 @@ exports.sendOtpEmail = async (email, otp) => {
     subject: "Your iConstruct OTP Code",
     htmlContent: `<p>Your OTP code is <b>${otp}</b></p>`,
     textContent: `Your OTP code is ${otp}`,
+  });
+};
+
+exports.sendForgotPasswordEmail = async (email, otp) => {
+  return sendBrevoEmail({
+    to: email,
+    subject: "Reset your iConstruct password",
+    htmlContent: `<p>Your password reset code is <b>${otp}</b></p>`,
+    textContent: `Your password reset code is ${otp}`,
+  });
+};
+
+exports.sendWelcomeEmail = async (email) => {
+  return sendBrevoEmail({
+    to: email,
+    subject: "Welcome to iConstruct!",
+    htmlContent: `<p>Welcome to iConstruct! We're glad to have you.</p>`,
+    textContent: `Welcome to iConstruct! We're glad to have you.`,
+  });
+};
+
+exports.sendPasswordResetSuccessEmail = async (email) => {
+  return sendBrevoEmail({
+    to: email,
+    subject: "Password Reset Successful",
+    htmlContent: `<p>Your iConstruct password has been reset successfully.</p>`,
+    textContent: `Your iConstruct password has been reset successfully.`,
   });
 };

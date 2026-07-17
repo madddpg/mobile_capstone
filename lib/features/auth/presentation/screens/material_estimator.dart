@@ -7,7 +7,9 @@ import 'package:iconstruct/features/auth/presentation/screens/cost_estimation.da
     show AddedTileSelection, AddedPlumbingSelection;
 import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
 import 'package:iconstruct/features/auth/presentation/screens/main_home_screen.dart';
+import 'package:iconstruct/features/auth/presentation/screens/profile_screen.dart';
 import 'package:iconstruct/core/utils/hammer_nav.dart';
+import 'package:iconstruct/core/widgets/user_avatar.dart';
 import 'package:iconstruct/features/bidding/screens/posted_project_details_screen.dart';
 
 class MaterialEstimatorScreen extends StatefulWidget {
@@ -15,6 +17,11 @@ class MaterialEstimatorScreen extends StatefulWidget {
   final List<AddedTileSelection> tiles;
   final List<AddedPlumbingSelection> plumbingMaterials;
   final ProjectModel? existingProject;
+  final List<String>? aiGeneratedMaterials;
+  final double? aiProjectArea;
+  final String? aiBudget;
+  final String? customProjectName;
+  final String? projectNotes;
 
   const MaterialEstimatorScreen({
     super.key,
@@ -22,6 +29,11 @@ class MaterialEstimatorScreen extends StatefulWidget {
     this.tiles = const [],
     this.plumbingMaterials = const [],
     this.existingProject,
+    this.aiGeneratedMaterials,
+    this.aiProjectArea,
+    this.aiBudget,
+    this.customProjectName,
+    this.projectNotes,
   });
 
   @override
@@ -39,6 +51,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
   late final TextEditingController _projectNameController;
   late final TextEditingController _projectTypeController;
   late final TextEditingController _projectAreaController;
+  late final TextEditingController _remarksController;
 
   int _currentMaterialPage = 0;
 
@@ -46,11 +59,33 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
   List<AddedPlumbingSelection> _localPlumbing = [];
   List<String> _localMaterials = [];
 
+  int get _materialCount =>
+      _localTiles.length + _localPlumbing.length + _localMaterials.length;
+
   @override
   void initState() {
     super.initState();
     _localTiles = List.from(widget.tiles);
     _localPlumbing = List.from(widget.plumbingMaterials);
+
+    if (widget.aiGeneratedMaterials != null) {
+      _localMaterials.addAll(widget.aiGeneratedMaterials!);
+    }
+
+    if (widget.aiProjectArea != null && widget.aiProjectArea! > 0) {
+      _projectArea = widget.aiProjectArea!;
+    }
+
+    if (widget.aiBudget != null) {
+      final budgetLower = widget.aiBudget!.toLowerCase();
+      if (budgetLower.contains('low')) {
+        _selectedBudget = 'Low Budget';
+      } else if (budgetLower.contains('high')) {
+        _selectedBudget = 'High Budget';
+      } else {
+        _selectedBudget = 'Mid Budget';
+      }
+    }
 
     if (widget.existingProject != null) {
       _projectName = widget.existingProject!.projectName;
@@ -73,12 +108,19 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       );
     } else {
       _projectType = widget.projectName;
+      if (widget.customProjectName != null &&
+          widget.customProjectName!.trim().isNotEmpty) {
+        _projectName = widget.customProjectName!.trim();
+      }
     }
 
     _projectNameController = TextEditingController(text: _projectName);
     _projectTypeController = TextEditingController(text: _projectType);
     _projectAreaController = TextEditingController(
       text: _projectArea > 0 ? _projectArea.toString() : '',
+    );
+    _remarksController = TextEditingController(
+      text: widget.projectNotes?.trim() ?? '',
     );
   }
 
@@ -87,6 +129,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
     _projectNameController.dispose();
     _projectTypeController.dispose();
     _projectAreaController.dispose();
+    _remarksController.dispose();
     _materialsPageController.dispose();
     super.dispose();
   }
@@ -94,88 +137,96 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Color(0xFFE0D7C9), // cream
-                    Color(0xFF2C3E50),
-                    Color(0xFF648DB6),
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-            ),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            stops: [0.0, 0.56, 1.0],
+            colors: [Color(0xFFE0D7C9), Color(0xFF2C3E50), Color(0xFF648DB6)],
           ),
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              height: 180,
-              decoration: const BoxDecoration(
-                color: Color(0xFFE0D7C9),
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(60),
-                  bottomRight: Radius.circular(60),
-                ),
-              ),
-            ),
-          ),
-          SafeArea(
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: SingleChildScrollView(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 100),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(72, 0, 0, 140),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildContentCard(context),
-                            const SizedBox(height: 32),
-                            _buildCostSummary(context),
-                            const SizedBox(height: 32),
-                          ],
-                        ),
-                      ),
-                    ),
+        ),
+        child: SafeArea(
+          child: Stack(
+            children: [
+              const Positioned(
+                left: 0,
+                top: -200,
+                width: 393,
+                height: 585,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Color(0xFFEDE4D4),
+                    borderRadius: BorderRadius.all(Radius.circular(50)),
                   ),
                 ),
-                _buildHeader(context),
-                _buildBottomNav(context),
-              ],
-            ),
+              ),
+              _buildTopBar(context),
+              Positioned.fill(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 110, 0, 120),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildContentCard(context),
+                      const SizedBox(height: 20),
+                      _buildFinalizeCard(context),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
+                ),
+              ),
+              _buildBottomNav(context),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
-    return Positioned(
-      top: 10,
-      left: 20,
-      child: GestureDetector(
-        onTap: () => Navigator.pop(context),
-        child: Container(
-          width: 40,
-          height: 40,
-          decoration: const BoxDecoration(
-            color: Color(0xFF2C3E50),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(
-            Icons.arrow_back_ios_new,
-            color: Colors.white,
-            size: 20,
-          ),
+  Widget _buildTopBar(BuildContext context) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: Container(
+        height: 96,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        decoration: const BoxDecoration(color: Color(0xFFEDE4D4)),
+        child: Row(
+          children: [
+            Material(
+              color: const Color(0xFF2C3E50),
+              shape: const CircleBorder(),
+              elevation: 2,
+              shadowColor: Colors.black26,
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: () => Navigator.pop(context),
+                child: const SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: Icon(
+                    Icons.arrow_back_rounded,
+                    color: Color(0xFFEDE4D4),
+                    size: 22,
+                  ),
+                ),
+              ),
+            ),
+            const Spacer(),
+            UserAvatar(
+              size: 36,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ProfileScreen(),
+                  ),
+                );
+              },
+            ),
+          ],
         ),
       ),
     );
@@ -183,41 +234,63 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
 
   Widget _buildContentCard(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.only(left: 24, top: 32, right: 24, bottom: 20),
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(24, 28, 20, 24),
       decoration: const BoxDecoration(
-        color: Color(0xFF2C3E50),
+        color: Color(0xFF1E3042),
         borderRadius: BorderRadius.only(
           topLeft: Radius.circular(60),
+          topRight: Radius.circular(60),
           bottomLeft: Radius.circular(60),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black38,
+            blurRadius: 18,
+            offset: Offset(-4, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Material\nEstimator',
+            'Review Bill of\nMaterials',
             style: GoogleFonts.poppins(
-              fontSize: 28,
-              height: 1.2,
+              fontSize: 26,
+              height: 1.15,
               fontWeight: FontWeight.w700,
               color: Colors.white,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
+          Text(
+            'Finalize your material plan before requesting supplier quotations.',
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: const Color(0xFFE0D7C9),
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 14),
+          const Divider(color: Color(0xFFEDE4D4), thickness: 1),
+          const SizedBox(height: 14),
+          _buildProcedureSteps(),
+          const SizedBox(height: 18),
           const Divider(color: Color(0xFFEDE4D4), thickness: 1),
           const SizedBox(height: 16),
           Text(
-            'Project Details',
+            'Estimate Details',
             style: GoogleFonts.poppins(
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: FontWeight.w600,
               color: Colors.white,
             ),
           ),
-          const SizedBox(height: 16),
-          _buildInputLabel('Project Name:'),
+          const SizedBox(height: 14),
+          _buildInputLabel('Estimate Name:'),
           _buildTextField(
-            'e.g., Living Room Renovation',
+            'e.g., Modern Kitchen Materials',
             controller: _projectNameController,
             onChanged: (val) {
               setState(() {
@@ -225,10 +298,10 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
               });
             },
           ),
-          const SizedBox(height: 16),
-          _buildInputLabel('Project Type:'),
+          const SizedBox(height: 14),
+          _buildInputLabel('Renovation Type:'),
           _buildTextField(
-            'e.g., Window Installation',
+            'e.g., Kitchen Renovation',
             controller: _projectTypeController,
             onChanged: (val) {
               setState(() {
@@ -236,8 +309,8 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
               });
             },
           ),
-          const SizedBox(height: 16),
-          _buildInputLabel('Project Area:\n(sq meters)', maxLines: 2),
+          const SizedBox(height: 14),
+          _buildInputLabel('Project Area (sqm) — optional:'),
           _buildTextField(
             '0.00',
             controller: _projectAreaController,
@@ -248,25 +321,231 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
             },
             keyboardType: TextInputType.number,
           ),
-          const SizedBox(height: 16),
-          _buildInputLabel('Budget Range:'),
+          const SizedBox(height: 14),
+          _buildInputLabel('Budget Preference — optional:'),
           _buildDropdownField(),
-          const SizedBox(height: 24),
-          _buildInputLabel('Selected Materials:'),
-          const SizedBox(height: 10),
-          if (_localTiles.isEmpty &&
-              _localPlumbing.isEmpty &&
-              _localMaterials.isEmpty)
+          const SizedBox(height: 14),
+          _buildInputLabel('Remarks for suppliers — optional:'),
+          _buildTextField(
+            'Brand preferences, delivery notes, or scope remarks',
+            controller: _remarksController,
+            maxLines: 3,
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Text(
+                'Bill of Materials',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '$_materialCount items',
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF8FB2D4),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Confirm materials and quantities. Prices come from supplier quotations.',
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              color: const Color(0xFFE0D7C9),
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (_materialCount == 0)
             Text(
-              'No materials selected.',
+              'No materials in this plan yet. Go back and load a template or AI BOM.',
               style: GoogleFonts.poppins(
-                fontSize: 14,
+                fontSize: 13,
                 color: const Color(0xFFE0D7C9),
               ),
             )
-          else ...[
+          else
             _buildSelectedMaterialsSlider(),
-          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProcedureSteps() {
+    const steps = [
+      ('1', 'Review details'),
+      ('2', 'Confirm BOM'),
+      ('3', 'Save or request quotes'),
+    ];
+
+    return Row(
+      children: [
+        for (var i = 0; i < steps.length; i++) ...[
+          if (i > 0)
+            Expanded(
+              child: Container(
+                height: 1.5,
+                margin: const EdgeInsets.symmetric(horizontal: 6),
+                color: const Color(0xFFEDE4D4).withValues(alpha: 0.35),
+              ),
+            ),
+          Column(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEDE4D4).withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFEDE4D4)),
+                ),
+                child: Text(
+                  steps[i].$1,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFFEDE4D4),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              SizedBox(
+                width: 72,
+                child: Text(
+                  steps[i].$2,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 10,
+                    color: const Color(0xFFE0D7C9),
+                    height: 1.2,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildFinalizeCard(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(24, 28, 20, 24),
+      decoration: const BoxDecoration(
+        color: Color(0xFF1E3042),
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(60),
+          bottomLeft: Radius.circular(60),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Finalize &\nCanvass',
+            style: GoogleFonts.poppins(
+              fontSize: 26,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+              height: 1.15,
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Divider(color: Color(0xFFEDE4D4), thickness: 1),
+          const SizedBox(height: 14),
+          _buildSummaryRow('Materials in BOM:', '$_materialCount items'),
+          const SizedBox(height: 8),
+          _buildSummaryRow(
+            'Renovation type:',
+            _projectTypeController.text.trim().isEmpty
+                ? '—'
+                : _projectTypeController.text.trim(),
+          ),
+          const SizedBox(height: 8),
+          _buildSummaryRow(
+            'Area:',
+            _projectArea > 0
+                ? '${_projectArea.toStringAsFixed(2)} sq.m'
+                : 'Not set',
+          ),
+          const SizedBox(height: 8),
+          _buildSummaryRow(
+            'Budget preference:',
+            _selectedBudget ?? 'Not set',
+          ),
+          const SizedBox(height: 14),
+          const Divider(color: Color(0xFFEDE4D4), thickness: 1),
+          const SizedBox(height: 14),
+          Text(
+            'Pricing comes from hardware shop quotations after you request bids. This screen finalizes your material list only.',
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              color: const Color(0xFFE0D7C9),
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _materialCount == 0 ? null : _postProjectForBidding,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFEDE4D4),
+                foregroundColor: const Color(0xFF2C3E50),
+                disabledBackgroundColor:
+                    const Color(0xFFEDE4D4).withValues(alpha: 0.4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              child: Text(
+                'Request Supplier Quotations',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: _materialCount == 0 ? null : _saveProject,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFEDE4D4),
+                side: const BorderSide(color: Color(0xFFEDE4D4)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              child: Text(
+                'Save Draft',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -340,155 +619,31 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
     );
   }
 
-  Widget _buildCostSummary(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: const Color(0xFF2C3E50),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(60),
-          bottomLeft: Radius.circular(60),
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Cost\nSummary',
-            style: const TextStyle(
-              fontFamily: 'Ramabhadra-Regular',
-              fontSize: 30,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-              height: 1.2,
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Divider(color: Color(0xFFEDE4D4), thickness: 1),
-          const SizedBox(height: 16),
-
-          _buildSummaryRow(
-            'Materials:',
-            '${_localTiles.length + _localPlumbing.length + _localMaterials.length} items',
-          ),
-
-          const SizedBox(height: 8),
-
-          _buildSummaryRow(
-            'Project Area:',
-            _projectArea > 0
-                ? '${_projectArea.toStringAsFixed(2)} sq.m'
-                : '0 sq.m',
-          ),
-
-          const SizedBox(height: 16),
-          const Divider(color: Color(0xFFEDE4D4), thickness: 1),
-          const SizedBox(height: 16),
-
-          Text(
-            'Total Estimate:',
-            style: const TextStyle(
-              fontFamily: 'PoppinsCustom',
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFFE0D7C9),
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          Text(
-            'TBD',
-            style: const TextStyle(
-              fontFamily: 'PoppinsCustom',
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFFEDE4D4),
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: _saveProject,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFEDE4D4),
-                    foregroundColor: const Color(0xFF2C3E50),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: const Text(
-                    'Save Project',
-                    style: TextStyle(
-                      fontFamily: 'Ramabhadra-Regular',
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(width: 12),
-
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: _postProjectForBidding,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFEDE4D4),
-                    foregroundColor: const Color(0xFF2C3E50),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: const Text(
-                    'Post',
-                    style: TextStyle(
-                      fontFamily: 'Ramabhadra-Regular',
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildSummaryRow(String label, String value) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            fontWeight: FontWeight.w400,
-            color: const Color(0xFFE0D7C9),
+        Expanded(
+          flex: 5,
+          child: Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w400,
+              color: const Color(0xFFE0D7C9),
+            ),
           ),
         ),
-        Text(
-          value,
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
+        Expanded(
+          flex: 6,
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
           ),
         ),
       ],
@@ -509,7 +664,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
     if (_projectName.trim().isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter a Project Name')),
+          const SnackBar(content: Text('Please enter an Estimate Name')),
         );
       }
       return;
@@ -565,6 +720,8 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         'totalAreaSqm': _projectArea,
         'status': widget.existingProject?.status ?? 'draft',
         'updatedAt': FieldValue.serverTimestamp(),
+        if (_remarksController.text.trim().isNotEmpty)
+          'projectNotes': _remarksController.text.trim(),
       };
 
       if (widget.existingProject != null) {
@@ -585,7 +742,9 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Project saved successfully!')),
+          const SnackBar(
+            content: Text('Draft saved. You can request quotations anytime.'),
+          ),
         );
         // By using `push` instead of `pushReplacement`, the current screen
         // stays in the navigation stack, preserving values. When the user taps
@@ -618,7 +777,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
     if (_projectName.trim().isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter a Project Name')),
+          const SnackBar(content: Text('Please enter an Estimate Name')),
         );
       }
       return;
@@ -712,6 +871,8 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         'quotationCount': 0,
         'postedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
+        if (_remarksController.text.trim().isNotEmpty)
+          'remarks': _remarksController.text.trim(),
       };
 
       final Map<String, dynamic> savedProjectData = {
@@ -725,6 +886,8 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         'postId': newPostRef.id,
         'postedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
+        if (_remarksController.text.trim().isNotEmpty)
+          'projectNotes': _remarksController.text.trim(),
       };
 
       if (widget.existingProject == null) {
@@ -742,7 +905,9 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Project successfully posted for bidding!'),
+            content: Text(
+              'BOM sent to hardware shops. Waiting for supplier quotations.',
+            ),
           ),
         );
         Navigator.pushReplacement(
@@ -780,9 +945,10 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
     TextEditingController? controller,
     ValueChanged<String>? onChanged,
     TextInputType? keyboardType,
+    int maxLines = 1,
   }) {
     return Container(
-      height: 48,
+      constraints: BoxConstraints(minHeight: maxLines > 1 ? 88 : 48),
       decoration: BoxDecoration(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(16),
@@ -792,11 +958,12 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         controller: controller,
         onChanged: onChanged,
         keyboardType: keyboardType,
+        maxLines: maxLines,
         style: GoogleFonts.poppins(color: Colors.white, fontSize: 14),
         decoration: InputDecoration(
-          contentPadding: const EdgeInsets.symmetric(
+          contentPadding: EdgeInsets.symmetric(
             horizontal: 16,
-            vertical: 0,
+            vertical: maxLines > 1 ? 12 : 0,
           ),
           border: InputBorder.none,
           hintText: hintText,
@@ -942,8 +1109,8 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
             ),
             const SizedBox(width: 10),
             const _BottomNavItem(
-              icon: Icons.calculate_rounded,
-              label: 'Calculate',
+              icon: Icons.fact_check_rounded,
+              label: 'Finalize',
               isActive: true,
             ),
             const SizedBox(width: 10),

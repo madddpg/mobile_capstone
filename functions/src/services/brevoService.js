@@ -2,10 +2,9 @@ const path = require("path");
 require("dotenv").config({ path: path.resolve(__dirname, "../../.env") });
 const axios = require("axios");
 
-const BREVO_API_KEY = process.env.BREVO_API_KEY;
-
 async function sendBrevoEmail({ to, subject, htmlContent, textContent }) {
-  if (!BREVO_API_KEY) {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) {
     throw new Error("BREVO_API_KEY is missing in process.env");
   }
 
@@ -24,7 +23,7 @@ async function sendBrevoEmail({ to, subject, htmlContent, textContent }) {
       },
       {
         headers: {
-          "api-key": BREVO_API_KEY,
+          "api-key": apiKey,
           "Content-Type": "application/json",
           Accept: "application/json",
         },

@@ -3,6 +3,7 @@ const logger = require("firebase-functions/logger");
 const { onCall, HttpsError, onRequest } = require("firebase-functions/v2/https");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { setGlobalOptions } = require("firebase-functions/v2");
+const { defineSecret } = require("firebase-functions/params");
 const { Timestamp } = require("firebase-admin/firestore");
 
 const admin = require("./firebaseAdmin");
@@ -14,6 +15,8 @@ setGlobalOptions({
   concurrency: 80,
   timeoutSeconds: 120
 });
+
+const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 
 const { app: apiApp } = require("./api");
 
@@ -131,7 +134,7 @@ exports.sendEmailOtp = onCall(async (request) => {
   } catch (error) {
     logger.error("Failed to send OTP email", { email, error });
     await docRef.delete().catch(() => null);
-    throw new HttpsError("internal", "Could not send the verification code.");
+    throw new HttpsError("internal", `Could not send the verification code. Detail: ${error.message}`);
   }
 
   return {
@@ -527,3 +530,140 @@ exports.onQuotationSubmitted = onDocumentCreated("projectPosts/{postId}/quotatio
     logger.error("Error processing new quotation:", error);
   }
 });
+
+exports.generateAIBOM = onCall(
+  {
+    secrets: [GEMINI_API_KEY],
+  },
+  async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "You must be signed in to use the AI Planner.");
+  }
+
+  const {
+    projectType = "General Renovation",
+    style = "Standard",
+    areaSqm = 0,
+    budgetLevel = "Medium",
+    additionalNotes = ""
+  } = request.data || {};
+
+  const prompt = `You are an expert Philippine construction material estimator for builders.
+Create a Bill of Materials (BOM) for a ${projectType} project.
+Style: ${style}
+Area: ${areaSqm} square meters
+Budget Level: ${budgetLevel}
+Additional Requirements: ${additionalNotes}
+
+Rules:
+- List ONLY basic essential materials a hardware store sells (e.g. "Ceramic floor tiles", "Tile adhesive", "Tile grout", "Toilet bowl set", "PVC pipe", "Interior latex paint").
+- Do NOT use vague labels like "essential materials", "install supplies", "finishing materials", or category descriptions.
+- Each name must be a specific product type a builder can buy and canvass.
+- Keep the list to essentials only (about 6–12 items).
+- Quantities must be realistic for ${areaSqm} sqm.
+
+Return the response strictly as a JSON array of objects.
+Do not include markdown blocks, backticks, or any conversational text.
+Each object must match:
+{
+  "name": "String (specific material name)",
+  "quantity": Number,
+  "unit": "String (pcs, bags, sqm, L, gal, set)",
+  "category": "String"
+}`;
+
+  let geminiKey = null;
+  try {
+    geminiKey = GEMINI_API_KEY.value();
+  } catch (_) {
+    geminiKey = process.env.GEMINI_API_KEY || null;
+  }
+
+  if (geminiKey) {
+    try {
+      const materials = await generateBomWithGemini(String(geminiKey).trim(), prompt);
+      return { success: true, materials, provider: "gemini" };
+    } catch (error) {
+      logger.error("Gemini BOM failed, trying OpenAI fallback:", error);
+    }
+  } else {
+    logger.error("GEMINI_API_KEY is not configured.");
+  }
+
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (openaiKey && String(openaiKey).trim()) {
+    try {
+      const materials = await generateBomWithOpenAI(String(openaiKey).trim(), prompt);
+      return { success: true, materials, provider: "openai" };
+    } catch (error) {
+      logger.error("OpenAI BOM failed:", error);
+    }
+  }
+
+  throw new HttpsError(
+    "internal",
+    "AI service is currently unavailable. Set GEMINI_API_KEY or OPENAI_API_KEY."
+  );
+  }
+);
+
+async function generateBomWithGemini(apiKey, prompt) {
+  const { GoogleGenAI } = require("@google/genai");
+  const ai = new GoogleGenAI({ apiKey });
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      temperature: 0.2,
+    },
+  });
+  return parseMaterialsJson(response.text);
+}
+
+async function generateBomWithOpenAI(apiKey, prompt) {
+  const axios = require("axios");
+  const response = await axios.post(
+    "https://api.openai.com/v1/chat/completions",
+    {
+      model: "gpt-4o-mini",
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            'Return JSON only as {"materials":[...]} where each item has name, quantity, unit, category.',
+        },
+        { role: "user", content: prompt },
+      ],
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      timeout: 60000,
+    }
+  );
+
+  const text = response.data?.choices?.[0]?.message?.content || "";
+  const parsed = JSON.parse(text);
+  const materials = Array.isArray(parsed) ? parsed : parsed.materials;
+  if (!Array.isArray(materials)) {
+    throw new Error("OpenAI returned unexpected JSON shape");
+  }
+  return materials;
+}
+
+function parseMaterialsJson(text) {
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) return parsed;
+    if (Array.isArray(parsed?.materials)) return parsed.materials;
+    throw new Error("Expected a materials array");
+  } catch (parseError) {
+    logger.error("Failed to parse AI JSON output", { text, parseError });
+    throw new HttpsError("internal", "AI returned invalid data format.");
+  }
+}

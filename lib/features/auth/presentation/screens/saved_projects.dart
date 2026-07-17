@@ -381,9 +381,17 @@ class ProjectCard extends StatelessWidget {
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'ready':
+      case 'planning':
         return Colors.blue.shade100;
       case 'posted':
+      case 'waiting for quotations':
+      case 'receiving quotations':
         return Colors.green.shade100;
+      case 'offer_accepted':
+      case 'supplier selected':
+        return const Color(0xFFD1FAE5);
+      case 'completed':
+        return const Color(0xFFBBF7D0);
       case 'draft':
       default:
         return Colors.grey.shade300;
@@ -393,9 +401,17 @@ class ProjectCard extends StatelessWidget {
   Color _getStatusTextColor(String status) {
     switch (status.toLowerCase()) {
       case 'ready':
+      case 'planning':
         return Colors.blue.shade900;
       case 'posted':
+      case 'waiting for quotations':
+      case 'receiving quotations':
         return Colors.green.shade900;
+      case 'offer_accepted':
+      case 'supplier selected':
+        return const Color(0xFF065F46);
+      case 'completed':
+        return const Color(0xFF166534);
       case 'draft':
       default:
         return Colors.grey.shade800;

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:iconstruct/core/materials/material_recommendation_controller.dart';
-import 'package:iconstruct/core/materials/models/material_category.dart';
 import 'package:iconstruct/core/materials/models/material_item.dart';
 import 'package:iconstruct/core/materials/services/firestore_materials_service.dart';
 import 'package:iconstruct/core/materials/services/favorites_service.dart';
@@ -12,6 +11,8 @@ import 'package:iconstruct/features/auth/presentation/screens/material_estimator
 import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
 import 'package:iconstruct/features/auth/presentation/screens/main_home_screen.dart';
 import 'package:iconstruct/features/auth/presentation/screens/profile_screen.dart';
+import 'package:iconstruct/features/project_creation/data/bom_quantity_estimator.dart';
+import 'package:iconstruct/features/project_creation/data/renovation_templates.dart';
 
 IconData getFilterIcon(String filter) {
   switch (filter.trim()) {
@@ -29,11 +30,23 @@ IconData getFilterIcon(String filter) {
 class CostEstimationScreen extends StatefulWidget {
   final String projectName;
   final MaterialItem? preselectedMaterial;
+  final String? customProjectName;
+  final String? projectNotes;
+
+  /// When set, opens in template mode with a pre-defined BOM.
+  final RenovationTemplate? template;
+
+  /// Area used to scale template quantities (sqm).
+  final double? projectAreaSqm;
 
   const CostEstimationScreen({
     super.key,
     required this.projectName,
     this.preselectedMaterial,
+    this.customProjectName,
+    this.projectNotes,
+    this.template,
+    this.projectAreaSqm,
   });
 
   @override
@@ -48,6 +61,11 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
   final List<AddedPlumbingSelection> _selectedProducts =
       <AddedPlumbingSelection>[];
 
+  /// Parallel template line items (supports type swap / alternatives).
+  List<RenovationTemplateItem> _templateItems = [];
+
+  bool get _isTemplateMode => widget.template != null;
+
   @override
   void initState() {
     super.initState();
@@ -56,7 +74,50 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     _materials = MaterialRecommendationController(firestore: firestore);
     _materials.addListener(_onMaterialsChanged);
 
-    _loadProjectMaterials();
+    if (_isTemplateMode) {
+      _seedFromTemplate(widget.template!);
+    } else {
+      _loadProjectMaterials();
+    }
+  }
+
+  void _seedFromTemplate(RenovationTemplate template) {
+    _templateItems = template.items
+        .map(BomQuantityEstimator.ensureSwappable)
+        .toList();
+    _rebuildSelectionsFromTemplateItems();
+  }
+
+  void _rebuildSelectionsFromTemplateItems() {
+    for (final old in _selectedProducts) {
+      old.qtyController.dispose();
+    }
+    _selectedProducts
+      ..clear()
+      ..addAll(
+        _templateItems.map(
+          (item) => AddedPlumbingSelection(
+            categoryTitle: item.category,
+            kind: 'Tap / drop to change type',
+            materialName: item.name,
+            size: item.size,
+            unit: item.unit,
+            quantity: item.defaultQuantity,
+          ),
+        ),
+      );
+  }
+
+  void _swapTemplateItem(int index, MaterialAlternative alternative) {
+    if (index < 0 || index >= _templateItems.length) return;
+    final current = _templateItems[index];
+    setState(() {
+      _templateItems[index] = current.copyWith(
+        name: alternative.name,
+        size: alternative.size ?? current.size,
+      );
+      _rebuildSelectionsFromTemplateItems();
+    });
   }
 
   void _onMaterialsChanged() {
@@ -116,7 +177,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
               _buildBackgroundPanel(),
               _buildHeader(context),
               _buildContentCard(context),
-              _buildFloatingFilter(),
+              if (!_isTemplateMode) _buildFloatingFilter(),
               _buildBottomNav(context),
             ],
           ),
@@ -190,28 +251,34 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
   }
 
   Widget _buildContentCard(BuildContext context) {
+    final templateName = widget.template?.name;
+    final titleText = templateName != null && templateName.isNotEmpty
+        ? templateName
+        : (widget.projectName.contains('\n')
+            ? widget.projectName
+            : widget.projectName.replaceFirst(' ', '\n'));
+
     return Positioned(
       top: 110,
       right: 0,
-      left: 72,
+      left: _isTemplateMode ? 16 : 72,
       bottom: 80,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(24, 28, 0, 32),
-        decoration: const BoxDecoration(
-          color: Color(0xFF1E3042),
+        padding: EdgeInsets.fromLTRB(_isTemplateMode ? 24 : 24, 28, 16, 32),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E3042),
           borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(60),
-            topRight: Radius.circular(60),
-            bottomLeft: Radius.circular(60),
+            topLeft: const Radius.circular(60),
+            topRight: const Radius.circular(60),
+            bottomLeft: Radius.circular(_isTemplateMode ? 60 : 60),
+            bottomRight: Radius.circular(_isTemplateMode ? 60 : 0),
           ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              widget.projectName.contains('\n')
-                  ? widget.projectName
-                  : widget.projectName.replaceFirst(' ', '\n'),
+              titleText,
               style: GoogleFonts.poppins(
                 fontSize: 24,
                 fontWeight: FontWeight.w700,
@@ -222,7 +289,9 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
             const Divider(color: Color(0xFFEDE4D4), thickness: 1),
             const SizedBox(height: 12),
             Text(
-              'Select products for your project.\nSizes will appear after clicking a product.',
+              _isTemplateMode
+                  ? 'Reference package — quantities scaled from area.\nEdit qty, remove items, or drag alternatives onto any material row to change type.'
+                  : 'Select products for your project.\nSizes will appear after clicking a product.',
               style: GoogleFonts.poppins(
                 fontSize: 12,
                 color: const Color(0xFFE0D7C9),
@@ -232,7 +301,11 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
             const SizedBox(height: 16),
             const Divider(color: Color(0xFFEDE4D4), thickness: 1),
             const SizedBox(height: 14),
-            Expanded(child: _buildMaterialsBody(context)),
+            Expanded(
+              child: _isTemplateMode
+                  ? _buildTemplateBomBody(context)
+                  : _buildMaterialsBody(context),
+            ),
           ],
         ),
       ),
@@ -276,6 +349,181 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     if (t.contains('plumb')) return Icons.plumbing;
     if (t.contains('electric')) return Icons.electrical_services;
     return Icons.category;
+  }
+
+  Widget _buildTemplateBomBody(BuildContext context) {
+    if (_templateItems.isEmpty || _selectedProducts.isEmpty) {
+      return Align(
+        alignment: Alignment.topLeft,
+        child: Text(
+          'All reference materials were removed.\nGo back and pick another template, or continue with AI.',
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            color: const Color(0xFFE0D7C9),
+            height: 1.4,
+          ),
+        ),
+      );
+    }
+
+    final areaLabel = widget.projectAreaSqm != null
+        ? '${widget.projectAreaSqm!.toStringAsFixed(1)} sqm'
+        : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (areaLabel != null) ...[
+          Text(
+            'Quantities auto-estimated for $areaLabel. Drag an alternative onto a tile row to change type.',
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              color: const Color(0xFF8FB2D4),
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        Expanded(
+          child: ListView.builder(
+            controller: _materialsScrollController,
+            itemCount: _templateItems.length,
+            itemBuilder: (context, index) {
+              final item = _templateItems[index];
+              final selected = _selectedProducts[index];
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    DragTarget<MaterialAlternative>(
+                      onWillAcceptWithDetails: (details) =>
+                          item.isSwappable || item.alternatives.isNotEmpty,
+                      onAcceptWithDetails: (details) {
+                        _swapTemplateItem(index, details.data);
+                      },
+                      builder: (context, candidate, rejected) {
+                        final hovering = candidate.isNotEmpty;
+                        return Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            border: hovering
+                                ? Border.all(
+                                    color: const Color(0xFF6EE7B7),
+                                    width: 2,
+                                  )
+                                : null,
+                          ),
+                          child: _AddedMaterialItem(
+                            title: selected.materialName,
+                            subtitle: [
+                              item.category,
+                              if ((selected.size ?? '').trim().isNotEmpty)
+                                selected.size!.trim(),
+                              selected.unit,
+                              'drag to swap',
+                            ].where((s) => s.isNotEmpty).join(' • '),
+                            unit: selected.unit,
+                            qtyController: selected.qtyController,
+                            onChanged: (val) {
+                              selected.quantity =
+                                  double.tryParse(val) ?? 0.0;
+                              _templateItems[index] = item.copyWith(
+                                defaultQuantity: selected.quantity,
+                              );
+                            },
+                            onRemove: () {
+                              setState(() {
+                                _templateItems.removeAt(index);
+                                final removed =
+                                    _selectedProducts.removeAt(index);
+                                removed.qtyController.dispose();
+                              });
+                            },
+                          ),
+                        );
+                      },
+                    ),
+                    if (item.alternatives.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Drag onto row to change type:',
+                        style: GoogleFonts.poppins(
+                          fontSize: 10,
+                          color: const Color(0xFFE0D7C9),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      SizedBox(
+                        height: 36,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: item.alternatives.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(width: 8),
+                          itemBuilder: (context, altIndex) {
+                            final alt = item.alternatives[altIndex];
+                            return Draggable<MaterialAlternative>(
+                              data: alt,
+                              feedback: Material(
+                                color: Colors.transparent,
+                                child: _AltChip(label: alt.name, dragging: true),
+                              ),
+                              childWhenDragging: Opacity(
+                                opacity: 0.35,
+                                child: _AltChip(label: alt.name),
+                              ),
+                              child: GestureDetector(
+                                onTap: () => _swapTemplateItem(index, alt),
+                                child: _AltChip(
+                                  label: alt.name,
+                                  selected: alt.name == item.name,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerRight,
+          child: SizedBox(
+            width: 150,
+            height: 40,
+            child: ElevatedButton(
+              onPressed: _selectedProducts.isEmpty ? null : _goToEstimator,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFEDE4D4),
+                foregroundColor: const Color(0xFF1E3042),
+                disabledBackgroundColor:
+                    const Color(0xFFEDE4D4).withValues(alpha: 0.4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(30),
+                ),
+                elevation: 6,
+                shadowColor: Colors.black.withAlpha(100),
+              ),
+              child: Text(
+                'Estimate Now',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+      ],
+    );
   }
 
   Widget _buildMaterialsBody(BuildContext context) {
@@ -479,13 +727,25 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
   }
 
   void _goToEstimator() {
+    if (_selectedProducts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Add or keep at least one material before estimating.'),
+        ),
+      );
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => MaterialEstimatorScreen(
           projectName: widget.projectName,
+          customProjectName: widget.customProjectName,
+          projectNotes: widget.projectNotes,
           tiles: const [],
           plumbingMaterials: _selectedProducts,
+          aiProjectArea: widget.projectAreaSqm,
         ),
       ),
     );
@@ -1026,6 +1286,44 @@ class _MaterialThumb extends StatelessWidget {
   }
 }
 
+class _AltChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final bool dragging;
+
+  const _AltChip({
+    required this.label,
+    this.selected = false,
+    this.dragging = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: dragging || selected
+            ? const Color(0xFFEDE4D4)
+            : const Color(0xFFEDE4D4).withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFF648DB6).withValues(alpha: 0.7),
+        ),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.poppins(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: dragging || selected
+              ? const Color(0xFF1E3042)
+              : const Color(0xFFEDE4D4),
+        ),
+      ),
+    );
+  }
+}
+
 class _AddedMaterialItem extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -1064,19 +1362,20 @@ class _AddedMaterialItem extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.poppins(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                     color: Colors.white,
+                    height: 1.25,
                   ),
                 ),
                 if (subtitle.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.poppins(
                       fontSize: 11,

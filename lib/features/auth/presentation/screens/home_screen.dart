@@ -3,8 +3,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'cost_estimation.dart';
 import 'main_home_screen.dart';
+import 'package:iconstruct/features/project_creation/screens/create_project_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -49,7 +49,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => CostEstimationScreen(projectName: selected),
+        builder: (_) => CreateProjectScreen(renovationType: selected),
       ),
     );
   }

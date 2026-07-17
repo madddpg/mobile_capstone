@@ -2,7 +2,7 @@
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconstruct/features/auth/data/email_service.dart';
 import 'package:iconstruct/features/auth/presentation/screens/forgot_password_screen.dart';
-import 'package:iconstruct/features/auth/presentation/screens/home_screen.dart';
+import 'package:iconstruct/features/auth/presentation/screens/main_home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -84,7 +84,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        MaterialPageRoute(builder: (_) => const MainHomeScreen()),
         (route) => route.isFirst,
       );
     } catch (e) {

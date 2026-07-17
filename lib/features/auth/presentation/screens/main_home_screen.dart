@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 
-import 'package:iconstruct/features/auth/presentation/screens/material_estimator.dart';
 import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
 import 'package:iconstruct/features/auth/presentation/screens/profile_screen.dart';
 import 'package:iconstruct/features/auth/presentation/screens/top_shops_screen.dart';
+import 'package:iconstruct/features/auth/presentation/screens/home_screen.dart';
 import 'package:iconstruct/features/auth/presentation/models/ranked_shop.dart';
 import 'package:iconstruct/features/auth/presentation/services/shop_ranking_service.dart';
 import 'package:iconstruct/core/widgets/user_avatar.dart';
 import 'package:iconstruct/core/utils/hammer_nav.dart';
+import 'package:iconstruct/features/project_creation/screens/project_tracking_screen.dart';
 
 class MainHomeScreen extends StatefulWidget {
   const MainHomeScreen({super.key});
@@ -143,13 +144,11 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                     backgroundColor: _darkBlue,
                     cream: _cream,
                     onSeeLocations: () {},
-                    onEstimateMaterials: () {
+                    onStartNewRenovation: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const MaterialEstimatorScreen(
-                            projectName: 'Your Project Name',
-                          ),
+                          builder: (context) => const HomeScreen(),
                         ),
                       );
                     },
@@ -166,6 +165,14 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                         context,
                         MaterialPageRoute(
                           builder: (context) => const SavedProjectsScreen(),
+                        ),
+                      );
+                    },
+                    onViewQuotations: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ProjectTrackingScreen(),
                         ),
                       );
                     },
@@ -225,18 +232,20 @@ class _MainCard extends StatelessWidget {
   final Color backgroundColor;
   final Color cream;
   final VoidCallback onSeeLocations;
-  final VoidCallback onEstimateMaterials;
+  final VoidCallback onStartNewRenovation;
   final VoidCallback onSavedProjects;
   final VoidCallback onPostProject;
+  final VoidCallback onViewQuotations;
   final VoidCallback onTopShops;
 
   const _MainCard({
     required this.backgroundColor,
     required this.cream,
     required this.onSeeLocations,
-    required this.onEstimateMaterials,
+    required this.onStartNewRenovation,
     required this.onSavedProjects,
     required this.onPostProject,
+    required this.onViewQuotations,
     required this.onTopShops,
   });
 
@@ -261,17 +270,17 @@ class _MainCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _ActionTile(
-            icon: Icons.calculate_outlined,
-            title: 'Estimate Materials',
+            icon: Icons.home_repair_service_outlined,
+            title: 'Start New Renovation',
             subtitle:
-                'Calculate the exact quantity and cost of main materials and accessories needed for your project.',
-            onTap: onEstimateMaterials,
+                'Begin a new renovation project: choose type, create details, plan materials with a template or AI, then request supplier quotations.',
+            onTap: onStartNewRenovation,
           ),
           const _ThinDivider(),
 
           _ActionTile(
             icon: Icons.folder_open_outlined,
-            title: 'Saved Projects',
+            title: 'My Projects',
             subtitle:
                 'Access and manage your previous material estimates and project drafts in one secure place.',
             onTap: onSavedProjects,
@@ -288,11 +297,11 @@ class _MainCard extends StatelessWidget {
           const _ThinDivider(),
 
           _ActionTile(
-            icon: Icons.receipt_long_outlined,
-            title: 'View Quotations',
+            icon: Icons.timeline_outlined,
+            title: 'Project Tracking',
             subtitle:
-                'Compare bids from hardware shops, review pricing per material, and choose the best offer for your project.',
-            onTap: () {},
+                'Monitor project progress from draft through quotations, supplier selection, and completion.',
+            onTap: onViewQuotations,
           ),
 
           const Spacer(),
@@ -671,14 +680,11 @@ class _BottomPillNav extends StatelessWidget {
               icon: Icons.calculate_rounded,
               onTap: () {
                 onChanged(2);
-                Navigator.pushAndRemoveUntil(
+                Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const MaterialEstimatorScreen(
-                      projectName: 'Your Project Name',
-                    ),
+                    builder: (context) => const HomeScreen(),
                   ),
-                  (route) => false,
                 );
               },
             ),

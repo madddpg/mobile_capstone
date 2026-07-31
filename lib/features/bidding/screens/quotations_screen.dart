@@ -1,13 +1,46 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'package:iconstruct/features/bidding/screens/project_bids_screen.dart';
+
 class QuotationsScreen extends StatelessWidget {
   final String postId;
 
-  const QuotationsScreen({super.key, required this.postId});
+  /// Shown on the full-details screen; resolved from the post when omitted.
+  final String? projectName;
+
+  const QuotationsScreen({super.key, required this.postId, this.projectName});
 
   static const Color bgCream = Color(0xFFF9F6F0);
   static const Color navyColor = Color(0xFF1E2A38);
+
+  Future<void> _openFullDetails(BuildContext context) async {
+    var name = projectName ?? '';
+
+    if (name.isEmpty) {
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('projectPosts')
+            .doc(postId)
+            .get();
+        name = (snap.data()?['projectName'] ?? '').toString();
+      } catch (_) {
+        // Fall back to a generic title below.
+      }
+    }
+
+    if (!context.mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProjectBidsScreen(
+          postId: postId,
+          projectName: name.isEmpty ? 'Project' : name,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +82,7 @@ class QuotationsScreen extends StatelessWidget {
                     Icon(
                       Icons.inventory_2_outlined,
                       size: 80,
-                      color: navyColor.withOpacity(0.5),
+                      color: navyColor.withValues(alpha: 0.5),
                     ),
                     const SizedBox(height: 16),
                     const Text(
@@ -86,7 +119,7 @@ class QuotationsScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 10,
                       offset: const Offset(0, 5),
                     ),
@@ -145,13 +178,10 @@ class QuotationsScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
 
-                    // Future Phase Space (Accept/Reject logic later)
                     SizedBox(
                       width: double.infinity,
                       child: TextButton(
-                        onPressed: () {
-                          // Navigate to individual full quotation details/accept flow (Phase 3)
-                        },
+                        onPressed: () => _openFullDetails(context),
                         style: TextButton.styleFrom(
                           foregroundColor: navyColor,
                           backgroundColor: bgCream,

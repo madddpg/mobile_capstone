@@ -539,9 +539,19 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
   }
 
   Future<void> _generateBOM() async {
-    setState(() => _isTyping = true);
+    final selected = List<String>.from(_confirmedMaterials);
 
-    final selected = _confirmedMaterials;
+    // The builder leads the plan: what they picked is what they review.
+    if (selected.isNotEmpty) {
+      await _addBotMessage(
+        "Building your BOM with the ${selected.length} material"
+        "${selected.length == 1 ? '' : 's'} you selected.",
+      );
+      _openBomFromSelections(selected);
+      return;
+    }
+
+    setState(() => _isTyping = true);
 
     try {
       final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
@@ -552,10 +562,9 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
         'areaSqm': _area,
         'budgetLevel': _budget,
         'additionalNotes': [
-          'User leads the plan. Only include materials they explicitly selected when possible.',
-          'Do not invent a full sequential package unless needed to fill gaps they clearly implied.',
-          if (selected.isNotEmpty) 'Materials the user selected:',
-          ...selected.map((m) => '- $m'),
+          'The user picked no materials from suggestions — draft only the '
+              'essentials implied by the ideas below.',
+          'Do not invent a full sequential package beyond those essentials.',
           if (_ideaLog.isNotEmpty) 'User ideas (in their words):',
           ..._ideaLog.map((e) => '- $e'),
           if (widget.projectNotes != null &&
@@ -585,7 +594,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
             ),
           );
         } else {
-          _openLocalBomFallback(selected);
+          _openBomFromSelections(selected);
         }
         return;
       }
@@ -594,18 +603,18 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
       await _addBotMessage(
         "Cloud AI didn't return a list — building your BOM from materials you selected.",
       );
-      _openLocalBomFallback(selected);
+      _openBomFromSelections(selected);
     } catch (e) {
       setState(() => _isTyping = false);
       await _addBotMessage(
         "AI service unavailable — building your essential BOM locally from what you selected.",
       );
-      _openLocalBomFallback(selected);
+      _openBomFromSelections(selected);
     }
   }
 
-  void _openLocalBomFallback(List<String> selected) {
-    // Prefer only what the user explicitly chose — never invent a full package here.
+  /// Builds the review BOM from exactly the materials the builder confirmed.
+  void _openBomFromSelections(List<String> selected) {
     final names = selected.isNotEmpty ? selected : _confirmedMaterials;
     if (names.isEmpty) {
       setState(() {

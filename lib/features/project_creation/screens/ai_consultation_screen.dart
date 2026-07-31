@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
 import 'package:iconstruct/core/widgets/user_avatar.dart';
 import 'package:iconstruct/features/auth/presentation/screens/cost_estimation.dart';
 import 'package:iconstruct/features/auth/presentation/screens/profile_screen.dart';
+import 'package:iconstruct/features/project_creation/data/ai_material_consultant_service.dart';
 import 'package:iconstruct/features/project_creation/data/bom_quantity_estimator.dart';
 import 'package:iconstruct/features/project_creation/data/renovation_template_service.dart';
 import 'package:iconstruct/features/project_creation/data/renovation_templates.dart';
@@ -39,6 +41,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
   final ScrollController _scrollController = ScrollController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final _templateService = RenovationTemplateService();
+  final _aiService = AiMaterialConsultantService();
 
   bool _isTyping = false;
   int _step = 0;
@@ -79,135 +82,19 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
 
   void _startConversation() async {
     await _addBotMessage(
-      "Hi! I'm your AI material consultant for ${widget.projectName}.",
+      "Hi! I'm the iConstruct AI Material Consultant for ${widget.projectName}.",
     );
     await Future.delayed(const Duration(milliseconds: 350));
     await _addBotMessage(
-      "This chat is yours to lead — describe your project ideas freely "
-      "(style, must-haves, constraints). I'll only suggest options; you decide what to keep.\n\n"
-      "Want a ready package instead? Open Templates on the side — that's the structured path.",
+      "I use an AI API (not a custom-trained model) and I'm limited to iConstruct only: "
+      "material planning and estimate help for canvassing — not general chat or construction site management.\n\n"
+      "You lead: describe your ideas freely. I only suggest options; you decide what to keep.\n"
+      "Want a ready package? Open Templates on the side.",
     );
     await Future.delayed(const Duration(milliseconds: 350));
     await _addBotMessage(
       "To size quantities later, what's the total area in square meters? (e.g., 20)",
     );
-  }
-
-  String get _typeLower => widget.projectName
-      .toLowerCase()
-      .replaceAll('\n', ' ')
-      .replaceAll(RegExp(r'\s+'), ' ')
-      .trim();
-
-  /// Suggests options from the user's own words — never a forced topic sequence.
-  List<String> _suggestFromUserIdea(String userText) {
-    final t = userText.toLowerCase();
-    final out = <String>[];
-
-    void addAll(List<String> items) {
-      for (final i in items) {
-        if (!out.contains(i)) out.add(i);
-      }
-    }
-
-    // Keyword-driven suggestions from what they actually said
-    if (t.contains('vinyl') || t.contains('spc')) {
-      addAll(['SPC vinyl flooring planks', 'Floor underlayment', 'Transition strips']);
-    }
-    if (t.contains('porcelain')) {
-      addAll(['Porcelain floor tiles', 'Tile adhesive', 'Tile grout']);
-    }
-    if (t.contains('ceramic') || t.contains('tile') || t.contains('floor')) {
-      addAll(['Ceramic floor tiles', 'Tile adhesive', 'Tile grout']);
-    }
-    if (t.contains('wall') || t.contains('subway') || t.contains('backsplash')) {
-      addAll(
-        t.contains('subway')
-            ? ['Subway wall tiles', 'Tile adhesive', 'Tile grout']
-            : ['Ceramic wall tiles', 'Tile adhesive', 'Tile grout'],
-      );
-    }
-    if (t.contains('waterproof') || t.contains('wet')) {
-      addAll(['Waterproofing membrane', 'Liquid waterproofing', 'Silicone sealant']);
-    }
-    if (t.contains('toilet')) addAll(['Toilet bowl set']);
-    if (t.contains('sink') || t.contains('lavatory')) {
-      addAll(_typeLower.contains('kitchen') ? ['Kitchen sink'] : ['Lavatory sink']);
-    }
-    if (t.contains('shower')) addAll(['Shower faucet set']);
-    if (t.contains('faucet') || t.contains('tap')) {
-      addAll(_typeLower.contains('kitchen') ? ['Kitchen faucet'] : ['Lavatory faucet']);
-    }
-    if (t.contains('counter') || t.contains('quartz') || t.contains('granite') || t.contains('laminate')) {
-      if (t.contains('quartz')) {
-        addAll(['Quartz countertop']);
-      } else if (t.contains('granite')) {
-        addAll(['Granite countertop']);
-      } else {
-        addAll(['Laminate countertop']);
-      }
-    }
-    if (t.contains('cabinet')) addAll(['Base kitchen cabinets']);
-    if (t.contains('paint') || t.contains('color') || t.contains('colour')) {
-      addAll(['Wall primer', 'Interior latex paint']);
-    }
-    if (t.contains('grout') || t.contains('adhesive') || t.contains('seal')) {
-      addAll(['Tile adhesive', 'Tile grout', 'Silicone sealant']);
-    }
-    if (t.contains('pipe') || t.contains('plumb')) {
-      addAll(['PVC pipes', 'PVC elbows & tees', 'Pipe cement']);
-    }
-    if (t.contains('wire') || t.contains('outlet') || t.contains('electric')) {
-      addAll(['THHN electrical wire', 'Wall outlets', 'Light switches']);
-    }
-    if (t.contains('roof')) {
-      addAll(['Corrugated roofing sheets', 'Roof sealant', 'Roof screws']);
-    }
-
-    // Soft optional starters only when they ask for ideas — framed as options
-    final asksSuggest = t.contains('suggest') ||
-        t.contains('recommend') ||
-        t.contains('not sure') ||
-        t.contains('idea') ||
-        t == 'idk' ||
-        t.contains('help me');
-
-    if (out.isEmpty && asksSuggest) {
-      if (_typeLower.contains('bathroom')) {
-        addAll([
-          'Non-slip ceramic floor tiles',
-          'Ceramic wall tiles',
-          'Waterproofing membrane',
-          'Toilet bowl set',
-          'Lavatory sink',
-          'Shower faucet set',
-        ]);
-      } else if (_typeLower.contains('kitchen')) {
-        addAll([
-          'Ceramic floor tiles',
-          'Ceramic backsplash tiles',
-          'Laminate countertop',
-          'Kitchen sink',
-          'Kitchen faucet',
-        ]);
-      } else if (_typeLower.contains('floor')) {
-        addAll(['Ceramic floor tiles', 'Tile adhesive', 'Tile grout', 'Skirting boards']);
-      } else if (_typeLower.contains('paint')) {
-        addAll(['Wall primer', 'Interior latex paint', 'Paint roller set']);
-      } else {
-        addAll(['Ceramic floor tiles', 'Tile adhesive', 'Interior latex paint', 'Silicone sealant']);
-      }
-    }
-
-    // Cap so we don't overwhelm — suggestions, not a full decided BOM
-    if (out.length > 6) return out.take(6).toList();
-    return out;
-  }
-
-  String _formatSuggestions(List<String> recs) {
-    final bullets = recs.map((r) => '• $r').join('\n');
-    return "Here are some options based on what you shared — pick only what fits your idea "
-        "(or skip and keep describing):\n$bullets";
   }
 
   bool _isReadyToBuild(String text) {
@@ -233,9 +120,10 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
       _style = 'Minimalist';
     } else if (t.contains('traditional') || t.contains('classic')) {
       _style = 'Traditional';
-    } else if (input.trim().length <= 40 && !RegExp(r'^\d').hasMatch(input.trim())) {
-      // Short vibe phrases become style notes
-      if (!t.contains('sqm') && double.tryParse(input.replaceAll(',', '')) == null) {
+    } else if (input.trim().length <= 40 &&
+        !RegExp(r'^\d').hasMatch(input.trim())) {
+      if (!t.contains('sqm') &&
+          double.tryParse(input.replaceAll(',', '')) == null) {
         _style = input.trim();
       }
     }
@@ -294,18 +182,12 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
       case _stepArea:
         final parsedArea = double.tryParse(input.replaceAll(',', ''));
         if (parsedArea == null || parsedArea <= 0) {
-          // Allow them to start describing; try extract area later
+          // Allow them to start describing without area first
           if (input.length > 8) {
-            _ideaLog.add(input);
-            _captureStyleHints(input);
             _area = 0;
             _step = _stepChat;
             setState(() => _showBomChip = true);
-            await _addBotMessage(
-              "Got it — I'll keep that in mind. When you can, also share the area in sqm "
-              "(just send a number like 20) so quantities can be estimated.\n\n"
-              "Keep describing your ideas anytime.",
-            );
+            await _handleFreeChat(input);
           } else {
             await _addBotMessage(
               "Please enter the area as a number in sqm (e.g., 20), or describe your project in a sentence.",
@@ -360,14 +242,48 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
     _ideaLog.add(input);
     _captureStyleHints(input);
 
-    final recs = _suggestFromUserIdea(input);
+    setState(() {
+      _isTyping = true;
+      _showSelectChips = false;
+      _pendingRecommendations = [];
+      _pendingSelected.clear();
+      _showBomChip = true;
+    });
 
-    if (recs.isEmpty) {
+    final result = await _aiService.consult(
+      projectType: widget.projectName,
+      userMessage: input,
+      style: _style,
+      areaSqm: _area,
+      ideaLog: List<String>.from(_ideaLog),
+      selectedMaterials: List<String>.from(_confirmedMaterials),
+      projectNotes: widget.projectNotes,
+    );
+
+    if (!mounted) return;
+    setState(() => _isTyping = false);
+
+    if (!result.success) {
       await _addBotMessage(
-        "Thanks — I've noted that. Keep going with more details "
-        "(materials you already like, finishes, fixtures, must-haves), "
-        "or ask me to suggest options. Nothing is added to your BOM unless you pick it.",
+        "iConstruct AI is temporarily unavailable"
+        "${result.errorMessage != null ? ' (${result.errorMessage})' : ''}. "
+        "You can keep notes here, or open Templates for a ready material package.",
       );
+      return;
+    }
+
+    final reply = result.reply.isNotEmpty
+        ? result.reply
+        : (result.inScope
+            ? "Tell me more about the materials you want — I only suggest; you decide."
+            : "I can only help with iConstruct material planning for this estimate.");
+
+    setState(() {
+      _messages.add(ChatMessage(text: reply, isUser: false));
+    });
+    _scrollToBottom();
+
+    if (!result.inScope || result.suggestions.isEmpty) {
       setState(() {
         _showSelectChips = false;
         _pendingRecommendations = [];
@@ -377,26 +293,182 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
       return;
     }
 
-    _pendingRecommendations = List<String>.from(recs);
-    _pendingSelected.clear(); // never decide for the user
-
-    await _addBotMessage(_formatSuggestions(recs));
+    _pendingRecommendations = List<String>.from(result.suggestions);
+    _pendingSelected.clear();
+    setState(() => _showBomChip = true);
     await Future.delayed(const Duration(milliseconds: 200));
-    await _addBotMessage(
-      "Optional: tap chips to add materials you want, then Add to my list — "
-      "or Skip and keep chatting. You're in control.",
+    if (!mounted) return;
+    await _openSuggestionsModal();
+  }
+
+  Future<void> _openSuggestionsModal() async {
+    if (!mounted || _pendingRecommendations.isEmpty) return;
+
+    final selected = await showModalBottomSheet<Set<String>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final working = Set<String>.from(_pendingSelected);
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+            return Padding(
+              padding: EdgeInsets.only(bottom: bottomInset),
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(context).height * 0.72,
+                ),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF1E3042),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(height: 10),
+                    Container(
+                      width: 42,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: _cream.withValues(alpha: 0.35),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(22, 18, 14, 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Suggested materials',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                    color: _cream,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Optional picks — nothing is added until you choose.',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    color: _cream.withValues(alpha: 0.75),
+                                    height: 1.35,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            icon: Icon(
+                              Icons.close_rounded,
+                              color: _cream.withValues(alpha: 0.85),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(color: Color(0x33EDE4D4), height: 1),
+                    Flexible(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                        child: Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: _pendingRecommendations.map((name) {
+                            final isOn = working.contains(name);
+                            return FilterChip(
+                              selected: isOn,
+                              showCheckmark: true,
+                              checkmarkColor: _darkBlue,
+                              label: Text(
+                                name,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: isOn ? _darkBlue : _cream,
+                                ),
+                              ),
+                              selectedColor: _cream,
+                              backgroundColor: _navy,
+                              side: BorderSide(
+                                color: _cream.withValues(alpha: 0.7),
+                              ),
+                              onSelected: (value) {
+                                setModalState(() {
+                                  if (value) {
+                                    working.add(name);
+                                  } else {
+                                    working.remove(name);
+                                  }
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _ChoiceChipButton(
+                              label: 'Skip',
+                              onTap: () => Navigator.pop(ctx, <String>{}),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _ChoiceChipButton(
+                              label: working.isEmpty
+                                  ? 'Add to my list'
+                                  : 'Add (${working.length})',
+                              filled: true,
+                              onTap: () =>
+                                  Navigator.pop(ctx, Set<String>.from(working)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
 
-    setState(() {
-      _showSelectChips = true;
-      _showBomChip = true;
-    });
+    if (!mounted) return;
+
+    // Dismissed without action — keep a reopen button via pending list
+    if (selected == null) {
+      setState(() {});
+      return;
+    }
+
+    if (selected.isEmpty) {
+      await _skipSuggestions();
+      return;
+    }
+
+    _pendingSelected
+      ..clear()
+      ..addAll(selected);
+    await _confirmPendingSelection();
   }
 
   Future<void> _confirmPendingSelection() async {
     if (_pendingSelected.isEmpty) {
       await _addBotMessage(
-        "No materials selected — that's fine. Keep describing your idea, or tap chips first if you want to add some.",
+        "No materials selected — that's fine. Keep describing your idea, or open suggestions again to pick some.",
       );
       return;
     }
@@ -430,7 +502,9 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
 
   Future<void> _skipSuggestions() async {
     setState(() {
-      _messages.add(const ChatMessage(text: 'Skip suggestions — keep chatting', isUser: true));
+      _messages.add(
+        const ChatMessage(text: 'Skip suggestions — keep chatting', isUser: true),
+      );
       _showSelectChips = false;
       _pendingRecommendations = [];
       _pendingSelected.clear();
@@ -470,7 +544,8 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
     final selected = _confirmedMaterials;
 
     try {
-      final callable = FirebaseFunctions.instance.httpsCallable('generateAIBOM');
+      final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('generateAIBOM');
       final response = await callable.call(<String, dynamic>{
         'projectType': widget.projectName,
         'style': _style.isEmpty ? 'As described by user' : _style,
@@ -564,6 +639,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
           projectNotes: widget.projectNotes,
           template: template,
           projectAreaSqm: _area,
+          budgetPreference: _budget,
         ),
       ),
     );
@@ -605,114 +681,142 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      key: _scaffoldKey,
-      endDrawer: _TemplatesDrawer(
-        renovationType: widget.projectName,
-        templates: _templates.isEmpty
-            ? RenovationTemplatesCatalog.forType(widget.projectName)
-            : _templates,
-        onSelect: _useTemplateReference,
+    final statusTop = MediaQuery.paddingOf(context).top;
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Color(0xFF1E3042),
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            stops: [0.0, 0.56, 1.0],
-            colors: [Color(0xFFE0D7C9), Color(0xFF2C3E50), Color(0xFF648DB6)],
-          ),
+      child: Scaffold(
+        key: _scaffoldKey,
+        backgroundColor: const Color(0xFFE0D7C9),
+        endDrawer: _TemplatesDrawer(
+          renovationType: widget.projectName,
+          templates: _templates.isEmpty
+              ? RenovationTemplatesCatalog.forType(widget.projectName)
+              : _templates,
+          onSelect: _useTemplateReference,
         ),
-        child: SafeArea(
-          child: Stack(
-            children: [
-              const Positioned(
-                left: 0,
-                top: -200,
-                width: 393,
-                height: 585,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: _cream,
-                    borderRadius: BorderRadius.all(Radius.circular(50)),
+        body: Column(
+          children: [
+            // Dark status-bar strip only — keeps phone icons visible
+            ColoredBox(
+              color: _navy,
+              child: SizedBox(height: statusTop, width: double.infinity),
+            ),
+            Expanded(
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: [0.0, 0.56, 1.0],
+                    colors: [
+                      Color(0xFFE0D7C9),
+                      Color(0xFF2C3E50),
+                      Color(0xFF648DB6),
+                    ],
                   ),
                 ),
-              ),
-              _buildTopBar(),
-              Positioned(
-                top: 110,
-                left: 16,
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  decoration: const BoxDecoration(
-                    color: _navy,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(60),
-                      topRight: Radius.circular(60),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                child: SafeArea(
+                  top: false,
+                  child: Stack(
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 28, 20, 0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'AI Material\nConsultant',
-                              style: GoogleFonts.poppins(
-                                fontSize: 24,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                                height: 1.15,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              widget.customProjectName?.isNotEmpty == true
-                                  ? widget.customProjectName!
-                                  : widget.projectName,
-                              style: GoogleFonts.poppins(
-                                fontSize: 13,
-                                color: _cream.withValues(alpha: 0.85),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              'You lead — share ideas freely. I only suggest options. Templates are the structured path.',
-                              style: GoogleFonts.poppins(
-                                fontSize: 11,
-                                color: const Color(0xFFE0D7C9),
-                                height: 1.35,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            const Divider(color: _cream, thickness: 1),
-                          ],
+                      const Positioned(
+                        left: 0,
+                        top: -200,
+                        width: 393,
+                        height: 585,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: _cream,
+                            borderRadius: BorderRadius.all(Radius.circular(50)),
+                          ),
                         ),
                       ),
-                      Expanded(
-                        child: ListView.builder(
-                          controller: _scrollController,
-                          padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-                          itemCount: _messages.length + (_isTyping ? 1 : 0),
-                          itemBuilder: (context, index) {
-                            if (index == _messages.length) {
-                              return _buildTypingIndicator();
-                            }
-                            return _buildMessageBubble(_messages[index]);
-                          },
+                      _buildTopBar(),
+                      Positioned(
+                        top: 110,
+                        left: 16,
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            color: _navy,
+                            borderRadius: BorderRadius.only(
+                              topLeft: Radius.circular(60),
+                              topRight: Radius.circular(60),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(24, 28, 20, 0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'AI Material\nConsultant',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white,
+                                        height: 1.15,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      widget.customProjectName?.isNotEmpty == true
+                                          ? widget.customProjectName!
+                                          : widget.projectName,
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 13,
+                                        color: _cream.withValues(alpha: 0.85),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Text(
+                                      'Powered by AI API · iConstruct material planning only. You choose; I suggest.',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 11,
+                                        color: const Color(0xFFE0D7C9),
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    const Divider(color: _cream, thickness: 1),
+                                  ],
+                                ),
+                              ),
+                              Expanded(
+                                child: ListView.builder(
+                                  controller: _scrollController,
+                                  padding:
+                                      const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                                  itemCount:
+                                      _messages.length + (_isTyping ? 1 : 0),
+                                  itemBuilder: (context, index) {
+                                    if (index == _messages.length) {
+                                      return _buildTypingIndicator();
+                                    }
+                                    return _buildMessageBubble(_messages[index]);
+                                  },
+                                ),
+                              ),
+                              _buildMessageInput(),
+                            ],
+                          ),
                         ),
                       ),
-                      _buildMessageInput(),
                     ],
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -758,10 +862,15 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
                 borderRadius: BorderRadius.circular(20),
                 onTap: () => _scaffoldKey.currentState?.openEndDrawer(),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   child: Row(
                     children: [
-                      const Icon(Icons.grid_view_rounded, color: _cream, size: 18),
+                      const Icon(
+                        Icons.grid_view_rounded,
+                        color: _cream,
+                        size: 18,
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         'Templates',
@@ -855,67 +964,13 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (_showSelectChips && _pendingRecommendations.isNotEmpty) ...[
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Optional picks (nothing is added until you choose):',
-                  style: GoogleFonts.poppins(
-                    fontSize: 11,
-                    color: _cream.withValues(alpha: 0.85),
-                  ),
+            if (_pendingRecommendations.isNotEmpty) ...[
+              SizedBox(
+                width: double.infinity,
+                child: _ChoiceChipButton(
+                  label: 'Review suggestions (${_pendingRecommendations.length})',
+                  onTap: _openSuggestionsModal,
                 ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _pendingRecommendations.map((name) {
-                  final selected = _pendingSelected.contains(name);
-                  return FilterChip(
-                    selected: selected,
-                    label: Text(
-                      name,
-                      style: GoogleFonts.poppins(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: selected ? _darkBlue : _cream,
-                      ),
-                    ),
-                    selectedColor: _cream,
-                    checkmarkColor: _darkBlue,
-                    backgroundColor: _navy,
-                    side: BorderSide(color: _cream.withValues(alpha: 0.7)),
-                    onSelected: (value) {
-                      setState(() {
-                        if (value) {
-                          _pendingSelected.add(name);
-                        } else {
-                          _pendingSelected.remove(name);
-                        }
-                      });
-                    },
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: _ChoiceChipButton(
-                      label: 'Skip',
-                      onTap: _skipSuggestions,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _ChoiceChipButton(
-                      label: 'Add to my list',
-                      filled: true,
-                      onTap: _confirmPendingSelection,
-                    ),
-                  ),
-                ],
               ),
               const SizedBox(height: 10),
             ],
@@ -941,9 +996,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
                     decoration: InputDecoration(
                       hintText: _step == _stepArea
                           ? 'Area in sqm, or start describing…'
-                          : _showSelectChips
-                              ? 'Or keep typing your ideas…'
-                              : 'Describe your project ideas freely…',
+                          : 'Describe your project ideas freely…',
                       hintStyle: TextStyle(
                         color: Colors.white.withValues(alpha: 0.55),
                       ),

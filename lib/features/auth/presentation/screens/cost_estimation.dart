@@ -39,6 +39,9 @@ class CostEstimationScreen extends StatefulWidget {
   /// Area used to scale template quantities (sqm).
   final double? projectAreaSqm;
 
+  /// Budget preference collected during AI consultation (Low / Medium / High).
+  final String? budgetPreference;
+
   const CostEstimationScreen({
     super.key,
     required this.projectName,
@@ -47,6 +50,7 @@ class CostEstimationScreen extends StatefulWidget {
     this.projectNotes,
     this.template,
     this.projectAreaSqm,
+    this.budgetPreference,
   });
 
   @override
@@ -746,6 +750,8 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
           tiles: const [],
           plumbingMaterials: _selectedProducts,
           aiProjectArea: widget.projectAreaSqm,
+          aiBudget: widget.budgetPreference,
+          lockEstimateDetails: true,
         ),
       ),
     );

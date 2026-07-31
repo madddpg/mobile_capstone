@@ -1,8 +1,86 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // OTP docs are Cloud Functions only
     match /email_otp/{email} {
       allow read, write: if false;
+    }
+
+    // Builder / user profiles
+    match /users/{userId} {
+      allow read, create, update: if isOwner(userId);
+      allow delete: if false;
+
+      match /favorites/{favoriteId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /saved_projects/{projectId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // Project posts for supplier canvassing / bidding
+    match /projectPosts/{postId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn()
+        && resource.data.userId == request.auth.uid;
+
+      match /quotations/{shopId} {
+        allow read: if isSignedIn()
+          && (get(/databases/$(database)/documents/projectPosts/$(postId)).data.userId
+              == request.auth.uid
+              || request.auth.uid == shopId);
+        allow create, update: if isSignedIn();
+        allow delete: if false;
+      }
+
+      match /acceptance/{acceptanceId} {
+        allow read: if isSignedIn()
+          && get(/databases/$(database)/documents/projectPosts/$(postId)).data.userId
+            == request.auth.uid;
+        allow create: if isSignedIn()
+          && get(/databases/$(database)/documents/projectPosts/$(postId)).data.userId
+            == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+
+    // In-app notifications
+    match /notifications/{notificationId} {
+      allow read, update: if isSignedIn()
+        && resource.data.recipientId == request.auth.uid;
+      allow create: if isSignedIn();
+      allow delete: if isSignedIn()
+        && resource.data.recipientId == request.auth.uid;
+    }
+
+    // Hardware shops (ranking / comparison) — read for signed-in builders
+    match /shops/{shopId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == shopId;
+    }
+
+    // Material catalog / products
+    match /products/{productId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // Template references (optional remote catalog)
+    match /renovation_templates/{templateId} {
+      allow read: if isSignedIn();
+      allow write: if false;
     }
   }
 }

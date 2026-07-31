@@ -23,6 +23,9 @@ class MaterialEstimatorScreen extends StatefulWidget {
   final String? customProjectName;
   final String? projectNotes;
 
+  /// When true, estimate name, renovation type, area, and budget are read-only.
+  final bool lockEstimateDetails;
+
   const MaterialEstimatorScreen({
     super.key,
     required this.projectName,
@@ -34,6 +37,7 @@ class MaterialEstimatorScreen extends StatefulWidget {
     this.aiBudget,
     this.customProjectName,
     this.projectNotes,
+    this.lockEstimateDetails = false,
   });
 
   @override
@@ -292,38 +296,59 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
           _buildTextField(
             'e.g., Modern Kitchen Materials',
             controller: _projectNameController,
-            onChanged: (val) {
-              setState(() {
-                _projectName = val;
-              });
-            },
+            readOnly: widget.lockEstimateDetails,
+            onChanged: widget.lockEstimateDetails
+                ? null
+                : (val) {
+                    setState(() {
+                      _projectName = val;
+                    });
+                  },
           ),
           const SizedBox(height: 14),
           _buildInputLabel('Renovation Type:'),
           _buildTextField(
             'e.g., Kitchen Renovation',
             controller: _projectTypeController,
-            onChanged: (val) {
-              setState(() {
-                _projectType = val;
-              });
-            },
+            readOnly: widget.lockEstimateDetails,
+            onChanged: widget.lockEstimateDetails
+                ? null
+                : (val) {
+                    setState(() {
+                      _projectType = val;
+                    });
+                  },
           ),
           const SizedBox(height: 14),
-          _buildInputLabel('Project Area (sqm) — optional:'),
+          _buildInputLabel(
+            widget.lockEstimateDetails
+                ? 'Project Area (sqm):'
+                : 'Project Area (sqm) — optional:',
+          ),
           _buildTextField(
             '0.00',
             controller: _projectAreaController,
-            onChanged: (val) {
-              setState(() {
-                _projectArea = double.tryParse(val) ?? 0.0;
-              });
-            },
+            readOnly: widget.lockEstimateDetails,
+            onChanged: widget.lockEstimateDetails
+                ? null
+                : (val) {
+                    setState(() {
+                      _projectArea = double.tryParse(val) ?? 0.0;
+                    });
+                  },
             keyboardType: TextInputType.number,
           ),
           const SizedBox(height: 14),
-          _buildInputLabel('Budget Preference — optional:'),
-          _buildDropdownField(),
+          _buildInputLabel(
+            widget.lockEstimateDetails &&
+                    (widget.aiBudget?.trim().isNotEmpty ?? false)
+                ? 'Budget Preference:'
+                : 'Budget Preference — optional:',
+          ),
+          _buildDropdownField(
+            readOnly: widget.lockEstimateDetails &&
+                (widget.aiBudget?.trim().isNotEmpty ?? false),
+          ),
           const SizedBox(height: 14),
           _buildInputLabel('Remarks for suppliers — optional:'),
           _buildTextField(
@@ -946,20 +971,31 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
     ValueChanged<String>? onChanged,
     TextInputType? keyboardType,
     int maxLines = 1,
+    bool readOnly = false,
   }) {
     return Container(
       constraints: BoxConstraints(minHeight: maxLines > 1 ? 88 : 48),
       decoration: BoxDecoration(
-        color: Colors.transparent,
+        color: readOnly
+            ? const Color(0xFFEDE4D4).withValues(alpha: 0.08)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFEDE4D4), width: 1),
+        border: Border.all(
+          color: const Color(0xFFEDE4D4).withValues(alpha: readOnly ? 0.45 : 1),
+          width: 1,
+        ),
       ),
       child: TextField(
         controller: controller,
         onChanged: onChanged,
+        readOnly: readOnly,
+        enableInteractiveSelection: !readOnly,
         keyboardType: keyboardType,
         maxLines: maxLines,
-        style: GoogleFonts.poppins(color: Colors.white, fontSize: 14),
+        style: GoogleFonts.poppins(
+          color: Colors.white.withValues(alpha: readOnly ? 0.85 : 1),
+          fontSize: 14,
+        ),
         decoration: InputDecoration(
           contentPadding: EdgeInsets.symmetric(
             horizontal: 16,
@@ -976,49 +1012,68 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
     );
   }
 
-  Widget _buildDropdownField() {
+  Widget _buildDropdownField({bool readOnly = false}) {
     return Container(
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.transparent,
+        color: readOnly
+            ? const Color(0xFFEDE4D4).withValues(alpha: 0.08)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFEDE4D4), width: 1),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _selectedBudget,
-          isExpanded: true,
-          dropdownColor: const Color(0xFF2C3E50),
-          icon: const Icon(
-            Icons.keyboard_arrow_down_rounded,
-            color: Colors.white,
-          ),
-          hint: Text(
-            'Select budget range',
-            style: GoogleFonts.poppins(
-              color: const Color(0xFFEDE4D4).withAlpha(153),
-              fontSize: 14,
-            ),
-          ),
-          items: ['Low Budget', 'Mid Budget', 'High Budget'].map((
-            String value,
-          ) {
-            return DropdownMenuItem<String>(
-              value: value,
-              child: Text(
-                value,
-                style: GoogleFonts.poppins(color: Colors.white, fontSize: 14),
-              ),
-            );
-          }).toList(),
-          onChanged: (newValue) {
-            setState(() {
-              _selectedBudget = newValue;
-            });
-          },
+        border: Border.all(
+          color: const Color(0xFFEDE4D4).withValues(alpha: readOnly ? 0.45 : 1),
+          width: 1,
         ),
       ),
+      child: readOnly
+          ? Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                _selectedBudget ?? 'Not set',
+                style: GoogleFonts.poppins(
+                  color: Colors.white.withValues(alpha: 0.85),
+                  fontSize: 14,
+                ),
+              ),
+            )
+          : DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _selectedBudget,
+                isExpanded: true,
+                dropdownColor: const Color(0xFF2C3E50),
+                icon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Colors.white,
+                ),
+                hint: Text(
+                  'Select budget range',
+                  style: GoogleFonts.poppins(
+                    color: const Color(0xFFEDE4D4).withAlpha(153),
+                    fontSize: 14,
+                  ),
+                ),
+                items: ['Low Budget', 'Mid Budget', 'High Budget'].map((
+                  String value,
+                ) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(
+                      value,
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 14,
+                      ),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (newValue) {
+                  setState(() {
+                    _selectedBudget = newValue;
+                  });
+                },
+              ),
+            ),
     );
   }
 

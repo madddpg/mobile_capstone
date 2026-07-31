@@ -18,6 +18,14 @@ setGlobalOptions({
 
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 
+const {
+  ICONSTRUCT_SYSTEM_SCOPE,
+  resolveGeminiKey,
+  callGeminiJson,
+  callOpenAiJson,
+  runMaterialConsult,
+} = require("./src/services/iconstructAi");
+
 const { app: apiApp } = require("./api");
 
 // Deploy as an Express-wrapped Cloud Function
@@ -531,6 +539,24 @@ exports.onQuotationSubmitted = onDocumentCreated("projectPosts/{postId}/quotatio
   }
 });
 
+exports.consultAIMaterials = onCall(
+  {
+    secrets: [GEMINI_API_KEY],
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "You must be signed in to use the iConstruct AI consultant."
+      );
+    }
+    return runMaterialConsult({
+      ...(request.data || {}),
+      geminiSecret: GEMINI_API_KEY,
+    });
+  }
+);
+
 exports.generateAIBOM = onCall(
   {
     secrets: [GEMINI_API_KEY],
@@ -538,6 +564,14 @@ exports.generateAIBOM = onCall(
   async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "You must be signed in to use the AI Planner.");
+  }
+
+  // Backward-compatible consult path (deployed name already exists in production)
+  if ((request.data || {}).mode === "consult") {
+    return runMaterialConsult({
+      ...(request.data || {}),
+      geminiSecret: GEMINI_API_KEY,
+    });
   }
 
   const {
@@ -548,40 +582,49 @@ exports.generateAIBOM = onCall(
     additionalNotes = ""
   } = request.data || {};
 
-  const prompt = `You are an expert Philippine construction material estimator for builders.
-Create a Bill of Materials (BOM) for a ${projectType} project.
+  const userPrompt = `Create an essential Bill of Materials (BOM) for this iConstruct estimate ONLY.
+Project type: ${projectType}
 Style: ${style}
 Area: ${areaSqm} square meters
 Budget Level: ${budgetLevel}
-Additional Requirements: ${additionalNotes}
+Additional Requirements:
+${additionalNotes}
+
+Return JSON:
+{
+  "materials": [
+    {
+      "name": "specific material name",
+      "quantity": 1,
+      "unit": "pcs|bags|sqm|L|gal|set",
+      "category": "string"
+    }
+  ]
+}
 
 Rules:
-- List ONLY basic essential materials a hardware store sells (e.g. "Ceramic floor tiles", "Tile adhesive", "Tile grout", "Toilet bowl set", "PVC pipe", "Interior latex paint").
-- Do NOT use vague labels like "essential materials", "install supplies", "finishing materials", or category descriptions.
-- Each name must be a specific product type a builder can buy and canvass.
-- Keep the list to essentials only (about 6–12 items).
-- Quantities must be realistic for ${areaSqm} sqm.
+- Prefer materials the builder already selected when listed in Additional Requirements
+- Only basic hardware-store essentials for planning / canvassing
+- 6–12 items max
+- No vague labels
+- No labor, scheduling, or construction management items`;
 
-Return the response strictly as a JSON array of objects.
-Do not include markdown blocks, backticks, or any conversational text.
-Each object must match:
-{
-  "name": "String (specific material name)",
-  "quantity": Number,
-  "unit": "String (pcs, bags, sqm, L, gal, set)",
-  "category": "String"
-}`;
-
-  let geminiKey = null;
-  try {
-    geminiKey = GEMINI_API_KEY.value();
-  } catch (_) {
-    geminiKey = process.env.GEMINI_API_KEY || null;
-  }
-
+  const geminiKey = resolveGeminiKey(GEMINI_API_KEY);
   if (geminiKey) {
     try {
-      const materials = await generateBomWithGemini(String(geminiKey).trim(), prompt);
+      const parsed = await callGeminiJson(geminiKey, {
+        system: ICONSTRUCT_SYSTEM_SCOPE,
+        user: userPrompt,
+        temperature: 0.2,
+      });
+      const materials = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsed?.materials)
+          ? parsed.materials
+          : null;
+      if (!materials) {
+        throw new Error("Expected materials array");
+      }
       return { success: true, materials, provider: "gemini" };
     } catch (error) {
       logger.error("Gemini BOM failed, trying OpenAI fallback:", error);
@@ -593,7 +636,19 @@ Each object must match:
   const openaiKey = process.env.OPENAI_API_KEY;
   if (openaiKey && String(openaiKey).trim()) {
     try {
-      const materials = await generateBomWithOpenAI(String(openaiKey).trim(), prompt);
+      const parsed = await callOpenAiJson(String(openaiKey).trim(), {
+        system: ICONSTRUCT_SYSTEM_SCOPE,
+        user: userPrompt,
+        temperature: 0.2,
+      });
+      const materials = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsed?.materials)
+          ? parsed.materials
+          : null;
+      if (!materials) {
+        throw new Error("Expected materials array");
+      }
       return { success: true, materials, provider: "openai" };
     } catch (error) {
       logger.error("OpenAI BOM failed:", error);
@@ -606,64 +661,3 @@ Each object must match:
   );
   }
 );
-
-async function generateBomWithGemini(apiKey, prompt) {
-  const { GoogleGenAI } = require("@google/genai");
-  const ai = new GoogleGenAI({ apiKey });
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      temperature: 0.2,
-    },
-  });
-  return parseMaterialsJson(response.text);
-}
-
-async function generateBomWithOpenAI(apiKey, prompt) {
-  const axios = require("axios");
-  const response = await axios.post(
-    "https://api.openai.com/v1/chat/completions",
-    {
-      model: "gpt-4o-mini",
-      temperature: 0.2,
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content:
-            'Return JSON only as {"materials":[...]} where each item has name, quantity, unit, category.',
-        },
-        { role: "user", content: prompt },
-      ],
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      timeout: 60000,
-    }
-  );
-
-  const text = response.data?.choices?.[0]?.message?.content || "";
-  const parsed = JSON.parse(text);
-  const materials = Array.isArray(parsed) ? parsed : parsed.materials;
-  if (!Array.isArray(materials)) {
-    throw new Error("OpenAI returned unexpected JSON shape");
-  }
-  return materials;
-}
-
-function parseMaterialsJson(text) {
-  try {
-    const parsed = JSON.parse(text);
-    if (Array.isArray(parsed)) return parsed;
-    if (Array.isArray(parsed?.materials)) return parsed.materials;
-    throw new Error("Expected a materials array");
-  } catch (parseError) {
-    logger.error("Failed to parse AI JSON output", { text, parseError });
-    throw new HttpsError("internal", "AI returned invalid data format.");
-  }
-}

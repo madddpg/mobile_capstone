@@ -480,7 +480,7 @@ exports.onProjectPostCreated = onDocumentCreated("projectPosts/{postId}", async 
   }
 });
 
-/// Planning/canvassing lifecycle statuses stored on users/{uid}/saved_projects.
+// Planning/canvassing lifecycle statuses stored on users/{uid}/saved_projects.
 const SAVED_PROJECT_STAGES = [
   "draft",
   "planning",
@@ -489,6 +489,9 @@ const SAVED_PROJECT_STAGES = [
   "supplier selected",
   "completed",
 ];
+
+const STAGE_RECEIVING_QUOTATIONS = 3;
+const STAGE_SUPPLIER_SELECTED = 4;
 
 const LEGACY_STAGE_ALIASES = {
   "": 0,
@@ -561,7 +564,11 @@ async function syncPostQuotationState(postId) {
   await postRef.update(updates);
 
   if (!isClosed && quotationCount > 0) {
-    await advanceSavedProject(post.userId, post.projectId, 3);
+    await advanceSavedProject(
+      post.userId,
+      post.projectId,
+      STAGE_RECEIVING_QUOTATIONS
+    );
   }
 
   return post;
@@ -652,7 +659,7 @@ exports.onProjectPostUpdated = onDocumentUpdated("projectPosts/{postId}", async 
 
   try {
     if (after.selectedQuotationId && !(before && before.selectedQuotationId)) {
-      await advanceSavedProject(userId, projectId, 4, {
+      await advanceSavedProject(userId, projectId, STAGE_SUPPLIER_SELECTED, {
         selectedShopName: after.selectedShopName || null,
         supplierSelectedAt: Timestamp.now(),
       });
@@ -661,7 +668,7 @@ exports.onProjectPostUpdated = onDocumentUpdated("projectPosts/{postId}", async 
 
     const quotationCount = Number(after.quotationCount || 0);
     if (!after.selectedQuotationId && quotationCount > 0) {
-      await advanceSavedProject(userId, projectId, 3);
+      await advanceSavedProject(userId, projectId, STAGE_RECEIVING_QUOTATIONS);
     }
   } catch (error) {
     logger.error("Error mirroring project post status:", error);

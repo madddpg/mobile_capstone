@@ -7,6 +7,7 @@ import 'package:iconstruct/features/auth/presentation/screens/material_estimator
 import 'package:iconstruct/core/state/active_project_state.dart';
 import 'package:iconstruct/core/utils/hammer_nav.dart';
 import 'package:iconstruct/features/bidding/screens/project_bids_screen.dart';
+import 'package:iconstruct/features/project_creation/data/project_lifecycle.dart';
 
 // --- Data Model ---
 class ProjectModel {
@@ -379,40 +380,36 @@ class ProjectCard extends StatelessWidget {
   }
 
   Color _getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'ready':
-      case 'planning':
+    switch (ProjectLifecycle.stageIndex(status)) {
+      case ProjectLifecycle.stagePlanning:
         return Colors.blue.shade100;
-      case 'posted':
-      case 'waiting for quotations':
-      case 'receiving quotations':
-        return Colors.green.shade100;
-      case 'offer_accepted':
-      case 'supplier selected':
+      case ProjectLifecycle.stageWaiting:
+        return const Color(0xFFFEF3C7);
+      case ProjectLifecycle.stageReceiving:
+        return const Color(0xFFFFEDD5);
+      case ProjectLifecycle.stageSupplierSelected:
         return const Color(0xFFD1FAE5);
-      case 'completed':
+      case ProjectLifecycle.stageCompleted:
         return const Color(0xFFBBF7D0);
-      case 'draft':
+      case ProjectLifecycle.stageDraft:
       default:
         return Colors.grey.shade300;
     }
   }
 
   Color _getStatusTextColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'ready':
-      case 'planning':
+    switch (ProjectLifecycle.stageIndex(status)) {
+      case ProjectLifecycle.stagePlanning:
         return Colors.blue.shade900;
-      case 'posted':
-      case 'waiting for quotations':
-      case 'receiving quotations':
-        return Colors.green.shade900;
-      case 'offer_accepted':
-      case 'supplier selected':
+      case ProjectLifecycle.stageWaiting:
+        return const Color(0xFF92400E);
+      case ProjectLifecycle.stageReceiving:
+        return const Color(0xFF9A3412);
+      case ProjectLifecycle.stageSupplierSelected:
         return const Color(0xFF065F46);
-      case 'completed':
+      case ProjectLifecycle.stageCompleted:
         return const Color(0xFF166534);
-      case 'draft':
+      case ProjectLifecycle.stageDraft:
       default:
         return Colors.grey.shade800;
     }
@@ -434,7 +431,9 @@ class ProjectCard extends StatelessWidget {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
-    if (project.status.toLowerCase() == 'posted' || project.postId != null) {
+    if (project.postId != null ||
+        ProjectLifecycle.stageIndex(project.status) >=
+            ProjectLifecycle.stageWaiting) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('This project is already posted for bidding.'),
@@ -481,7 +480,7 @@ class ProjectCard extends StatelessWidget {
       batch.set(newPostRef, projectPostData);
 
       batch.update(savedProjectRef, {
-        'status': 'posted',
+        'status': ProjectLifecycle.waitingForQuotations,
         'postId': newPostRef.id,
         'postedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -527,7 +526,7 @@ class ProjectCard extends StatelessWidget {
             ),
           ),
           content: Text(
-            project.status.toLowerCase() == 'posted'
+            project.postId != null
                 ? 'This project is already posted for bidding. Deleting this will only remove your saved local copy, not the active bidding board post. Proceed?'
                 : 'Are you sure you want to permanently delete this saved project?',
             style: const TextStyle(color: Color(0xFF5A6E7E)),
@@ -758,7 +757,7 @@ class ProjectCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    project.status.toUpperCase(),
+                    ProjectLifecycle.label(project.status).toUpperCase(),
                     style: TextStyle(
                       color: _getStatusTextColor(project.status),
                       fontSize: 10,
@@ -784,7 +783,8 @@ class ProjectCard extends StatelessWidget {
             const SizedBox(height: 16),
 
             if (project.postId != null &&
-                project.status.toLowerCase() == 'posted')
+                ProjectLifecycle.stageIndex(project.status) >=
+                    ProjectLifecycle.stageWaiting)
               StreamBuilder<DocumentSnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('projectPosts')

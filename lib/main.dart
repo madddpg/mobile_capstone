@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:provider/provider.dart';
 import 'package:iconstruct/core/state/user_state/user_provider.dart';
 import 'firebase_options.dart';
@@ -10,14 +12,13 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // Point to the local backend during development on Android
-  // if (kDebugMode) {
-  //   try {
-  //     FirebaseFunctions.instance.useFunctionsEmulator('192.168.1.7', 5001);
-  //   } catch (e) {
-  //     debugPrint('Failed to initialize Firebase Emulator: $e');
-  //   }
-  // }
+  // Avoid Firestore permission-denied from placeholder App Check tokens in debug.
+  await FirebaseAppCheck.instance.activate(
+    androidProvider:
+        kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
+    appleProvider:
+        kDebugMode ? AppleProvider.debug : AppleProvider.deviceCheck,
+  );
 
   runApp(
     MultiProvider(

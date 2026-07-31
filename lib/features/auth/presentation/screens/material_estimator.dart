@@ -11,6 +11,7 @@ import 'package:iconstruct/features/auth/presentation/screens/profile_screen.dar
 import 'package:iconstruct/core/utils/hammer_nav.dart';
 import 'package:iconstruct/core/widgets/user_avatar.dart';
 import 'package:iconstruct/features/bidding/screens/posted_project_details_screen.dart';
+import 'package:iconstruct/features/project_creation/data/project_lifecycle.dart';
 
 class MaterialEstimatorScreen extends StatefulWidget {
   final String projectName;
@@ -743,7 +744,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         'materials': materialsList,
         'materialsCount': materialsList.length,
         'totalAreaSqm': _projectArea,
-        'status': widget.existingProject?.status ?? 'draft',
+        'status': widget.existingProject?.status ?? ProjectLifecycle.draft,
         'updatedAt': FieldValue.serverTimestamp(),
         if (_remarksController.text.trim().isNotEmpty)
           'projectNotes': _remarksController.text.trim(),
@@ -907,7 +908,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         'materials': materialsList,
         'materialsCount': materialsList.length,
         'totalAreaSqm': _projectArea,
-        'status': 'posted',
+        'status': ProjectLifecycle.waitingForQuotations,
         'postId': newPostRef.id,
         'postedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),

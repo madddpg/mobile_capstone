@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -318,11 +319,28 @@ class EmailService {
       debugPrint('Firebase Auth UID: $uid');
       debugPrint('Auth Email: ${credential.user?.email}');
 
+      // Ensure the Auth ID token is ready before any Firestore call.
+      await credential.user!.getIdToken(true);
+
       // 2. Fetch profile ONLY with user's UID
       final userDocRef = FirebaseFirestore.instance
           .collection('users')
           .doc(uid);
-      final userDoc = await userDocRef.get();
+
+      DocumentSnapshot<Map<String, dynamic>> userDoc;
+      try {
+        userDoc = await userDocRef.get(const GetOptions(source: Source.server));
+      } on FirebaseException catch (e) {
+        if (e.code == 'permission-denied') {
+          throw const EmailApiException(
+            'Login blocked by Firestore permissions. '
+            'In Firebase Console → App Check, set Cloud Firestore to Monitor '
+            '(not Enforced) while developing, or install an App Check provider. '
+            'Also confirm firestore.rules allow users/{uid} for signed-in owners.',
+          );
+        }
+        rethrow;
+      }
 
       debugPrint('Fetched Firestore doc ID: ${userDocRef.id}');
       debugPrint('Firestore doc exists: ${userDoc.exists}');

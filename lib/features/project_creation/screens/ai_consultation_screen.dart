@@ -695,7 +695,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
         endDrawer: _TemplatesDrawer(
           renovationType: widget.projectName,
           templates: _templates.isEmpty
-              ? RenovationTemplatesCatalog.forType(widget.projectName)
+              ? RenovationTemplatesCatalog.threeForType(widget.projectName)
               : _templates,
           onSelect: _useTemplateReference,
         ),

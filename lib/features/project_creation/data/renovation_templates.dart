@@ -209,6 +209,9 @@ class RenovationTemplate {
 class RenovationTemplatesCatalog {
   RenovationTemplatesCatalog._();
 
+  /// The three reference styles offered for every renovation type.
+  static const List<String> styles = ['modern', 'minimalist', 'traditional'];
+
   static String normalizeType(String renovationType) {
     return renovationType
         .replaceAll('\n', ' ')
@@ -216,8 +219,28 @@ class RenovationTemplatesCatalog {
         .trim();
   }
 
+  /// Maps any free-form style label onto one of [styles].
+  static String styleKey(String style) {
+    final value = style.toLowerCase().trim();
+    if (value.contains('minimal') || value.contains('basic')) {
+      return 'minimalist';
+    }
+    if (value.contains('tradition') ||
+        value.contains('classic') ||
+        value.contains('standard')) {
+      return 'traditional';
+    }
+    return 'modern';
+  }
+
+  static String styleLabel(String style) {
+    final key = styleKey(style);
+    return '${key[0].toUpperCase()}${key.substring(1)}';
+  }
+
   static List<RenovationTemplate> forType(String renovationType) {
-    final key = normalizeType(renovationType).toLowerCase();
+    final label = normalizeType(renovationType);
+    final key = label.toLowerCase();
     final matched = allTemplates
         .where((t) => t.renovationType.toLowerCase() == key)
         .toList()
@@ -235,9 +258,163 @@ class RenovationTemplatesCatalog {
       ..sort((a, b) => a.order.compareTo(b.order));
     if (loose.isNotEmpty) return loose;
 
-    return allTemplates
-        .where((t) => t.renovationType == 'Kitchen Renovation')
-        .toList();
+    return _generalFor(label.isEmpty ? 'Renovation' : label);
+  }
+
+  /// Exactly three templates for [renovationType] — one per entry in [styles].
+  static List<RenovationTemplate> threeForType(String renovationType) {
+    return threeFrom(forType(renovationType), renovationType);
+  }
+
+  /// Normalizes [candidates] into one template per style, in [styles] order.
+  ///
+  /// Earlier candidates win, so callers can pass remote templates ahead of the
+  /// built-in ones. Missing styles are derived from whatever is available so the
+  /// picker always offers the same three choices.
+  static List<RenovationTemplate> threeFrom(
+    List<RenovationTemplate> candidates,
+    String renovationType,
+  ) {
+    final label = normalizeType(renovationType);
+    final byStyle = <String, RenovationTemplate>{};
+    final spares = <RenovationTemplate>[];
+
+    for (final template in candidates) {
+      if (template.items.isEmpty) continue;
+      final key = styleKey(template.style);
+      if (byStyle.containsKey(key)) {
+        spares.add(template);
+      } else {
+        byStyle[key] = template;
+      }
+    }
+
+    final pool = byStyle.values.toList()..addAll(spares);
+    if (pool.isEmpty) {
+      pool.addAll(_generalFor(label.isEmpty ? 'Renovation' : label));
+      for (final template in pool) {
+        byStyle.putIfAbsent(styleKey(template.style), () => template);
+      }
+    }
+
+    final result = <RenovationTemplate>[];
+    for (var i = 0; i < styles.length; i++) {
+      final style = styles[i];
+      final existing = byStyle[style];
+      final base =
+          existing ?? (spares.isNotEmpty ? spares.first : pool.first);
+      if (existing == null) {
+        spares.remove(base);
+      }
+      result.add(_asStyle(base, style, label, i + 1));
+    }
+    return result;
+  }
+
+  static RenovationTemplate _asStyle(
+    RenovationTemplate base,
+    String style,
+    String renovationType,
+    int order,
+  ) {
+    final type = renovationType.isEmpty ? base.renovationType : renovationType;
+    if (styleKey(base.style) == style &&
+        base.renovationType == type &&
+        base.order == order) {
+      return base;
+    }
+
+    final renamed = styleKey(base.style) != style;
+    return RenovationTemplate(
+      id: renamed ? '${_idPrefix(type)}_$style' : base.id,
+      renovationType: type,
+      style: style,
+      name: renamed ? '${styleLabel(style)} ${_shortType(type)}' : base.name,
+      description: renamed
+          ? '${styleLabel(style)} take on the essentials — reference only.'
+          : base.description,
+      items: base.items,
+      order: order,
+      imageAsset: renamed ? null : base.imageAsset,
+      imageUrl: renamed ? null : base.imageUrl,
+    );
+  }
+
+  static String _idPrefix(String renovationType) {
+    return renovationType
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
+  }
+
+  /// "Kitchen Renovation" → "Kitchen", "Roof Repair" → "Roof".
+  static String _shortType(String renovationType) {
+    final trimmed = renovationType
+        .replaceAll(
+          RegExp(r'\b(renovation|repair|installation)\b', caseSensitive: false),
+          '',
+        )
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    return trimmed.isEmpty ? renovationType : trimmed;
+  }
+
+  /// Last-resort package for renovation types without a curated template.
+  static List<RenovationTemplate> _generalFor(String renovationType) {
+    const items = [
+      RenovationTemplateItem(
+        name: 'Floor Tiles',
+        category: 'Floor Surface',
+        unit: 'sqm',
+        defaultQuantity: 1,
+        qtyPerSqm: 1.0,
+        isSwappable: true,
+        alternatives: _tileAlts,
+      ),
+      RenovationTemplateItem(
+        name: 'Portland Cement',
+        category: 'Masonry',
+        unit: 'bags',
+        defaultQuantity: 1,
+        qtyPerSqm: 0.5,
+      ),
+      RenovationTemplateItem(
+        name: 'Washed Sand',
+        category: 'Masonry',
+        unit: 'cu.m',
+        defaultQuantity: 1,
+        qtyPerSqm: 0.05,
+      ),
+      RenovationTemplateItem(
+        name: 'Interior Paint',
+        category: 'Wall Finishing',
+        unit: 'gal',
+        defaultQuantity: 1,
+        qtyPerSqm: 0.1,
+      ),
+      RenovationTemplateItem(
+        name: 'Assorted Fasteners',
+        category: 'Installation',
+        unit: 'box',
+        defaultQuantity: 1,
+      ),
+    ];
+
+    final prefix = _idPrefix(renovationType);
+    final short = _shortType(renovationType);
+
+    return [
+      for (var i = 0; i < styles.length; i++)
+        RenovationTemplate(
+          id: '${prefix}_${styles[i]}',
+          renovationType: renovationType,
+          style: styles[i],
+          name: '${styleLabel(styles[i])} $short',
+          description: 'Essential materials package — reference only.',
+          items: items,
+          order: i + 1,
+        ),
+    ];
   }
 
   static List<RenovationTemplate> get allTemplates => [

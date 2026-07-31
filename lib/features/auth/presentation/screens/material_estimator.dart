@@ -11,7 +11,9 @@ import 'package:iconstruct/features/auth/presentation/screens/profile_screen.dar
 import 'package:iconstruct/core/utils/hammer_nav.dart';
 import 'package:iconstruct/core/widgets/user_avatar.dart';
 import 'package:iconstruct/features/bidding/screens/posted_project_details_screen.dart';
+import 'package:iconstruct/features/project_creation/data/bom_export.dart';
 import 'package:iconstruct/features/project_creation/data/project_lifecycle.dart';
+import 'package:iconstruct/features/project_creation/widgets/bom_share_sheet.dart';
 
 class MaterialEstimatorScreen extends StatefulWidget {
   final String projectName;
@@ -553,6 +555,29 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
           const SizedBox(height: 10),
           SizedBox(
             width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _materialCount == 0 ? null : _shareMaterialList,
+              icon: const Icon(Icons.ios_share_rounded, size: 18),
+              label: Text(
+                'Share / Print Material List',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFEDE4D4),
+                side: const BorderSide(color: Color(0xFFEDE4D4)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
             child: OutlinedButton(
               onPressed: _materialCount == 0 ? null : _saveProject,
               style: OutlinedButton.styleFrom(
@@ -697,35 +722,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
     }
 
     try {
-      final materialsList = [
-        ..._localMaterials.map(
-          (name) => {
-            'name': name,
-            'quantity': 0,
-            'unit': '',
-            'size': null,
-            'category': 'Material',
-          },
-        ),
-        ..._localTiles.map(
-          (t) => {
-            'name': t.tileTypeName,
-            'quantity': t.quantity,
-            'unit': 'Qty.',
-            'size': t.tileSizeName,
-            'category': 'Tiles',
-          },
-        ),
-        ..._localPlumbing.map(
-          (p) => {
-            'name': p.materialName,
-            'quantity': p.quantity,
-            'unit': p.unit,
-            'size': p.size,
-            'category': p.categoryTitle,
-          },
-        ),
-      ];
+      final materialsList = _buildMaterialMaps();
 
       // Convert selectedBudget strings to expected costLevel logic
       String costLevel = 'medium';
@@ -789,27 +786,9 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
     }
   }
 
-  Future<void> _postProjectForBidding() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please log in to post projects')),
-        );
-      }
-      return;
-    }
-
-    if (_projectName.trim().isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter an Estimate Name')),
-        );
-      }
-      return;
-    }
-
-    final materialsList = [
+  /// Material rows shared by saving, posting, and the shareable canvass sheet.
+  List<Map<String, dynamic>> _buildMaterialMaps() {
+    return [
       ..._localMaterials.map(
         (name) => {
           'name': name,
@@ -838,6 +817,47 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         },
       ),
     ];
+  }
+
+  Future<void> _shareMaterialList() async {
+    await showBomShareSheet(
+      context,
+      BomExportData.fromMaterials(
+        estimateName: _projectName.trim().isEmpty
+            ? _projectType
+            : _projectName.trim(),
+        renovationType: _projectType,
+        areaSqm: _projectArea,
+        budgetPreference: _selectedBudget,
+        notes: _remarksController.text.trim().isEmpty
+            ? null
+            : _remarksController.text.trim(),
+        materials: _buildMaterialMaps(),
+      ),
+    );
+  }
+
+  Future<void> _postProjectForBidding() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please log in to post projects')),
+        );
+      }
+      return;
+    }
+
+    if (_projectName.trim().isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter an Estimate Name')),
+        );
+      }
+      return;
+    }
+
+    final materialsList = _buildMaterialMaps();
 
     if (materialsList.isEmpty) {
       if (mounted) {

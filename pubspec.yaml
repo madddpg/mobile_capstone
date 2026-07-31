@@ -47,6 +47,10 @@ dependencies:
   flutter_launcher_icons: ^0.14.4
   firebase_messaging: ^15.2.10
   firebase_app_check: ^0.3.2+10
+  pdf: ^3.13.0
+  printing: ^5.15.0
+  share_plus: ^13.3.0
+  path_provider: ^2.1.6
 
 dev_dependencies:
   flutter_test:

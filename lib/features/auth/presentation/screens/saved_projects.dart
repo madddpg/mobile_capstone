@@ -7,7 +7,9 @@ import 'package:iconstruct/features/auth/presentation/screens/material_estimator
 import 'package:iconstruct/core/state/active_project_state.dart';
 import 'package:iconstruct/core/utils/hammer_nav.dart';
 import 'package:iconstruct/features/bidding/screens/project_bids_screen.dart';
+import 'package:iconstruct/features/project_creation/data/bom_export.dart';
 import 'package:iconstruct/features/project_creation/data/project_lifecycle.dart';
+import 'package:iconstruct/features/project_creation/widgets/bom_share_sheet.dart';
 
 // --- Data Model ---
 class ProjectModel {
@@ -506,6 +508,19 @@ class ProjectCard extends StatelessWidget {
     }
   }
 
+  void _handleShareProject(BuildContext context) {
+    showBomShareSheet(
+      context,
+      BomExportData.fromMaterials(
+        estimateName: project.projectName,
+        renovationType: project.projectType,
+        areaSqm: project.projectArea,
+        budgetPreference: project.costLevel,
+        materials: project.materials,
+      ),
+    );
+  }
+
   void _handleDeleteProject(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
@@ -694,6 +709,16 @@ class ProjectCard extends StatelessWidget {
                         ),
                       ),
                       const PopupMenuItem(
+                        value: 'share',
+                        child: Row(
+                          children: [
+                            Icon(Icons.ios_share_rounded, size: 20),
+                            SizedBox(width: 10),
+                            Text('Share list'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
                         value: 'delete',
                         child: Row(
                           children: [
@@ -721,6 +746,8 @@ class ProjectCard extends StatelessWidget {
                         );
                       } else if (value == 'post') {
                         _handlePostProject(context);
+                      } else if (value == 'share') {
+                        _handleShareProject(context);
                       } else if (value == 'delete') {
                         _handleDeleteProject(context);
                       }

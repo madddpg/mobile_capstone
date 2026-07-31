@@ -1,7 +1,7 @@
 const crypto = require("crypto");
 const logger = require("firebase-functions/logger");
 const { onCall, HttpsError, onRequest } = require("firebase-functions/v2/https");
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { defineSecret } = require("firebase-functions/params");
 const { Timestamp } = require("firebase-admin/firestore");
@@ -480,6 +480,93 @@ exports.onProjectPostCreated = onDocumentCreated("projectPosts/{postId}", async 
   }
 });
 
+/// Planning/canvassing lifecycle statuses stored on users/{uid}/saved_projects.
+const SAVED_PROJECT_STAGES = [
+  "draft",
+  "planning",
+  "waiting for quotations",
+  "receiving quotations",
+  "supplier selected",
+  "completed",
+];
+
+const LEGACY_STAGE_ALIASES = {
+  "": 0,
+  ready: 1,
+  posted: 2,
+  open: 2,
+  has_quotations: 3,
+  offer_accepted: 4,
+  awarded: 4,
+};
+
+function savedProjectStage(status) {
+  const value = String(status || "").toLowerCase().trim();
+  const index = SAVED_PROJECT_STAGES.indexOf(value);
+  if (index >= 0) return index;
+  const alias = LEGACY_STAGE_ALIASES[value];
+  return typeof alias === "number" ? alias : 0;
+}
+
+/**
+ * Moves a builder's saved estimate forward, never backwards, and never past a
+ * cycle the builder already marked complete.
+ */
+async function advanceSavedProject(userId, projectId, targetStage, extra = {}) {
+  if (!userId || !projectId) return;
+
+  const savedRef = db
+    .collection("users")
+    .doc(userId)
+    .collection("saved_projects")
+    .doc(projectId);
+
+  const savedSnap = await savedRef.get();
+  if (!savedSnap.exists) return;
+
+  const currentStage = savedProjectStage(savedSnap.data().status);
+  if (currentStage >= SAVED_PROJECT_STAGES.length - 1) return;
+  if (currentStage >= targetStage) return;
+
+  await savedRef.update({
+    status: SAVED_PROJECT_STAGES[targetStage],
+    updatedAt: Timestamp.now(),
+    ...extra,
+  });
+}
+
+/**
+ * Recounts submitted quotations so the builder's tracking view and the bidding
+ * board agree, even when a shop client forgets to bump the counter.
+ */
+async function syncPostQuotationState(postId) {
+  const postRef = db.collection("projectPosts").doc(postId);
+  const postSnap = await postRef.get();
+  if (!postSnap.exists) return null;
+
+  const post = postSnap.data() || {};
+  const quotations = await postRef.collection("quotations").get();
+  const quotationCount = quotations.size;
+
+  const updates = { quotationCount, updatedAt: Timestamp.now() };
+  const closedStatuses = ["closed", "cancelled", "awarded", "offer_accepted"];
+  const isClosed =
+    post.selectedQuotationId != null ||
+    closedStatuses.includes(String(post.status || "").toLowerCase());
+
+  if (!isClosed && quotationCount > 0 && post.status !== "has_quotations") {
+    updates.status = "has_quotations";
+  }
+
+  await postRef.update(updates);
+
+  if (!isClosed && quotationCount > 0) {
+    await advanceSavedProject(post.userId, post.projectId, 3);
+  }
+
+  return post;
+}
+
 exports.onQuotationSubmitted = onDocumentCreated("projectPosts/{postId}/quotations/{shopId}", async (event) => {
   const snapshot = event.data;
   if (!snapshot) return;
@@ -487,7 +574,17 @@ exports.onQuotationSubmitted = onDocumentCreated("projectPosts/{postId}/quotatio
   const quotation = snapshot.data();
   const postId = event.params.postId;
   const shopId = event.params.shopId;
-  const userId = quotation.userId;
+
+  let post = null;
+  try {
+    // Auto-advance the builder's estimate to "Receiving Quotations".
+    post = await syncPostQuotationState(postId);
+  } catch (error) {
+    logger.error("Error syncing quotation state:", error);
+  }
+
+  const userId = quotation.userId || (post && post.userId);
+  if (!userId) return null;
 
   try {
     const userDoc = await db.collection("users").doc(userId).get();
@@ -537,6 +634,40 @@ exports.onQuotationSubmitted = onDocumentCreated("projectPosts/{postId}/quotatio
   } catch (error) {
     logger.error("Error processing new quotation:", error);
   }
+});
+
+/**
+ * Mirrors bidding progress onto the builder's saved estimate so Project
+ * Tracking reflects "Receiving Quotations" and "Supplier Selected" without the
+ * app having to write it.
+ */
+exports.onProjectPostUpdated = onDocumentUpdated("projectPosts/{postId}", async (event) => {
+  const before = event.data?.before?.data();
+  const after = event.data?.after?.data();
+  if (!after) return null;
+
+  const userId = after.userId;
+  const projectId = after.projectId;
+  if (!userId || !projectId) return null;
+
+  try {
+    if (after.selectedQuotationId && !(before && before.selectedQuotationId)) {
+      await advanceSavedProject(userId, projectId, 4, {
+        selectedShopName: after.selectedShopName || null,
+        supplierSelectedAt: Timestamp.now(),
+      });
+      return null;
+    }
+
+    const quotationCount = Number(after.quotationCount || 0);
+    if (!after.selectedQuotationId && quotationCount > 0) {
+      await advanceSavedProject(userId, projectId, 3);
+    }
+  } catch (error) {
+    logger.error("Error mirroring project post status:", error);
+  }
+
+  return null;
 });
 
 exports.consultAIMaterials = onCall(

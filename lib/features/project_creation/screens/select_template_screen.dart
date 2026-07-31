@@ -55,7 +55,7 @@ class _SelectTemplateScreenState extends State<SelectTemplateScreen> {
       title: 'Select\nTemplate',
       subtitle: typeLabel,
       instruction:
-          'Choose a pre-defined material package.\nYou can edit quantities or remove items next.',
+          'Three reference styles for $typeLabel.\nQuantities scale from the area you enter next.',
       body: FutureBuilder<List<RenovationTemplate>>(
         future: _future,
         builder: (context, snapshot) {
@@ -72,8 +72,8 @@ class _SelectTemplateScreenState extends State<SelectTemplateScreen> {
             );
           }
 
-          final templates =
-              snapshot.data ?? RenovationTemplatesCatalog.forType(typeLabel);
+          final templates = snapshot.data ??
+              RenovationTemplatesCatalog.threeForType(typeLabel);
 
           if (templates.isEmpty) {
             return Text(
@@ -87,9 +87,21 @@ class _SelectTemplateScreenState extends State<SelectTemplateScreen> {
 
           return ListView.separated(
             padding: const EdgeInsets.only(right: 4, bottom: 8),
-            itemCount: templates.length,
+            itemCount: templates.length + 1,
             separatorBuilder: (_, __) => const SizedBox(height: 14),
             itemBuilder: (context, index) {
+              if (index == templates.length) {
+                return Text(
+                  'Templates are references only — you can swap, edit or remove '
+                  'materials before requesting quotations.',
+                  style: GoogleFonts.poppins(
+                    fontSize: 10.5,
+                    color: const Color(0xFFE0D7C9).withValues(alpha: 0.75),
+                    height: 1.4,
+                  ),
+                );
+              }
+
               final template = templates[index];
               return _GlitchedTemplateTile(
                 template: template,
@@ -136,13 +148,20 @@ class _GlitchedTemplateTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      template.name,
-                      style: GoogleFonts.poppins(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            template.name,
+                            style: GoogleFonts.poppins(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        _StyleBadge(style: template.style),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -221,17 +240,77 @@ class _TemplatePreview extends StatelessWidget {
   }
 
   Widget _fallback() {
-    return Container(
-      color: GlitchedFlowShell.cream.withValues(alpha: 0.12),
-      alignment: Alignment.center,
-      child: Text(
-        template.style.isNotEmpty
-            ? template.style[0].toUpperCase()
-            : 'T',
-        style: GoogleFonts.poppins(
-          fontSize: 22,
-          fontWeight: FontWeight.w700,
+    final key = RenovationTemplatesCatalog.styleKey(template.style);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            _styleAccent(key).withValues(alpha: 0.35),
+            GlitchedFlowShell.navyCard,
+          ],
+        ),
+      ),
+      child: Center(
+        child: Icon(
+          _styleIcon(key),
+          size: 30,
           color: GlitchedFlowShell.cream,
+        ),
+      ),
+    );
+  }
+
+  IconData _styleIcon(String styleKey) {
+    switch (styleKey) {
+      case 'minimalist':
+        return Icons.crop_square_rounded;
+      case 'traditional':
+        return Icons.villa_outlined;
+      case 'modern':
+      default:
+        return Icons.auto_awesome_mosaic_outlined;
+    }
+  }
+}
+
+Color _styleAccent(String styleKey) {
+  switch (styleKey) {
+    case 'minimalist':
+      return const Color(0xFF6EE7B7);
+    case 'traditional':
+      return const Color(0xFFFBBF77);
+    case 'modern':
+    default:
+      return const Color(0xFF8FB2D4);
+  }
+}
+
+class _StyleBadge extends StatelessWidget {
+  final String style;
+
+  const _StyleBadge({required this.style});
+
+  @override
+  Widget build(BuildContext context) {
+    final key = RenovationTemplatesCatalog.styleKey(style);
+    final accent = _styleAccent(key);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: accent.withValues(alpha: 0.6)),
+      ),
+      child: Text(
+        RenovationTemplatesCatalog.styleLabel(key),
+        style: GoogleFonts.poppins(
+          fontSize: 9.5,
+          fontWeight: FontWeight.w700,
+          color: accent,
+          letterSpacing: 0.3,
         ),
       ),
     );

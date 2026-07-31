@@ -8,8 +8,9 @@ class RenovationTemplateService {
   RenovationTemplateService({FirebaseFirestore? firestore})
       : _firestore = firestore ?? FirebaseFirestore.instance;
 
-  /// Loads up to 3 active templates for a renovation type.
-  /// Falls back to the built-in catalog when Firestore is empty/unavailable.
+  /// Loads exactly 3 style templates (Modern / Minimalist / Traditional) for a
+  /// renovation type. Remote templates win per style; the built-in catalog fills
+  /// any style Firestore does not cover.
   Future<List<RenovationTemplate>> fetchTemplatesForType(
     String renovationType,
   ) async {
@@ -23,7 +24,9 @@ class RenovationTemplateService {
           .where('isActive', isEqualTo: true)
           .get();
 
-      if (snap.docs.isEmpty) return local;
+      if (snap.docs.isEmpty) {
+        return RenovationTemplatesCatalog.threeFrom(local, normalized);
+      }
 
       final remote = snap.docs
           .map((doc) => RenovationTemplate.fromMap(doc.id, doc.data()))
@@ -32,10 +35,12 @@ class RenovationTemplateService {
           .toList()
         ..sort((a, b) => a.order.compareTo(b.order));
 
-      if (remote.isEmpty) return local;
-      return remote.take(3).toList();
+      return RenovationTemplatesCatalog.threeFrom(
+        [...remote, ...local],
+        normalized,
+      );
     } catch (_) {
-      return local;
+      return RenovationTemplatesCatalog.threeFrom(local, normalized);
     }
   }
 

@@ -6,8 +6,8 @@ import 'package:iconstruct/core/widgets/offset_panel_shell.dart';
 
 /// Content chrome for Cost Estimation–style planning steps.
 ///
-/// Layout chrome (gradient, cream, navy panel, pill nav) lives in
-/// [OffsetPanelShell]; this widget only supplies the titled card body.
+/// Layout chrome (cream curve, right-shifted navy offset panel, pill nav)
+/// lives in [OffsetPanelShell]; this widget only supplies the titled card body.
 class GlitchedFlowShell extends StatelessWidget {
   final String title;
   final String? subtitle;

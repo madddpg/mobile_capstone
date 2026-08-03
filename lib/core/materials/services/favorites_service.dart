@@ -48,7 +48,7 @@ class FavoritesService {
       projectType: projectType,
       size:
           '', // Size is intentionally removed from favorites as per requirement
-      imageUrl: item.imageUrl ?? '',
+      imageUrl: item.imageUrl,
     );
 
     await ref.doc(productId).set(favorite.toMap(), SetOptions(merge: true));

@@ -107,7 +107,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       }
 
       _localMaterials = List<String>.from(
-        (widget.existingProject!.materials as List<dynamic>)
+        widget.existingProject!.materials
             .map((m) => m is Map ? (m['name'] ?? '').toString() : m.toString())
             .where((s) => s.isNotEmpty),
       );
@@ -885,7 +885,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
     }
   }
 
-  Widget _buildInputLabel(String label, {int maxLines = 1}) {
+  Widget _buildInputLabel(String label) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Text(

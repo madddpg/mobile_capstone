@@ -429,7 +429,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             style: TextButton.styleFrom(
                               backgroundColor: _acceptedTerms
                                   ? const Color(0xFF1E3248)
-                                  : const Color(0xFF1E3248).withOpacity(0.45),
+                                  : const Color(0xFF1E3248).withValues(alpha: 0.45),
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14),
@@ -540,7 +540,7 @@ class _TermsAndConditionsDialog extends StatelessWidget {
                         margin: const EdgeInsets.only(bottom: 12),
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.72),
+                          color: Colors.white.withValues(alpha: 0.72),
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(color: const Color(0xFFD4C4AA)),
                         ),

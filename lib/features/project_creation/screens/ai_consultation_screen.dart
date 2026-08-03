@@ -61,7 +61,6 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
 
   List<String> _pendingRecommendations = [];
   final Set<String> _pendingSelected = {};
-  bool _showSelectChips = false;
   bool _showBomChip = false;
 
   static const Color _cream = Color(0xFFEDE4D4);
@@ -151,13 +150,11 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
       setState(() {
         _step = _stepArea;
         _showBomChip = false;
-        _showSelectChips = false;
       });
       return;
     }
 
     setState(() {
-      _showSelectChips = false;
       _showBomChip = false;
       _pendingRecommendations = [];
       _pendingSelected.clear();
@@ -245,7 +242,6 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
 
     setState(() {
       _isTyping = true;
-      _showSelectChips = false;
       _pendingRecommendations = [];
       _pendingSelected.clear();
       _showBomChip = true;
@@ -286,7 +282,6 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
 
     if (!result.inScope || result.suggestions.isEmpty) {
       setState(() {
-        _showSelectChips = false;
         _pendingRecommendations = [];
         _pendingSelected.clear();
         _showBomChip = true;
@@ -486,7 +481,6 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
           isUser: true,
         ),
       );
-      _showSelectChips = false;
       _pendingRecommendations = [];
       _pendingSelected.clear();
       _showBomChip = true;
@@ -506,7 +500,6 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
       _messages.add(
         const ChatMessage(text: 'Skip suggestions — keep chatting', isUser: true),
       );
-      _showSelectChips = false;
       _pendingRecommendations = [];
       _pendingSelected.clear();
       _showBomChip = true;
@@ -521,7 +514,6 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
   Future<void> _onChipReady() async {
     setState(() {
       _messages.add(const ChatMessage(text: "I'm ready — build my BOM", isUser: true));
-      _showSelectChips = false;
       _showBomChip = false;
     });
     _scrollToBottom();
@@ -1088,7 +1080,7 @@ class _TemplatesDrawer extends StatelessWidget {
                 child: ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                   itemCount: templates.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final t = templates[index];
                     return Material(
@@ -1111,7 +1103,7 @@ class _TemplatesDrawer extends StatelessWidget {
                                       ? Image.asset(
                                           t.imageAsset!,
                                           fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) =>
+                                          errorBuilder: (_, _, _) =>
                                               _fallback(t),
                                         )
                                       : _fallback(t),

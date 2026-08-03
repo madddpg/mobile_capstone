@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -576,7 +576,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  "You don’t have favorite materials yet",
+                  "You donâ€™t have favorite materials yet",
                   textAlign: TextAlign.center,
                   style: GoogleFonts.poppins(
                     fontSize: 15,
@@ -869,7 +869,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                           ),
                           content: Text(
-                            'You currently don’t have a selected project to estimate. Please select one from our available projects.',
+                            'You currently donâ€™t have a selected project to estimate. Please select one from our available projects.',
                             style: GoogleFonts.poppins(color: creamBg),
                           ),
                           actions: [

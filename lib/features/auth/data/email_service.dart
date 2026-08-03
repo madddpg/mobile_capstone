@@ -1,11 +1,7 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import '../../../core/api_config.dart';
 import '../../../core/services/fcm_service.dart';
 
 class EmailSendOtpResult {
@@ -43,62 +39,6 @@ class EmailService {
   final FirebaseAuth _auth;
 
   EmailService({FirebaseAuth? auth}) : _auth = auth ?? FirebaseAuth.instance;
-
-  /// Centralized API request handler for authentication flows that logs parameters before making the API call
-  Future<http.Response> _post(
-    String endpoint,
-    Map<String, dynamic> body,
-  ) async {
-    final url = Uri.parse('${ApiConfig.authUrl}$endpoint');
-
-    // Debug logging to print the full request URL before calling the API
-    debugPrint('================ API REQUEST ================');
-    debugPrint('POST $url');
-    debugPrint('BODY: ${jsonEncode(body)}');
-    debugPrint('=============================================');
-
-    try {
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode(body),
-      );
-
-      debugPrint('================ API RESPONSE ================');
-      debugPrint('STATUS [${response.statusCode}] for POST $url');
-      debugPrint('BODY: ${response.body}');
-      debugPrint('==============================================');
-
-      return response;
-    } catch (e) {
-      debugPrint('================ API ERROR ================');
-      debugPrint('ERROR making request to $url: $e');
-      debugPrint('===========================================');
-      throw EmailApiException('Network error: Could not reach the server. $e');
-    }
-  }
-
-  /// Safely decodes JSON and handles HTML fallback responses
-  Map<String, dynamic> _safeDecode(http.Response response) {
-    try {
-      if (response.body.trim().startsWith('<')) {
-        debugPrint(
-          'WARNING: Received HTML instead of JSON. Backend might be returning 404 or a server error.',
-        );
-        return {
-          'message':
-              'Server returned an invalid HTML response (Status ${response.statusCode})',
-        };
-      }
-      return jsonDecode(response.body) as Map<String, dynamic>;
-    } catch (e) {
-      debugPrint('JSON Decode Error: $e');
-      return {'message': 'Invalid response format from server.'};
-    }
-  }
 
   Future<String> register({
     required String firstName,

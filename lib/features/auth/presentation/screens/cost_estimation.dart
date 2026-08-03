@@ -170,9 +170,10 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
 
     return OffsetPanelShell(
       activeNav: OffsetNavTab.estimate,
+      panelColor: IConstructPanel.navy,
       header: OffsetPanelHeaders.avatarAndMenu(context),
       contentPadding:
-          IConstructPanel.contentPaddingOf(context).copyWith(bottom: 28),
+          IConstructPanel.contentPaddingOf(context).copyWith(bottom: 20),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -354,7 +355,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
                         child: ListView.separated(
                           scrollDirection: Axis.horizontal,
                           itemCount: item.alternatives.length,
-                          separatorBuilder: (_, __) =>
+                          separatorBuilder: (_, _) =>
                               const SizedBox(width: 8),
                           itemBuilder: (context, altIndex) {
                             final alt = item.alternatives[altIndex];
@@ -737,7 +738,8 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
                       ),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
-                        value: selectedSize,
+                        key: ValueKey(selectedSize),
+                        initialValue: selectedSize,
                         dropdownColor: const Color(0xFFEDE4D4),
                         decoration: InputDecoration(
                           border: OutlineInputBorder(

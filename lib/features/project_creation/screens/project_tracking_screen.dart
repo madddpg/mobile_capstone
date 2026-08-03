@@ -149,7 +149,7 @@ class ProjectTrackingScreen extends StatelessWidget {
                             return ListView.separated(
                               padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
                               itemCount: docs.length,
-                              separatorBuilder: (_, __) =>
+                              separatorBuilder: (_, _) =>
                                   const SizedBox(height: 16),
                               itemBuilder: (context, index) {
                                 final project =

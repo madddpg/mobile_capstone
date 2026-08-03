@@ -10,23 +10,26 @@ import 'package:iconstruct/features/auth/presentation/screens/main_home_screen.d
 import 'package:iconstruct/features/auth/presentation/screens/profile_screen.dart';
 import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
 
-/// How the navy panel is laid out inside [OffsetPanelShell].
+/// How the navy offset panel is laid out inside [OffsetPanelShell].
 enum OffsetPanelExtent {
-  /// Centered card with clearance above the floating pill nav.
+  /// Floating card sitting just above the pill nav.
   pinnedWithNav,
 
-  /// Centered card that stretches toward the bottom (AI chat, saved projects).
+  /// Panel stretches to the bottom (AI chat).
   fillBottom,
 
-  /// Scrollable column of centered cards.
+  /// Scrollable column of offset cards.
   scrollBody,
 }
 
-/// Which pill-nav label is active on a planning screen.
-enum OffsetNavTab { estimate, finalize, files }
+/// Which pill-nav label is active.
+enum OffsetNavTab { estimate, finalize, files, bidding }
 
-/// Home-style shell for planning screens: cream top, centered rounded navy
-/// card, optional floating pill nav. Screens only supply header + body.
+/// Shared offset-panel shell for Name Estimate, AI Consultant, BOM review, etc.
+///
+/// Cream top curve, navy card shifted right / flush to the right edge, floating
+/// pill nav. Bottom SafeArea is not applied to the stack so the panel-to-nav
+/// gap stays tight and intentional.
 class OffsetPanelShell extends StatelessWidget {
   final Widget header;
   final Widget body;
@@ -54,15 +57,15 @@ class OffsetPanelShell extends StatelessWidget {
     this.activeNav,
     this.scaffoldKey,
     this.endDrawer,
-    this.safeAreaBottom = true,
+    this.safeAreaBottom = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final showNav = activeNav != null;
-    final bottomClearance = showNav
+    final bottomClearance = showNav && extent == OffsetPanelExtent.pinnedWithNav
         ? IConstructPanel.bottomInsetOf(context)
-        : (extent == OffsetPanelExtent.fillBottom ? 16.0 : 0.0);
+        : MediaQuery.paddingOf(context).bottom;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -72,6 +75,7 @@ class OffsetPanelShell extends StatelessWidget {
       ),
       child: Scaffold(
         key: scaffoldKey,
+        // Cream fallback so any anti-alias seam never flashes blue/gray.
         backgroundColor: IConstructPanel.cream,
         endDrawer: endDrawer,
         body: Container(
@@ -81,9 +85,9 @@ class OffsetPanelShell extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              stops: [0.28, 0.55, 1.0],
+              stops: [0.0, 0.42, 1.0],
               colors: [
-                IConstructPanel.creamSoft,
+                IConstructPanel.cream,
                 IConstructPanel.darkBlue,
                 IConstructPanel.midBlue,
               ],
@@ -92,13 +96,14 @@ class OffsetPanelShell extends StatelessWidget {
           child: OffsetSafeArea(
             bottom: safeAreaBottom,
             child: Stack(
+              clipBehavior: Clip.none,
               children: [
                 const CreamBackdrop(),
                 CreamHeaderBand(child: header),
                 if (extent == OffsetPanelExtent.scrollBody)
                   _buildScrollBody(context, showNav: showNav)
                 else
-                  _buildCenteredPanel(context, bottom: bottomClearance),
+                  _buildOffsetPanel(context, bottom: bottomClearance),
                 if (overlay != null) overlay!,
                 if (showNav) OffsetPillNav(activeTab: activeNav!),
               ],
@@ -109,76 +114,63 @@ class OffsetPanelShell extends StatelessWidget {
     );
   }
 
-  Widget _buildCenteredPanel(BuildContext context, {required double bottom}) {
-    final margin = IConstructPanel.horizontalMarginOf(context);
-    final radius = borderRadius ?? IConstructPanel.cardRadiusOf(context);
+  Widget _buildOffsetPanel(BuildContext context, {required double bottom}) {
+    final radius = borderRadius ??
+        (extent == OffsetPanelExtent.fillBottom
+            ? IConstructPanel.offsetTallRadiusOf(context)
+            : IConstructPanel.offsetRadiusOf(context));
     final padding =
         contentPadding ?? IConstructPanel.contentPaddingOf(context);
-    final maxWidth = IConstructPanel.maxPanelWidthOf(context);
 
     Widget child = body;
     if (wrapPanel) {
       child = Container(
-        padding: padding,
         decoration: BoxDecoration(
-          color: panelColor ?? IConstructPanel.darkBlue,
+          color: panelColor ?? IConstructPanel.navy,
           borderRadius: radius,
-          boxShadow: [
+          boxShadow: const [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.25),
-              blurRadius: 24,
-              offset: const Offset(0, 12),
+              color: Colors.black26,
+              blurRadius: 15,
+              offset: Offset(-5, 10),
             ),
           ],
         ),
-        child: body,
+        child: ClipRRect(
+          borderRadius: radius,
+          child: Padding(
+            padding: padding,
+            child: body,
+          ),
+        ),
       );
     }
 
     return Positioned(
       top: IConstructPanel.panelTopOf(context),
-      left: margin,
-      right: margin,
+      left: IConstructPanel.leftInsetOf(context),
+      right: 0,
       bottom: bottom,
-      child: Center(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxWidth),
-          child: SizedBox(
-            width: double.infinity,
-            height: double.infinity,
-            child: child,
-          ),
-        ),
-      ),
+      child: child,
     );
   }
 
   Widget _buildScrollBody(BuildContext context, {required bool showNav}) {
-    final margin = IConstructPanel.horizontalMarginOf(context);
-
     return Positioned.fill(
       child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
-          margin,
+          IConstructPanel.leftInsetOf(context),
           IConstructPanel.panelTopOf(context),
-          margin,
-          showNav ? 120 : 24,
+          0,
+          showNav ? IConstructPanel.bottomInsetOf(context) + 8 : 24,
         ),
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: IConstructPanel.maxPanelWidthOf(context),
-            ),
-            child: body,
-          ),
-        ),
+        child: body,
       ),
     );
   }
 }
 
-/// Shared cream pill navigation used by planning screens.
+/// Cream floating pill navigation.
 class OffsetPillNav extends StatelessWidget {
   final OffsetNavTab activeTab;
 
@@ -186,108 +178,119 @@ class OffsetPillNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.paddingOf(context).bottom;
+
     return Align(
       alignment: Alignment.bottomCenter,
-      child: Container(
-        height: 64,
-        margin: EdgeInsets.only(
+      child: Padding(
+        padding: EdgeInsets.only(
           left: 20,
           right: 20,
-          bottom: 12 + MediaQuery.paddingOf(context).bottom,
+          bottom: IConstructPanel.pillBottomMargin + bottomPad,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          color: IConstructPanel.cream,
-          borderRadius: BorderRadius.circular(40),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _NavIcon(
-              icon: Icons.home_rounded,
-              onTap: () {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const MainHomeScreen(),
-                  ),
-                  (route) => false,
-                );
-              },
-            ),
-            const SizedBox(width: 8),
-            _NavIcon(
-              imagePath: 'assets/images/hammer.png',
-              onTap: () => handleHammerTap(context),
-            ),
-            const SizedBox(width: 8),
-            if (activeTab == OffsetNavTab.files)
-              _NavIcon(
-                icon: Icons.calculate_rounded,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const HomeScreen(),
-                    ),
-                  );
-                },
-              )
-            else
-              _ActiveNavChip(
-                icon: activeTab == OffsetNavTab.finalize
-                    ? Icons.fact_check_rounded
-                    : Icons.calculate_rounded,
-                label: activeTab == OffsetNavTab.finalize
-                    ? 'Finalize'
-                    : 'Estimate',
+        child: Container(
+          height: IConstructPanel.pillHeight,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          decoration: BoxDecoration(
+            color: IConstructPanel.cream,
+            borderRadius: BorderRadius.circular(40),
+            boxShadow: const [
+              BoxShadow(
+                color: Colors.black54,
+                blurRadius: 16,
+                offset: Offset(0, 6),
               ),
-            const SizedBox(width: 8),
-            if (activeTab == OffsetNavTab.files)
-              const _ActiveNavChip(
-                icon: Icons.folder_rounded,
-                label: 'Files',
-              )
-            else
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
               _NavIcon(
-                icon: Icons.folder_rounded,
+                icon: Icons.home_rounded,
                 onTap: () {
                   Navigator.pushAndRemoveUntil(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const SavedProjectsScreen(),
+                      builder: (context) => const MainHomeScreen(),
                     ),
                     (route) => false,
                   );
                 },
               ),
-          ],
+              const SizedBox(width: 10),
+              if (activeTab == OffsetNavTab.bidding)
+                const _ActiveNavChip(
+                  imagePath: 'assets/images/hammer.png',
+                  label: 'Bidding',
+                )
+              else
+                _NavIcon(
+                  imagePath: 'assets/images/hammer.png',
+                  onTap: () => handleHammerTap(context),
+                ),
+              const SizedBox(width: 10),
+              if (activeTab == OffsetNavTab.files ||
+                  activeTab == OffsetNavTab.bidding)
+                _NavIcon(
+                  icon: Icons.calculate_rounded,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const HomeScreen(),
+                      ),
+                    );
+                  },
+                )
+              else
+                _ActiveNavChip(
+                  icon: activeTab == OffsetNavTab.finalize
+                      ? Icons.fact_check_rounded
+                      : Icons.calculate_rounded,
+                  label: activeTab == OffsetNavTab.finalize
+                      ? 'Finalize'
+                      : 'Estimate',
+                ),
+              const SizedBox(width: 10),
+              if (activeTab == OffsetNavTab.files)
+                const _ActiveNavChip(
+                  icon: Icons.folder_rounded,
+                  label: 'Files',
+                )
+              else
+                _NavIcon(
+                  icon: Icons.folder_rounded,
+                  onTap: () {
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SavedProjectsScreen(),
+                      ),
+                      (route) => false,
+                    );
+                  },
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// Common header rows for planning screens.
+/// Common header rows for offset screens.
 class OffsetPanelHeaders {
   const OffsetPanelHeaders._();
 
   static Widget backAndAvatar(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
         children: [
           _BackButton(onTap: () => Navigator.pop(context)),
           const Spacer(),
           UserAvatar(
-            size: 34,
+            size: 36,
             onTap: () {
               Navigator.push(
                 context,
@@ -304,12 +307,12 @@ class OffsetPanelHeaders {
 
   static Widget avatarAndMenu(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           UserAvatar(
-            size: 34,
+            size: 36,
             onTap: () {
               Navigator.push(
                 context,
@@ -347,7 +350,7 @@ class OffsetPanelHeaders {
 
   static Widget backOnly(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Align(
         alignment: Alignment.centerLeft,
         child: _BackButton(onTap: () => Navigator.pop(context)),
@@ -372,12 +375,12 @@ class _BackButton extends StatelessWidget {
         customBorder: const CircleBorder(),
         onTap: onTap,
         child: const SizedBox(
-          width: 40,
-          height: 40,
+          width: 44,
+          height: 44,
           child: Icon(
-            Icons.arrow_back_rounded,
-            color: IConstructPanel.cream,
-            size: 22,
+            Icons.arrow_back_ios_new,
+            color: Colors.white,
+            size: 20,
           ),
         ),
       ),
@@ -386,22 +389,35 @@ class _BackButton extends StatelessWidget {
 }
 
 class _ActiveNavChip extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
+  final String? imagePath;
   final String label;
 
-  const _ActiveNavChip({required this.icon, required this.label});
+  const _ActiveNavChip({
+    this.icon,
+    this.imagePath,
+    required this.label,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: IConstructPanel.darkBlue,
         borderRadius: BorderRadius.circular(30),
       ),
       child: Row(
         children: [
-          Icon(icon, color: IConstructPanel.cream, size: 18),
+          if (imagePath != null)
+            Image.asset(
+              imagePath!,
+              width: 18,
+              height: 18,
+              color: IConstructPanel.cream,
+            )
+          else
+            Icon(icon, color: IConstructPanel.cream, size: 18),
           const SizedBox(width: 6),
           Text(
             label,

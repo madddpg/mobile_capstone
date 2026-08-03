@@ -6,11 +6,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:iconstruct/features/auth/presentation/screens/cost_estimation.dart'
     show AddedTileSelection, AddedPlumbingSelection;
 import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
-import 'package:iconstruct/features/auth/presentation/screens/main_home_screen.dart';
-import 'package:iconstruct/features/auth/presentation/screens/profile_screen.dart';
-import 'package:iconstruct/core/utils/hammer_nav.dart';
 import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
-import 'package:iconstruct/core/widgets/user_avatar.dart';
+import 'package:iconstruct/core/widgets/offset_panel_shell.dart';
 import 'package:iconstruct/features/bidding/screens/posted_project_details_screen.dart';
 import 'package:iconstruct/features/project_creation/data/bom_export.dart';
 import 'package:iconstruct/features/project_creation/data/project_lifecycle.dart';
@@ -144,89 +141,19 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            stops: [0.0, 0.56, 1.0],
-            colors: [Color(0xFFE0D7C9), Color(0xFF2C3E50), Color(0xFF648DB6)],
-          ),
-        ),
-        child: OffsetSafeArea(
-          child: Stack(
-            children: [
-              const CreamBackdrop(),
-              _buildTopBar(context),
-              Positioned.fill(
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(
-                    IConstructPanel.leftInset,
-                    IConstructPanel.panelTop(context),
-                    0,
-                    120,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildContentCard(context),
-                      const SizedBox(height: 20),
-                      _buildFinalizeCard(context),
-                      const SizedBox(height: 24),
-                    ],
-                  ),
-                ),
-              ),
-              _buildBottomNav(context),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTopBar(BuildContext context) {
-    return CreamHeaderBand(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Row(
-          children: [
-            Material(
-              color: const Color(0xFF2C3E50),
-              shape: const CircleBorder(),
-              elevation: 2,
-              shadowColor: Colors.black26,
-              child: InkWell(
-                customBorder: const CircleBorder(),
-                onTap: () => Navigator.pop(context),
-                child: const SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: Icon(
-                    Icons.arrow_back_rounded,
-                    color: Color(0xFFEDE4D4),
-                    size: 22,
-                  ),
-                ),
-              ),
-            ),
-            const Spacer(),
-            UserAvatar(
-              size: 36,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const ProfileScreen(),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
+    return OffsetPanelShell(
+      extent: OffsetPanelExtent.scrollBody,
+      wrapPanel: false,
+      activeNav: OffsetNavTab.finalize,
+      header: OffsetPanelHeaders.backAndAvatar(context),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildContentCard(context),
+          const SizedBox(height: 20),
+          _buildFinalizeCard(context),
+          const SizedBox(height: 24),
+        ],
       ),
     );
   }
@@ -234,11 +161,11 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
   Widget _buildContentCard(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: IConstructPanel.contentPadding,
-      decoration: const BoxDecoration(
+      padding: IConstructPanel.contentPaddingOf(context),
+      decoration: BoxDecoration(
         color: IConstructPanel.navy,
-        borderRadius: IConstructPanel.flushRadius,
-        boxShadow: [
+        borderRadius: IConstructPanel.flushRadiusOf(context),
+        boxShadow: const [
           BoxShadow(
             color: Colors.black38,
             blurRadius: 18,
@@ -455,11 +382,11 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
   Widget _buildFinalizeCard(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(24, 28, 20, 24),
-      decoration: const BoxDecoration(
+      padding: const EdgeInsets.fromLTRB(22, 24, 18, 22),
+      decoration: BoxDecoration(
         color: IConstructPanel.navy,
-        borderRadius: IConstructPanel.flushRadius,
-        boxShadow: [
+        borderRadius: IConstructPanel.flushRadiusOf(context),
+        boxShadow: const [
           BoxShadow(
             color: Colors.black26,
             blurRadius: 10,
@@ -1130,144 +1057,6 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
     );
   }
 
-  Widget _buildBottomNav(BuildContext context) {
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: Container(
-        height: 72,
-        margin: const EdgeInsets.only(bottom: 24),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFFEDE4D4),
-          borderRadius: BorderRadius.circular(40),
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black54,
-              blurRadius: 16,
-              offset: Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _BottomIconButton(
-              icon: Icons.home_rounded,
-              onTap: () {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const MainHomeScreen(),
-                  ),
-                  (route) => false,
-                );
-              },
-            ),
-            const SizedBox(width: 10),
-            _BottomIconButton(
-              imagePath: 'assets/images/hammer.png',
-              onTap: () => handleHammerTap(context),
-            ),
-            const SizedBox(width: 10),
-            const _BottomNavItem(
-              icon: Icons.fact_check_rounded,
-              label: 'Finalize',
-              isActive: true,
-            ),
-            const SizedBox(width: 10),
-            _BottomIconButton(
-              icon: Icons.folder_rounded,
-              onTap: () {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const SavedProjectsScreen(),
-                  ),
-                  (route) => false,
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _BottomNavItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool isActive;
-
-  const _BottomNavItem({
-    required this.icon,
-    required this.label,
-    this.isActive = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-      decoration: BoxDecoration(
-        color: isActive ? const Color(0xFF2C3E50) : Colors.transparent,
-        borderRadius: BorderRadius.circular(30),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 22,
-            color: isActive ? const Color(0xFFEDE4D4) : const Color(0xFF2C3E50),
-          ),
-          if (isActive) ...[
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: const Color(0xFFEDE4D4),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _BottomIconButton extends StatelessWidget {
-  final IconData? icon;
-  final String? imagePath;
-  final VoidCallback? onTap;
-
-  const _BottomIconButton({this.icon, this.imagePath, this.onTap})
-    : assert(icon != null || imagePath != null);
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 44,
-        height: 44,
-        color: Colors.transparent,
-        child: Center(
-          child: imagePath != null
-              ? Image.asset(
-                  imagePath!,
-                  width: 24,
-                  height: 24,
-                  fit: BoxFit.contain,
-                  color: const Color(0xFF2C3E50),
-                )
-              : Icon(icon, size: 24, color: const Color(0xFF2C3E50)),
-        ),
-      ),
-    );
-  }
 }
 
 class SelectedMaterialCard extends StatelessWidget {

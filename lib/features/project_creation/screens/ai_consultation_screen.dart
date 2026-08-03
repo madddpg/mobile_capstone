@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
 import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
+import 'package:iconstruct/core/widgets/offset_panel_shell.dart';
 import 'package:iconstruct/core/widgets/user_avatar.dart';
 import 'package:iconstruct/features/auth/presentation/screens/cost_estimation.dart';
 import 'package:iconstruct/features/auth/presentation/screens/profile_screen.dart';
@@ -691,184 +691,140 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
-        statusBarColor: Color(0xFFEDE4D4),
-        statusBarIconBrightness: Brightness.dark,
-        statusBarBrightness: Brightness.light,
+    return OffsetPanelShell(
+      scaffoldKey: _scaffoldKey,
+      extent: OffsetPanelExtent.fillBottom,
+      safeAreaBottom: false,
+      contentPadding: EdgeInsets.zero,
+      borderRadius: IConstructPanel.topRadiusOf(context),
+      endDrawer: _TemplatesDrawer(
+        renovationType: widget.projectName,
+        templates: _templates.isEmpty
+            ? RenovationTemplatesCatalog.threeForType(widget.projectName)
+            : _templates,
+        onSelect: _useTemplateReference,
       ),
-      child: Scaffold(
-        key: _scaffoldKey,
-        backgroundColor: const Color(0xFFE0D7C9),
-        endDrawer: _TemplatesDrawer(
-          renovationType: widget.projectName,
-          templates: _templates.isEmpty
-              ? RenovationTemplatesCatalog.threeForType(widget.projectName)
-              : _templates,
-          onSelect: _useTemplateReference,
-        ),
-        body: Container(
-          width: double.infinity,
-          height: double.infinity,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              stops: [0.0, 0.56, 1.0],
-              colors: [
-                Color(0xFFE0D7C9),
-                Color(0xFF2C3E50),
-                Color(0xFF648DB6),
-              ],
-            ),
-          ),
-          child: OffsetSafeArea(
-            bottom: false,
-            child: Stack(
+      header: _buildTopBar(),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 22, 14, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const CreamBackdrop(),
-                _buildTopBar(),
-                Positioned(
-                  top: IConstructPanel.panelTop(context),
-                  left: IConstructPanel.leftInset,
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      color: _navy,
-                      borderRadius: IConstructPanel.topRadius,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 28, 14, 0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'AI Material\nConsultant',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                  height: 1.15,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                widget.customProjectName?.isNotEmpty == true
-                                    ? widget.customProjectName!
-                                    : widget.projectName,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 13,
-                                  color: _cream.withValues(alpha: 0.85),
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                'Powered by AI API · iConstruct material planning only. You choose; I suggest.',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 11,
-                                  color: const Color(0xFFE0D7C9),
-                                  height: 1.35,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              const Divider(color: _cream, thickness: 1),
-                            ],
-                          ),
-                        ),
-                        Expanded(
-                          child: ListView.builder(
-                            controller: _scrollController,
-                            padding:
-                                const EdgeInsets.fromLTRB(16, 12, 14, 12),
-                            itemCount:
-                                _messages.length + (_isTyping ? 1 : 0),
-                            itemBuilder: (context, index) {
-                              if (index == _messages.length) {
-                                return _buildTypingIndicator();
-                              }
-                              return _buildMessageBubble(_messages[index]);
-                            },
-                          ),
-                        ),
-                        _buildMessageInput(),
-                      ],
-                    ),
+                Text(
+                  'AI Material\nConsultant',
+                  style: GoogleFonts.poppins(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    height: 1.15,
                   ),
                 ),
+                const SizedBox(height: 6),
+                Text(
+                  widget.customProjectName?.isNotEmpty == true
+                      ? widget.customProjectName!
+                      : widget.projectName,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    color: _cream.withValues(alpha: 0.85),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Powered by AI API · iConstruct material planning only. You choose; I suggest.',
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    color: const Color(0xFFE0D7C9),
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Divider(color: _cream, thickness: 1),
               ],
             ),
           ),
-        ),
+          Expanded(
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.fromLTRB(16, 12, 14, 12),
+              itemCount: _messages.length + (_isTyping ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index == _messages.length) {
+                  return _buildTypingIndicator();
+                }
+                return _buildMessageBubble(_messages[index]);
+              },
+            ),
+          ),
+          _buildMessageInput(),
+        ],
       ),
     );
   }
 
   Widget _buildTopBar() {
-    return CreamHeaderBand(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Row(
-          children: [
-            Material(
-              color: _darkBlue,
-              shape: const CircleBorder(),
-              child: InkWell(
-                customBorder: const CircleBorder(),
-                onTap: () => Navigator.pop(context),
-                child: const SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: Icon(Icons.arrow_back_rounded, color: _cream, size: 22),
-                ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Material(
+            color: _darkBlue,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: () => Navigator.pop(context),
+              child: const SizedBox(
+                width: 40,
+                height: 40,
+                child: Icon(Icons.arrow_back_rounded, color: _cream, size: 22),
               ),
             ),
-            const Spacer(),
-            Material(
-              color: _darkBlue,
+          ),
+          const Spacer(),
+          Material(
+            color: _darkBlue,
+            borderRadius: BorderRadius.circular(20),
+            child: InkWell(
               borderRadius: BorderRadius.circular(20),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: () => _scaffoldKey.currentState?.openEndDrawer(),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.grid_view_rounded,
+              onTap: () => _scaffoldKey.currentState?.openEndDrawer(),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.grid_view_rounded,
+                      color: _cream,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Templates',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
                         color: _cream,
-                        size: 18,
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Templates',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: _cream,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            UserAvatar(
-              size: 36,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                );
-              },
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          UserAvatar(
+            size: 34,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ProfileScreen()),
+              );
+            },
+          ),
+        ],
       ),
     );
   }

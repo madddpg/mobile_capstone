@@ -12,10 +12,10 @@ import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dar
 
 /// How the navy offset panel is laid out inside [OffsetPanelShell].
 enum OffsetPanelExtent {
-  /// Floating card with clearance above the pill nav (default planning steps).
+  /// Floating card sitting just above the pill nav.
   pinnedWithNav,
 
-  /// Panel stretches toward the bottom (AI chat, saved projects).
+  /// Panel stretches to the bottom (AI chat).
   fillBottom,
 
   /// Scrollable column of offset cards.
@@ -25,8 +25,11 @@ enum OffsetPanelExtent {
 /// Which pill-nav label is active.
 enum OffsetNavTab { estimate, finalize, files, bidding }
 
-/// Shared shell for the offset-panel look used by posted-project details:
-/// cream top curve, navy card shifted right / flush left-rounded, pill nav.
+/// Shared offset-panel shell for Name Estimate, AI Consultant, BOM review, etc.
+///
+/// Cream top curve, navy card shifted right / flush to the right edge, floating
+/// pill nav. Bottom SafeArea is not applied to the stack so the panel-to-nav
+/// gap stays tight and intentional.
 class OffsetPanelShell extends StatelessWidget {
   final Widget header;
   final Widget body;
@@ -54,7 +57,7 @@ class OffsetPanelShell extends StatelessWidget {
     this.activeNav,
     this.scaffoldKey,
     this.endDrawer,
-    this.safeAreaBottom = true,
+    this.safeAreaBottom = false,
   });
 
   @override
@@ -62,7 +65,7 @@ class OffsetPanelShell extends StatelessWidget {
     final showNav = activeNav != null;
     final bottomClearance = showNav && extent == OffsetPanelExtent.pinnedWithNav
         ? IConstructPanel.bottomInsetOf(context)
-        : 0.0;
+        : MediaQuery.paddingOf(context).bottom;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -72,7 +75,8 @@ class OffsetPanelShell extends StatelessWidget {
       ),
       child: Scaffold(
         key: scaffoldKey,
-        backgroundColor: IConstructPanel.midBlue,
+        // Cream fallback so any anti-alias seam never flashes blue/gray.
+        backgroundColor: IConstructPanel.cream,
         endDrawer: endDrawer,
         body: Container(
           width: double.infinity,
@@ -81,9 +85,10 @@ class OffsetPanelShell extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
+              stops: [0.0, 0.42, 1.0],
               colors: [
+                IConstructPanel.cream,
                 IConstructPanel.darkBlue,
-                Color(0xFF4F6B8A),
                 IConstructPanel.midBlue,
               ],
             ),
@@ -91,6 +96,7 @@ class OffsetPanelShell extends StatelessWidget {
           child: OffsetSafeArea(
             bottom: safeAreaBottom,
             child: Stack(
+              clipBehavior: Clip.none,
               children: [
                 const CreamBackdrop(),
                 CreamHeaderBand(child: header),
@@ -119,9 +125,8 @@ class OffsetPanelShell extends StatelessWidget {
     Widget child = body;
     if (wrapPanel) {
       child = Container(
-        padding: padding,
         decoration: BoxDecoration(
-          color: panelColor ?? IConstructPanel.darkBlue,
+          color: panelColor ?? IConstructPanel.navy,
           borderRadius: radius,
           boxShadow: const [
             BoxShadow(
@@ -131,7 +136,13 @@ class OffsetPanelShell extends StatelessWidget {
             ),
           ],
         ),
-        child: body,
+        child: ClipRRect(
+          borderRadius: radius,
+          child: Padding(
+            padding: padding,
+            child: body,
+          ),
+        ),
       );
     }
 
@@ -151,7 +162,7 @@ class OffsetPanelShell extends StatelessWidget {
           IConstructPanel.leftInsetOf(context),
           IConstructPanel.panelTopOf(context),
           0,
-          showNav ? 120 : 24,
+          showNav ? IConstructPanel.bottomInsetOf(context) + 8 : 24,
         ),
         child: body,
       ),
@@ -159,7 +170,7 @@ class OffsetPanelShell extends StatelessWidget {
   }
 }
 
-/// Cream floating pill navigation from the offset-panel reference.
+/// Cream floating pill navigation.
 class OffsetPillNav extends StatelessWidget {
   final OffsetNavTab activeTab;
 
@@ -167,14 +178,19 @@ class OffsetPillNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.paddingOf(context).bottom;
+
     return Align(
       alignment: Alignment.bottomCenter,
-      child: SafeArea(
-        top: false,
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          bottom: IConstructPanel.pillBottomMargin + bottomPad,
+        ),
         child: Container(
-          height: 72,
-          margin: const EdgeInsets.only(bottom: 24, left: 20, right: 20),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+          height: IConstructPanel.pillHeight,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           decoration: BoxDecoration(
             color: IConstructPanel.cream,
             borderRadius: BorderRadius.circular(40),
@@ -204,7 +220,6 @@ class OffsetPillNav extends StatelessWidget {
               const SizedBox(width: 10),
               if (activeTab == OffsetNavTab.bidding)
                 const _ActiveNavChip(
-                  icon: Icons.gavel_rounded,
                   imagePath: 'assets/images/hammer.png',
                   label: 'Bidding',
                 )

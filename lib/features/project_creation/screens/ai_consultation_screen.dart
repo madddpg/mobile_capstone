@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
+import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
 import 'package:iconstruct/core/widgets/offset_panel_shell.dart';
 import 'package:iconstruct/core/widgets/user_avatar.dart';
 import 'package:iconstruct/features/auth/presentation/screens/cost_estimation.dart';
@@ -693,7 +694,8 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
     return OffsetPanelShell(
       scaffoldKey: _scaffoldKey,
       extent: OffsetPanelExtent.fillBottom,
-      safeAreaBottom: false,
+      panelColor: IConstructPanel.navy,
+      borderRadius: IConstructPanel.topRadiusOf(context),
       contentPadding: EdgeInsets.zero,
       endDrawer: _TemplatesDrawer(
         renovationType: widget.projectName,

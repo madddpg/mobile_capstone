@@ -170,9 +170,10 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
 
     return OffsetPanelShell(
       activeNav: OffsetNavTab.estimate,
+      panelColor: IConstructPanel.navy,
       header: OffsetPanelHeaders.avatarAndMenu(context),
       contentPadding:
-          IConstructPanel.contentPaddingOf(context).copyWith(bottom: 28),
+          IConstructPanel.contentPaddingOf(context).copyWith(bottom: 20),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

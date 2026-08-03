@@ -35,6 +35,7 @@ class GlitchedFlowShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return OffsetPanelShell(
       activeNav: OffsetNavTab.estimate,
+      panelColor: IConstructPanel.navy,
       header: showBackOnCard
           ? OffsetPanelHeaders.backAndAvatar(context)
           : OffsetPanelHeaders.avatarAndMenu(context),

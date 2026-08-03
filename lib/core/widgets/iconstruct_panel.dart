@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 
 /// Geometry for iConstruct's signature **offset panel**.
 ///
-/// Inspired by the posted-project details card: navy sheet shifted right with a
-/// cream gutter on the left, rounded on the left only, flush to the right edge.
+/// Navy sheet shifted right with a cream gutter on the left, rounded on the
+/// left (and top when tall), flush to the right edge — matching the
+/// posted-project details / Name Estimate planning look.
 class IConstructPanel {
   const IConstructPanel._();
 
@@ -13,51 +14,49 @@ class IConstructPanel {
   static const Color creamSoft = Color(0xFFE0D7C9);
   static const Color midBlue = Color(0xFF648DB6);
 
-  /// Left cream gutter — matches posted-details `left: 60`.
+  static const double pillHeight = 64;
+  static const double pillBottomMargin = 12;
+  static const double panelNavGap = 10;
+
+  /// Left cream gutter.
   static double leftInsetOf(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     return (width * 0.155).clamp(52.0, 64.0);
   }
 
-  /// How far a side rail sits into the cream gutter.
   static double railLeftOf(BuildContext context) =>
       (leftInsetOf(context) * 0.12).clamp(6.0, 8.0);
 
   static double railWidthOf(BuildContext context) =>
       leftInsetOf(context) - railLeftOf(context) - 6;
 
-  /// Cream header controls band (below the status bar).
   static double headerHeightOf(BuildContext context) {
     final height = MediaQuery.sizeOf(context).height;
-    return (height * 0.09).clamp(72.0, 88.0);
+    return (height * 0.085).clamp(70.0, 84.0);
   }
 
-  /// Space under the header before the offset panel (posted-details uses ~90).
   static double topInsetOf(BuildContext context) =>
-      headerHeightOf(context) + 12;
+      headerHeightOf(context) + 10;
 
-  /// Clearance for the floating pill navigation.
+  /// Space reserved under a pinned panel so it sits just above the pill nav
+  /// (no double SafeArea — that was leaving the large empty “error gap”).
   static double bottomInsetOf(BuildContext context) {
     final bottomPad = MediaQuery.paddingOf(context).bottom;
-    return 72 + (bottomPad > 0 ? 8 : 16);
+    return pillHeight + pillBottomMargin + panelNavGap + bottomPad;
   }
 
-  /// Left-side rounding used by the offset card (~55 in the reference).
   static double cornerRadiusOf(BuildContext context) {
     final side = MediaQuery.sizeOf(context).shortestSide;
-    return (side * 0.13).clamp(44.0, 56.0);
+    return (side * 0.12).clamp(40.0, 52.0);
   }
 
-  /// Flush-right offset card: rounded on the left only.
+  /// Flush-right floating card: rounded left side.
   static BorderRadius offsetRadiusOf(BuildContext context) {
     final r = Radius.circular(cornerRadiusOf(context));
-    return BorderRadius.only(
-      topLeft: r,
-      bottomLeft: r,
-    );
+    return BorderRadius.only(topLeft: r, bottomLeft: r);
   }
 
-  /// Tall panels that also need a soft top-right when they sit under a header.
+  /// Tall fill panels (AI): rounded top + bottom-left, flush right.
   static BorderRadius offsetTallRadiusOf(BuildContext context) {
     final r = Radius.circular(cornerRadiusOf(context));
     return BorderRadius.only(
@@ -69,17 +68,15 @@ class IConstructPanel {
 
   static EdgeInsets contentPaddingOf(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    final left = width < 360 ? 20.0 : 24.0;
-    final right = width < 360 ? 16.0 : 20.0;
-    return EdgeInsets.fromLTRB(left, 28, right, 24);
+    final left = width < 360 ? 18.0 : 22.0;
+    final right = width < 360 ? 14.0 : 18.0;
+    return EdgeInsets.fromLTRB(left, 24, right, 20);
   }
 
   static double panelTopOf(BuildContext context) =>
       MediaQuery.paddingOf(context).top + topInsetOf(context);
 
-  // ---------------------------------------------------------------------------
   // Legacy aliases
-  // ---------------------------------------------------------------------------
   static const double leftInset = 60;
   static const double topInset = 90;
   static const double bottomInset = 80;
@@ -87,25 +84,23 @@ class IConstructPanel {
   static const double headerHeight = 80;
 
   static const BorderRadius radius = BorderRadius.only(
-    topLeft: Radius.circular(55),
-    bottomLeft: Radius.circular(55),
+    topLeft: Radius.circular(48),
+    bottomLeft: Radius.circular(48),
   );
   static const BorderRadius flushRadius = BorderRadius.only(
-    topLeft: Radius.circular(55),
-    bottomLeft: Radius.circular(55),
+    topLeft: Radius.circular(48),
+    bottomLeft: Radius.circular(48),
   );
   static const BorderRadius topRadius = BorderRadius.only(
-    topLeft: Radius.circular(55),
-    topRight: Radius.circular(55),
+    topLeft: Radius.circular(48),
+    topRight: Radius.circular(48),
   );
-  static const EdgeInsets contentPadding = EdgeInsets.fromLTRB(24, 28, 20, 24);
+  static const EdgeInsets contentPadding = EdgeInsets.fromLTRB(22, 24, 18, 20);
 
   static BorderRadius cardRadiusOf(BuildContext context) =>
       offsetRadiusOf(context);
-
   static BorderRadius flushRadiusOf(BuildContext context) =>
       offsetRadiusOf(context);
-
   static BorderRadius topRadiusOf(BuildContext context) {
     final r = Radius.circular(cornerRadiusOf(context));
     return BorderRadius.only(topLeft: r, topRight: r);
@@ -113,23 +108,21 @@ class IConstructPanel {
 
   static double horizontalMarginOf(BuildContext context) =>
       leftInsetOf(context);
-
   static double maxPanelWidthOf(BuildContext context) =>
       MediaQuery.sizeOf(context).width;
-
   static double panelTop(BuildContext context) => panelTopOf(context);
 }
 
-/// Cream top shape from the offset-panel reference: soft curve on the
-/// bottom-left only, so the navy card can tuck against the right edge.
+/// Cream top shape: curve on the bottom-left, sharp on the right so nothing
+/// peeks beside a flush-right navy panel.
 class CreamBackdrop extends StatelessWidget {
   const CreamBackdrop({super.key});
 
   @override
   Widget build(BuildContext context) {
     final height = MediaQuery.sizeOf(context).height;
-    final blobHeight = height * 0.45;
-    final radius = IConstructPanel.cornerRadiusOf(context) + 4;
+    final blobHeight = height * 0.48;
+    final radius = IConstructPanel.cornerRadiusOf(context) + 8;
 
     return Positioned(
       top: 0,
@@ -148,7 +141,9 @@ class CreamBackdrop extends StatelessWidget {
   }
 }
 
-/// Cream header band for back / avatar controls over the cream blob.
+/// Full-bleed cream under the status bar + header controls. Also covers the
+/// area behind the panel’s top-right radius so no gray/gradient “error gap”
+/// appears at that seam.
 class CreamHeaderBand extends StatelessWidget {
   final Widget child;
 
@@ -158,25 +153,40 @@ class CreamHeaderBand extends StatelessWidget {
   Widget build(BuildContext context) {
     final topPad = MediaQuery.paddingOf(context).top;
     final headerHeight = IConstructPanel.headerHeightOf(context);
+    final coverHeight = IConstructPanel.panelTopOf(context) +
+        IConstructPanel.cornerRadiusOf(context);
 
-    return Positioned(
-      top: 0,
-      left: 0,
-      right: 0,
-      height: topPad + headerHeight,
-      child: Padding(
-        padding: EdgeInsets.only(top: topPad),
-        child: SizedBox(
-          height: headerHeight,
-          width: double.infinity,
-          child: child,
+    return Stack(
+      children: [
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          height: coverHeight,
+          child: const ColoredBox(color: IConstructPanel.cream),
         ),
-      ),
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          height: topPad + headerHeight,
+          child: Padding(
+            padding: EdgeInsets.only(top: topPad),
+            child: SizedBox(
+              height: headerHeight,
+              width: double.infinity,
+              child: child,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
 
-/// Edge-to-edge horizontally so the flush-right panel never shows a side gap.
+/// Horizontal edge-to-edge stack. Bottom padding is handled by the shell’s
+/// panel/nav geometry — applying SafeArea bottom here stacked a second inset
+/// and created the large empty gap above the pill nav.
 class OffsetSafeArea extends StatelessWidget {
   final Widget child;
   final bool bottom;
@@ -184,7 +194,7 @@ class OffsetSafeArea extends StatelessWidget {
   const OffsetSafeArea({
     super.key,
     required this.child,
-    this.bottom = true,
+    this.bottom = false,
   });
 
   @override

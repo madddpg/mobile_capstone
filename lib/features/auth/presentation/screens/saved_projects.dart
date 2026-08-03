@@ -68,169 +68,33 @@ class SavedProjectsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     const Color creamBg = Color(0xFFEDE4D4);
     const Color darkBlue = Color(0xFF2C3E50);
-    const Color lightBlue = Color(0xFF648DB6);
 
     return Scaffold(
-      body: Stack(
-        children: [
-          // 1. Background Layer (Cream fading to Light Blue)
-          // 1. Full dark blue background ONLY
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xFFE0D7C9), // cream top
-                  Color(0xFF2C3E50), // dark blue mid
-                  Color(0xFF648DB6), // light blue bottom
-                ],
-                stops: [0.28, 0.55, 1.0],
-              ),
-            ),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFFE0D7C9), // cream top
+              Color(0xFF2C3E50), // dark blue mid
+              Color(0xFF648DB6), // light blue bottom
+            ],
+            stops: [0.28, 0.55, 1.0],
           ),
-
-          const CreamBackdrop(),
-
-          // 2. Main Dark Blue Panel (Offset from left)
-          Positioned(
-            top: IConstructPanel.topInset,
-            bottom: 0,
-            left: IConstructPanel.leftInset,
-            right: 0,
-            child: Container(
-              decoration: const BoxDecoration(
-                color: darkBlue,
-                borderRadius: IConstructPanel.topRadius,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 20,
-                    offset: Offset(-5, 5),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 40),
-
-                  // Title Area
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 32),
-                    child: Text(
-                      'Saved Projects',
-                      style: TextStyle(
-                        fontFamily: 'Inter', // Or custom app font
-                        color: creamBg,
-                        fontSize: 26,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Divider
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
-                    child: Container(
-                      height: 1,
-                      color: creamBg.withValues(alpha: 0.4),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Project List
-                  Expanded(
-                    child: StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseAuth.instance.currentUser == null
-                          ? const Stream.empty()
-                          : FirebaseFirestore.instance
-                                .collection('users')
-                                .doc(FirebaseAuth.instance.currentUser!.uid)
-                                .collection('saved_projects')
-                                .orderBy('updatedAt', descending: true)
-                                .snapshots(),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return const Center(
-                            child: CircularProgressIndicator(color: creamBg),
-                          );
-                        }
-
-                        if (snapshot.hasError) {
-                          return Center(
-                            child: Text(
-                              'Error loading projects.',
-                              style: TextStyle(color: creamBg.withAlpha(150)),
-                            ),
-                          );
-                        }
-
-                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                          return Center(
-                            child: Text(
-                              'No saved projects yet.',
-                              style: TextStyle(
-                                color: creamBg.withAlpha(150),
-                                fontSize: 16,
-                              ),
-                            ),
-                          );
-                        }
-
-                        final projects = snapshot.data!.docs
-                            .map((doc) => ProjectModel.fromDocument(doc))
-                            .toList();
-
-                        return AnimatedBuilder(
-                          animation: ActiveProjectState.instance,
-                          builder: (context, child) {
-                            return ListView.builder(
-                              padding: const EdgeInsets.only(
-                                left: 24,
-                                right: 24,
-                                top: 8,
-                                bottom: 120, // Extra space for bottom nav
-                              ),
-                              itemCount: projects.length,
-                              itemBuilder: (context, index) {
-                                final project = projects[index];
-                                return ProjectCard(
-                                  project: project,
-                                  isActive:
-                                      project.id ==
-                                      ActiveProjectState
-                                          .instance
-                                          .activeProject
-                                          ?.id,
-                                );
-                              },
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // 3. Fake Top Left SafeArea / Back Button Layer over the dark blue to ensure no overlapping issues
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 140,
-            child: SafeArea(
-              child: Stack(
-                children: [
-                  Positioned(
-                    top: 10,
-                    left: 20,
+        ),
+        child: OffsetSafeArea(
+          bottom: false,
+          child: Stack(
+            children: [
+              const CreamBackdrop(),
+              CreamHeaderBand(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
                     child: GestureDetector(
                       onTap: () => Navigator.pop(context),
                       child: Container(
@@ -248,96 +112,231 @@ class SavedProjectsScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
 
-          // 4. Floating Bottom Navigation (Visual Mock)
-          Positioned(
-            bottom: 30,
-            left: 30,
-            right: 30,
-            child: Container(
-              height: 72,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: creamBg,
-                borderRadius: BorderRadius.circular(40),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 15,
-                    offset: Offset(0, 5),
+              // Main Dark Blue Panel (Offset from left, flush right)
+              Positioned(
+                top: IConstructPanel.panelTop(context),
+                bottom: 0,
+                left: IConstructPanel.leftInset,
+                right: 0,
+                child: Container(
+                  decoration: const BoxDecoration(
+                    color: darkBlue,
+                    borderRadius: IConstructPanel.topRadius,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: 20,
+                        offset: Offset(-5, 5),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _buildNavIcon(context, Icons.home_rounded, () {
-                    Navigator.pushAndRemoveUntil(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const MainHomeScreen(),
-                      ),
-                      (route) => false,
-                    );
-                  }),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: GestureDetector(
-                      onTap: () => handleHammerTap(context),
-                      child: Image.asset(
-                        'assets/images/hammer.png',
-                        width: 24,
-                        height: 24,
-                        color: const Color(0xFF2C3E50),
-                      ),
-                    ),
-                  ),
-                  _buildNavIcon(context, Icons.calculate_rounded, () {
-                    Navigator.pushAndRemoveUntil(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const MaterialEstimatorScreen(
-                          projectName:
-                              'Your Project Name', // Adjust later if needed
-                        ),
-                      ),
-                      (route) => false,
-                    );
-                  }),
-                  // Active "Files" Tab
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: darkBlue,
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.folder_rounded, color: creamBg, size: 22),
-                        SizedBox(width: 8),
-                        Text(
-                          'Files',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 40),
+
+                      // Title Area
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 32),
+                        child: Text(
+                          'Saved Projects',
                           style: TextStyle(
+                            fontFamily: 'Inter', // Or custom app font
                             color: creamBg,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.5,
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Divider
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Container(
+                          height: 1,
+                          color: creamBg.withValues(alpha: 0.4),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Project List
+                      Expanded(
+                        child: StreamBuilder<QuerySnapshot>(
+                          stream: FirebaseAuth.instance.currentUser == null
+                              ? const Stream.empty()
+                              : FirebaseFirestore.instance
+                                    .collection('users')
+                                    .doc(FirebaseAuth.instance.currentUser!.uid)
+                                    .collection('saved_projects')
+                                    .orderBy('updatedAt', descending: true)
+                                    .snapshots(),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState ==
+                                ConnectionState.waiting) {
+                              return const Center(
+                                child:
+                                    CircularProgressIndicator(color: creamBg),
+                              );
+                            }
+
+                            if (snapshot.hasError) {
+                              return Center(
+                                child: Text(
+                                  'Error loading projects.',
+                                  style:
+                                      TextStyle(color: creamBg.withAlpha(150)),
+                                ),
+                              );
+                            }
+
+                            if (!snapshot.hasData ||
+                                snapshot.data!.docs.isEmpty) {
+                              return Center(
+                                child: Text(
+                                  'No saved projects yet.',
+                                  style: TextStyle(
+                                    color: creamBg.withAlpha(150),
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              );
+                            }
+
+                            final projects = snapshot.data!.docs
+                                .map((doc) => ProjectModel.fromDocument(doc))
+                                .toList();
+
+                            return AnimatedBuilder(
+                              animation: ActiveProjectState.instance,
+                              builder: (context, child) {
+                                return ListView.builder(
+                                  padding: const EdgeInsets.only(
+                                    left: 24,
+                                    right: 24,
+                                    top: 8,
+                                    bottom: 120, // Extra space for bottom nav
+                                  ),
+                                  itemCount: projects.length,
+                                  itemBuilder: (context, index) {
+                                    final project = projects[index];
+                                    return ProjectCard(
+                                      project: project,
+                                      isActive:
+                                          project.id ==
+                                          ActiveProjectState
+                                              .instance
+                                              .activeProject
+                                              ?.id,
+                                    );
+                                  },
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
+
+              // Floating Bottom Navigation
+              Positioned(
+                bottom: 30,
+                left: 30,
+                right: 30,
+                child: Container(
+                  height: 72,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: creamBg,
+                    borderRadius: BorderRadius.circular(40),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: 15,
+                        offset: Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildNavIcon(context, Icons.home_rounded, () {
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const MainHomeScreen(),
+                          ),
+                          (route) => false,
+                        );
+                      }),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: GestureDetector(
+                          onTap: () => handleHammerTap(context),
+                          child: Image.asset(
+                            'assets/images/hammer.png',
+                            width: 24,
+                            height: 24,
+                            color: const Color(0xFF2C3E50),
+                          ),
+                        ),
+                      ),
+                      _buildNavIcon(context, Icons.calculate_rounded, () {
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const MaterialEstimatorScreen(
+                              projectName:
+                                  'Your Project Name', // Adjust later if needed
+                            ),
+                          ),
+                          (route) => false,
+                        );
+                      }),
+                      // Active "Files" Tab
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: darkBlue,
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(
+                              Icons.folder_rounded,
+                              color: creamBg,
+                              size: 22,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Files',
+                              style: TextStyle(
+                                color: creamBg,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

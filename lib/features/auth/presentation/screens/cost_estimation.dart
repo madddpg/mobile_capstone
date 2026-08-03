@@ -176,13 +176,13 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
             colors: [Color(0xFFE0D7C9), Color(0xFF2C3E50), Color(0xFF648DB6)],
           ),
         ),
-        child: SafeArea(
+        child: OffsetSafeArea(
           child: Stack(
             children: [
               _buildBackgroundPanel(),
               _buildHeader(context),
               _buildContentCard(context),
-              if (!_isTemplateMode) _buildFloatingFilter(),
+              if (!_isTemplateMode) _buildFloatingFilter(context),
               _buildBottomNav(context),
             ],
           ),
@@ -194,12 +194,9 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
   Widget _buildBackgroundPanel() => const CreamBackdrop();
 
   Widget _buildHeader(BuildContext context) {
-    return Align(
-      alignment: Alignment.topCenter,
-      child: Container(
-        height: 96,
+    return CreamHeaderBand(
+      child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
-        decoration: const BoxDecoration(color: Color(0xFFEDE4D4)),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -251,7 +248,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
             : widget.projectName.replaceFirst(' ', '\n'));
 
     return Positioned(
-      top: IConstructPanel.topInset,
+      top: IConstructPanel.panelTop(context),
       right: 0,
       left: IConstructPanel.leftInset,
       bottom: IConstructPanel.bottomInset,
@@ -299,10 +296,10 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     );
   }
 
-  Widget _buildFloatingFilter() {
+  Widget _buildFloatingFilter(BuildContext context) {
     // Sits in the cream gutter and tucks slightly under the offset panel.
     return Positioned(
-      top: 300,
+      top: IConstructPanel.panelTop(context) + 190,
       left: IConstructPanel.railLeft,
       child: FloatingFilterRail(
         selectedFilter: _materials.selectedFilter,

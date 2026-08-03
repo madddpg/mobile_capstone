@@ -691,13 +691,11 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final statusTop = MediaQuery.paddingOf(context).top;
-
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
-        statusBarColor: Color(0xFF1E3042),
-        statusBarIconBrightness: Brightness.light,
-        statusBarBrightness: Brightness.dark,
+        statusBarColor: Color(0xFFEDE4D4),
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
       ),
       child: Scaffold(
         key: _scaffoldKey,
@@ -709,122 +707,110 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
               : _templates,
           onSelect: _useTemplateReference,
         ),
-        body: Column(
-          children: [
-            // Dark status-bar strip only — keeps phone icons visible
-            ColoredBox(
-              color: _navy,
-              child: SizedBox(height: statusTop, width: double.infinity),
+        body: Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              stops: [0.0, 0.56, 1.0],
+              colors: [
+                Color(0xFFE0D7C9),
+                Color(0xFF2C3E50),
+                Color(0xFF648DB6),
+              ],
             ),
-            Expanded(
-              child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    stops: [0.0, 0.56, 1.0],
-                    colors: [
-                      Color(0xFFE0D7C9),
-                      Color(0xFF2C3E50),
-                      Color(0xFF648DB6),
-                    ],
-                  ),
-                ),
-                child: SafeArea(
-                  top: false,
-                  child: Stack(
-                    children: [
-                      const CreamBackdrop(),
-                      _buildTopBar(),
-                      Positioned(
-                        top: IConstructPanel.topInset,
-                        left: IConstructPanel.leftInset,
-                        right: 0,
-                        bottom: 0,
-                        child: Container(
-                          decoration: const BoxDecoration(
-                            color: _navy,
-                            borderRadius: IConstructPanel.topRadius,
-                          ),
+          ),
+          child: OffsetSafeArea(
+            bottom: false,
+            child: Stack(
+              children: [
+                const CreamBackdrop(),
+                _buildTopBar(),
+                Positioned(
+                  top: IConstructPanel.panelTop(context),
+                  left: IConstructPanel.leftInset,
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      color: _navy,
+                      borderRadius: IConstructPanel.topRadius,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 28, 14, 0),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(20, 28, 14, 0),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'AI Material\nConsultant',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white,
-                                        height: 1.15,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      widget.customProjectName?.isNotEmpty == true
-                                          ? widget.customProjectName!
-                                          : widget.projectName,
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 13,
-                                        color: _cream.withValues(alpha: 0.85),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    Text(
-                                      'Powered by AI API · iConstruct material planning only. You choose; I suggest.',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 11,
-                                        color: const Color(0xFFE0D7C9),
-                                        height: 1.35,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    const Divider(color: _cream, thickness: 1),
-                                  ],
+                              Text(
+                                'AI Material\nConsultant',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                  height: 1.15,
                                 ),
                               ),
-                              Expanded(
-                                child: ListView.builder(
-                                  controller: _scrollController,
-                                  padding:
-                                      const EdgeInsets.fromLTRB(16, 12, 14, 12),
-                                  itemCount:
-                                      _messages.length + (_isTyping ? 1 : 0),
-                                  itemBuilder: (context, index) {
-                                    if (index == _messages.length) {
-                                      return _buildTypingIndicator();
-                                    }
-                                    return _buildMessageBubble(_messages[index]);
-                                  },
+                              const SizedBox(height: 6),
+                              Text(
+                                widget.customProjectName?.isNotEmpty == true
+                                    ? widget.customProjectName!
+                                    : widget.projectName,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  color: _cream.withValues(alpha: 0.85),
                                 ),
                               ),
-                              _buildMessageInput(),
+                              const SizedBox(height: 10),
+                              Text(
+                                'Powered by AI API · iConstruct material planning only. You choose; I suggest.',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 11,
+                                  color: const Color(0xFFE0D7C9),
+                                  height: 1.35,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              const Divider(color: _cream, thickness: 1),
                             ],
                           ),
                         ),
-                      ),
-                    ],
+                        Expanded(
+                          child: ListView.builder(
+                            controller: _scrollController,
+                            padding:
+                                const EdgeInsets.fromLTRB(16, 12, 14, 12),
+                            itemCount:
+                                _messages.length + (_isTyping ? 1 : 0),
+                            itemBuilder: (context, index) {
+                              if (index == _messages.length) {
+                                return _buildTypingIndicator();
+                              }
+                              return _buildMessageBubble(_messages[index]);
+                            },
+                          ),
+                        ),
+                        _buildMessageInput(),
+                      ],
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildTopBar() {
-    return Align(
-      alignment: Alignment.topCenter,
-      child: Container(
-        height: 96,
+    return CreamHeaderBand(
+      child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        color: _cream,
         child: Row(
           children: [
             Material(

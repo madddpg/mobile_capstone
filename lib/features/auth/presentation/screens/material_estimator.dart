@@ -156,16 +156,16 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
             colors: [Color(0xFFE0D7C9), Color(0xFF2C3E50), Color(0xFF648DB6)],
           ),
         ),
-        child: SafeArea(
+        child: OffsetSafeArea(
           child: Stack(
             children: [
               const CreamBackdrop(),
               _buildTopBar(context),
               Positioned.fill(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(
+                  padding: EdgeInsets.fromLTRB(
                     IConstructPanel.leftInset,
-                    IConstructPanel.topInset,
+                    IConstructPanel.panelTop(context),
                     0,
                     120,
                   ),
@@ -189,12 +189,9 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
   }
 
   Widget _buildTopBar(BuildContext context) {
-    return Align(
-      alignment: Alignment.topCenter,
-      child: Container(
-        height: 96,
+    return CreamHeaderBand(
+      child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
-        decoration: const BoxDecoration(color: Color(0xFFEDE4D4)),
         child: Row(
           children: [
             Material(

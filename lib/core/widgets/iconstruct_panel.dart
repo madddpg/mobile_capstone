@@ -22,6 +22,9 @@ class IConstructPanel {
   /// How far the side rail sits into the cream gutter.
   static const double railLeft = 8;
 
+  /// Height of the cream header controls band (below the status bar).
+  static const double headerHeight = 96;
+
   static const Color navy = Color(0xFF1E3042);
   static const Color cream = Color(0xFFEDE4D4);
   static const Color creamSoft = Color(0xFFE0D7C9);
@@ -50,12 +53,16 @@ class IConstructPanel {
 
   /// Inner padding that keeps content readable inside the narrower panel.
   static const EdgeInsets contentPadding = EdgeInsets.fromLTRB(20, 28, 14, 24);
+
+  /// Panel top inset including the status bar, for full-bleed stacks.
+  static double panelTop(BuildContext context) =>
+      MediaQuery.paddingOf(context).top + topInset;
 }
 
-/// The cream blob the offset panel overlaps.
+/// Full-bleed cream layer the offset panel sits on.
 ///
-/// Spans the full width of whatever screen it lands on — pinning it to a fixed
-/// width leaves a bare strip on the right of wider phones.
+/// Right edge is deliberately sharp so a rounded blob never leaves a strip of
+/// gradient showing beside the navy panel.
 class CreamBackdrop extends StatelessWidget {
   const CreamBackdrop({super.key});
 
@@ -69,9 +76,69 @@ class CreamBackdrop extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: IConstructPanel.cream,
-          borderRadius: BorderRadius.all(Radius.circular(50)),
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(50),
+            bottomLeft: Radius.circular(50),
+          ),
         ),
       ),
+    );
+  }
+}
+
+/// Cream header band that always paints edge-to-edge, including under the
+/// status bar, so the rounded top-right of the navy panel never reveals a gap.
+class CreamHeaderBand extends StatelessWidget {
+  final Widget child;
+
+  const CreamHeaderBand({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final topPad = MediaQuery.paddingOf(context).top;
+
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      height: topPad + IConstructPanel.headerHeight,
+      child: ColoredBox(
+        color: IConstructPanel.cream,
+        child: Padding(
+          padding: EdgeInsets.only(top: topPad),
+          child: SizedBox(
+            height: IConstructPanel.headerHeight,
+            width: double.infinity,
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Wraps offset-panel screens so the stack can paint to the physical left/right
+/// edges. Vertical safe padding is still applied; horizontal SafeArea is what
+/// was leaving the gray side strip beside the navy panel.
+class OffsetSafeArea extends StatelessWidget {
+  final Widget child;
+  final bool bottom;
+
+  const OffsetSafeArea({
+    super.key,
+    required this.child,
+    this.bottom = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      left: false,
+      right: false,
+      bottom: bottom,
+      // Top is handled by [CreamHeaderBand] so the cream reaches the status bar.
+      top: false,
+      child: child,
     );
   }
 }

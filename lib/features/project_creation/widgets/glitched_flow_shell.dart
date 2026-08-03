@@ -47,7 +47,7 @@ class GlitchedFlowShell extends StatelessWidget {
             colors: [Color(0xFFE0D7C9), Color(0xFF2C3E50), Color(0xFF648DB6)],
           ),
         ),
-        child: SafeArea(
+        child: OffsetSafeArea(
           child: Stack(
             children: [
               const CreamBackdrop(),
@@ -62,12 +62,9 @@ class GlitchedFlowShell extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context) {
-    return Align(
-      alignment: Alignment.topCenter,
-      child: Container(
-        height: 96,
+    return CreamHeaderBand(
+      child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
-        decoration: const BoxDecoration(color: cream),
         child: Row(
           children: [
             if (showBackOnCard)
@@ -138,7 +135,7 @@ class GlitchedFlowShell extends StatelessWidget {
 
   Widget _buildContentCard(BuildContext context) {
     return Positioned(
-      top: IConstructPanel.topInset,
+      top: IConstructPanel.panelTop(context),
       left: IConstructPanel.leftInset,
       right: 0,
       bottom: IConstructPanel.bottomInset,

@@ -7,6 +7,7 @@ import 'package:iconstruct/features/auth/presentation/screens/material_estimator
 import 'package:iconstruct/core/state/active_project_state.dart';
 import 'package:iconstruct/core/utils/hammer_nav.dart';
 import 'package:iconstruct/features/bidding/screens/project_bids_screen.dart';
+import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
 import 'package:iconstruct/features/project_creation/data/bom_export.dart';
 import 'package:iconstruct/features/project_creation/data/project_lifecycle.dart';
 import 'package:iconstruct/features/project_creation/widgets/bom_share_sheet.dart';
@@ -89,29 +90,18 @@ class SavedProjectsScreen extends StatelessWidget {
             ),
           ),
 
-          Positioned(
-            left: 0,
-            top: -200,
-            width: 393,
-            height: 585,
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Color(0xFFE0D7C9), // YOUR cream
-                borderRadius: BorderRadius.all(Radius.circular(50)),
-              ),
-            ),
-          ),
+          const CreamBackdrop(),
 
           // 2. Main Dark Blue Panel (Offset from left)
           Positioned(
-            top: 110,
+            top: IConstructPanel.topInset,
             bottom: 0,
-            left: 70,
+            left: IConstructPanel.leftInset,
             right: 0,
             child: Container(
               decoration: const BoxDecoration(
                 color: darkBlue,
-                borderRadius: BorderRadius.only(topLeft: Radius.circular(50)),
+                borderRadius: IConstructPanel.topRadius,
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black26,

@@ -5,6 +5,7 @@ import 'package:iconstruct/core/materials/material_recommendation_controller.dar
 import 'package:iconstruct/core/materials/models/material_item.dart';
 import 'package:iconstruct/core/materials/services/firestore_materials_service.dart';
 import 'package:iconstruct/core/materials/services/favorites_service.dart';
+import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
 import 'package:iconstruct/core/widgets/user_avatar.dart';
 
 import 'package:iconstruct/features/auth/presentation/screens/material_estimator.dart';
@@ -190,20 +191,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     );
   }
 
-  Widget _buildBackgroundPanel() {
-    return const Positioned(
-      left: 0,
-      top: -200,
-      width: 393,
-      height: 585,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Color(0xFFEDE4D4),
-          borderRadius: BorderRadius.all(Radius.circular(50)),
-        ),
-      ),
-    );
-  }
+  Widget _buildBackgroundPanel() => const CreamBackdrop();
 
   Widget _buildHeader(BuildContext context) {
     return Align(
@@ -263,20 +251,15 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
             : widget.projectName.replaceFirst(' ', '\n'));
 
     return Positioned(
-      top: 110,
+      top: IConstructPanel.topInset,
       right: 0,
-      left: _isTemplateMode ? 16 : 72,
-      bottom: 80,
+      left: IConstructPanel.leftInset,
+      bottom: IConstructPanel.bottomInset,
       child: Container(
-        padding: EdgeInsets.fromLTRB(_isTemplateMode ? 24 : 24, 28, 16, 32),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1E3042),
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(60),
-            topRight: const Radius.circular(60),
-            bottomLeft: Radius.circular(_isTemplateMode ? 60 : 60),
-            bottomRight: Radius.circular(_isTemplateMode ? 60 : 0),
-          ),
+        padding: IConstructPanel.contentPadding.copyWith(bottom: 32),
+        decoration: const BoxDecoration(
+          color: IConstructPanel.navy,
+          borderRadius: IConstructPanel.flushRadius,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -317,9 +300,10 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
   }
 
   Widget _buildFloatingFilter() {
+    // Sits in the cream gutter and tucks slightly under the offset panel.
     return Positioned(
-      top: 360,
-      left: 10,
+      top: 300,
+      left: IConstructPanel.railLeft,
       child: FloatingFilterRail(
         selectedFilter: _materials.selectedFilter,
         onChanged: _onFilterSelected,
@@ -1393,62 +1377,69 @@ class _AddedMaterialItem extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
 
-          Container(
-            width: 140,
-            height: 38,
-            decoration: BoxDecoration(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: const Color(0xFFEDE4D4).withAlpha(120),
-                width: 1,
+          // Loose fit so the field gives way on narrow panels instead of
+          // overflowing the row.
+          Flexible(
+            child: Container(
+              width: 132,
+              height: 38,
+              decoration: BoxDecoration(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: const Color(0xFFEDE4D4).withAlpha(120),
+                  width: 1,
+                ),
               ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
                     controller: qtyController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    onChanged: onChanged,
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.poppins(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                    decoration: InputDecoration(
-                      hintText: 'Enter quantity',
-                      hintStyle: GoogleFonts.poppins(
-                        color: Colors.white38,
-                        fontSize: 10,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
                       ),
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
-                      border: InputBorder.none,
+                      onChanged: onChanged,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Qty',
+                        hintStyle: GoogleFonts.poppins(
+                          color: Colors.white38,
+                          fontSize: 10,
+                        ),
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                        border: InputBorder.none,
+                      ),
                     ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: Text(
-                    unit,
-                    style: GoogleFonts.poppins(
-                      fontSize: 11,
-                      color: const Color(0xFFEDE4D4).withAlpha(180),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Text(
+                      unit,
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        color: const Color(0xFFEDE4D4).withAlpha(180),
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
 
           IconButton(
             onPressed: onRemove,
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.only(left: 4),
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             icon: const Icon(
               Icons.close_rounded,
               color: Color(0xFFEDE4D4),
@@ -1479,8 +1470,10 @@ class FloatingFilterRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Sized to sit in the cream gutter and tuck under the offset panel.
     return Container(
-      padding: const EdgeInsets.all(6),
+      width: IConstructPanel.leftInset - IConstructPanel.railLeft - 6,
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 8),
       decoration: BoxDecoration(
         color: const Color(0xFFEDE4D4),
         borderRadius: BorderRadius.circular(20),
@@ -1526,20 +1519,20 @@ class _FloatingFilterButton extends StatelessWidget {
     final foreground = isSelected ? Colors.white : const Color(0xFF2C3E50);
 
     return InkWell(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(14),
       onTap: onTap,
       child: Container(
-        width: 50,
-        height: 50,
+        width: 44,
+        height: 44,
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: const Color(0xFF2C3E50).withAlpha(90),
             width: 1.2,
           ),
         ),
-        child: Icon(icon, color: foreground, size: 22),
+        child: Icon(icon, color: foreground, size: 20),
       ),
     );
   }

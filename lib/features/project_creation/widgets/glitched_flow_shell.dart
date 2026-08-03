@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:iconstruct/core/utils/hammer_nav.dart';
+import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
 import 'package:iconstruct/core/widgets/user_avatar.dart';
 import 'package:iconstruct/features/auth/presentation/screens/main_home_screen.dart';
 import 'package:iconstruct/features/auth/presentation/screens/profile_screen.dart';
@@ -49,18 +50,7 @@ class GlitchedFlowShell extends StatelessWidget {
         child: SafeArea(
           child: Stack(
             children: [
-              const Positioned(
-                left: 0,
-                top: -200,
-                width: 393,
-                height: 585,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: cream,
-                    borderRadius: BorderRadius.all(Radius.circular(50)),
-                  ),
-                ),
-              ),
+              const CreamBackdrop(),
               _buildHeader(context),
               _buildContentCard(context),
               _buildBottomNav(context),
@@ -148,19 +138,15 @@ class GlitchedFlowShell extends StatelessWidget {
 
   Widget _buildContentCard(BuildContext context) {
     return Positioned(
-      top: 110,
-      left: 16,
+      top: IConstructPanel.topInset,
+      left: IConstructPanel.leftInset,
       right: 0,
-      bottom: 80,
+      bottom: IConstructPanel.bottomInset,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(24, 28, 20, 24),
+        padding: IConstructPanel.contentPadding,
         decoration: const BoxDecoration(
           color: navyCard,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(60),
-            topRight: Radius.circular(60),
-            bottomLeft: Radius.circular(60),
-          ),
+          borderRadius: IConstructPanel.flushRadius,
           boxShadow: [
             BoxShadow(
               color: Colors.black38,

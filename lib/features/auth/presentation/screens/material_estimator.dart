@@ -9,6 +9,7 @@ import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dar
 import 'package:iconstruct/features/auth/presentation/screens/main_home_screen.dart';
 import 'package:iconstruct/features/auth/presentation/screens/profile_screen.dart';
 import 'package:iconstruct/core/utils/hammer_nav.dart';
+import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
 import 'package:iconstruct/core/widgets/user_avatar.dart';
 import 'package:iconstruct/features/bidding/screens/posted_project_details_screen.dart';
 import 'package:iconstruct/features/project_creation/data/bom_export.dart';
@@ -158,22 +159,16 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         child: SafeArea(
           child: Stack(
             children: [
-              const Positioned(
-                left: 0,
-                top: -200,
-                width: 393,
-                height: 585,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Color(0xFFEDE4D4),
-                    borderRadius: BorderRadius.all(Radius.circular(50)),
-                  ),
-                ),
-              ),
+              const CreamBackdrop(),
               _buildTopBar(context),
               Positioned.fill(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(16, 110, 0, 120),
+                  padding: const EdgeInsets.fromLTRB(
+                    IConstructPanel.leftInset,
+                    IConstructPanel.topInset,
+                    0,
+                    120,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -242,14 +237,10 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
   Widget _buildContentCard(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(24, 28, 20, 24),
+      padding: IConstructPanel.contentPadding,
       decoration: const BoxDecoration(
-        color: Color(0xFF1E3042),
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(60),
-          topRight: Radius.circular(60),
-          bottomLeft: Radius.circular(60),
-        ),
+        color: IConstructPanel.navy,
+        borderRadius: IConstructPanel.flushRadius,
         boxShadow: [
           BoxShadow(
             color: Colors.black38,
@@ -469,11 +460,8 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(24, 28, 20, 24),
       decoration: const BoxDecoration(
-        color: Color(0xFF1E3042),
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(60),
-          bottomLeft: Radius.circular(60),
-        ),
+        color: IConstructPanel.navy,
+        borderRadius: IConstructPanel.flushRadius,
         boxShadow: [
           BoxShadow(
             color: Colors.black26,

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
+import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
 import 'package:iconstruct/core/widgets/user_avatar.dart';
 import 'package:iconstruct/features/auth/presentation/screens/cost_estimation.dart';
 import 'package:iconstruct/features/auth/presentation/screens/profile_screen.dart';
@@ -733,37 +734,23 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
                   top: false,
                   child: Stack(
                     children: [
-                      const Positioned(
-                        left: 0,
-                        top: -200,
-                        width: 393,
-                        height: 585,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: _cream,
-                            borderRadius: BorderRadius.all(Radius.circular(50)),
-                          ),
-                        ),
-                      ),
+                      const CreamBackdrop(),
                       _buildTopBar(),
                       Positioned(
-                        top: 110,
-                        left: 16,
+                        top: IConstructPanel.topInset,
+                        left: IConstructPanel.leftInset,
                         right: 0,
                         bottom: 0,
                         child: Container(
                           decoration: const BoxDecoration(
                             color: _navy,
-                            borderRadius: BorderRadius.only(
-                              topLeft: Radius.circular(60),
-                              topRight: Radius.circular(60),
-                            ),
+                            borderRadius: IConstructPanel.topRadius,
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(24, 28, 20, 0),
+                                padding: const EdgeInsets.fromLTRB(20, 28, 14, 0),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -804,7 +791,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
                                 child: ListView.builder(
                                   controller: _scrollController,
                                   padding:
-                                      const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                                      const EdgeInsets.fromLTRB(16, 12, 14, 12),
                                   itemCount:
                                       _messages.length + (_isTyping ? 1 : 0),
                                   itemBuilder: (context, index) {
@@ -853,17 +840,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
                 ),
               ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Want a ready package? Templates →',
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: _darkBlue.withValues(alpha: 0.75),
-                ),
-              ),
-            ),
+            const Spacer(),
             Material(
               color: _darkBlue,
               borderRadius: BorderRadius.circular(20),

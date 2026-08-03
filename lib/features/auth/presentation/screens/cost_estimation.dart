@@ -173,16 +173,6 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
       header: OffsetPanelHeaders.avatarAndMenu(context),
       contentPadding:
           IConstructPanel.contentPaddingOf(context).copyWith(bottom: 28),
-      overlay: _isTemplateMode
-          ? null
-          : Positioned(
-              top: IConstructPanel.panelTopOf(context) + 160,
-              left: IConstructPanel.railLeftOf(context),
-              child: FloatingFilterRail(
-                selectedFilter: _materials.selectedFilter,
-                onChanged: _onFilterSelected,
-              ),
-            ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -207,6 +197,13 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
               height: 1.4,
             ),
           ),
+          if (!_isTemplateMode) ...[
+            const SizedBox(height: 12),
+            FloatingFilterRail(
+              selectedFilter: _materials.selectedFilter,
+              onChanged: _onFilterSelected,
+            ),
+          ],
           const SizedBox(height: 12),
           const Divider(color: Color(0xFFEDE4D4), thickness: 1),
           const SizedBox(height: 12),
@@ -1317,75 +1314,75 @@ class FloatingFilterRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final railWidth = IConstructPanel.railWidthOf(context);
-    final buttonSize = (railWidth - 10).clamp(36.0, 44.0);
-
-    // Sized to sit in the cream gutter and tuck under the offset panel.
-    return Container(
-      width: railWidth,
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEDE4D4),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: 14,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final f in _filters) ...[
-            _FloatingFilterButton(
+    // Horizontal chips inside the centered card (no left-offset gutter).
+    return Row(
+      children: [
+        for (final f in _filters) ...[
+          Expanded(
+            child: _FloatingFilterButton(
               icon: getFilterIcon(f),
-              size: buttonSize,
+              label: f,
               isSelected: selectedFilter == f,
               onTap: () => onChanged(f),
             ),
-            if (f != _filters.last) const SizedBox(height: 8),
-          ],
+          ),
+          if (f != _filters.last) const SizedBox(width: 8),
         ],
-      ),
+      ],
     );
   }
 }
 
 class _FloatingFilterButton extends StatelessWidget {
   final IconData icon;
-  final double size;
+  final String label;
   final bool isSelected;
   final VoidCallback onTap;
 
   const _FloatingFilterButton({
     required this.icon,
-    required this.size,
+    required this.label,
     required this.isSelected,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final background = isSelected ? const Color(0xFF2C3E50) : Colors.white;
-    final foreground = isSelected ? Colors.white : const Color(0xFF2C3E50);
+    final background =
+        isSelected ? IConstructPanel.cream : Colors.white.withValues(alpha: 0.12);
+    final foreground =
+        isSelected ? IConstructPanel.darkBlue : IConstructPanel.cream;
 
     return InkWell(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(18),
       onTap: onTap,
       child: Container(
-        width: size,
-        height: size,
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: const Color(0xFF2C3E50).withAlpha(90),
-            width: 1.2,
+            color: IConstructPanel.cream.withValues(alpha: 0.45),
+            width: 1,
           ),
         ),
-        child: Icon(icon, color: foreground, size: size * 0.45),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: foreground, size: 18),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.poppins(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: foreground,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -12,23 +12,21 @@ import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dar
 
 /// How the navy panel is laid out inside [OffsetPanelShell].
 enum OffsetPanelExtent {
-  /// Pinned panel with clearance above the floating pill nav.
+  /// Centered card with clearance above the floating pill nav.
   pinnedWithNav,
 
-  /// Panel runs to the bottom of the screen (AI chat, saved projects).
+  /// Centered card that stretches toward the bottom (AI chat, saved projects).
   fillBottom,
 
-  /// Scrollable column of cards; shell only applies offset padding.
+  /// Scrollable column of centered cards.
   scrollBody,
 }
 
-/// Which pill-nav label is active on an offset planning screen.
+/// Which pill-nav label is active on a planning screen.
 enum OffsetNavTab { estimate, finalize, files }
 
-/// Centralized home-style shell for every offset planning screen.
-///
-/// Owns the gradient, cream backdrop, header band, navy panel geometry, and
-/// optional bottom pill nav so individual screens only supply content.
+/// Home-style shell for planning screens: cream top, centered rounded navy
+/// card, optional floating pill nav. Screens only supply header + body.
 class OffsetPanelShell extends StatelessWidget {
   final Widget header;
   final Widget body;
@@ -62,9 +60,9 @@ class OffsetPanelShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final showNav = activeNav != null;
-    final bottomClearance = showNav && extent == OffsetPanelExtent.pinnedWithNav
+    final bottomClearance = showNav
         ? IConstructPanel.bottomInsetOf(context)
-        : 0.0;
+        : (extent == OffsetPanelExtent.fillBottom ? 16.0 : 0.0);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -74,7 +72,7 @@ class OffsetPanelShell extends StatelessWidget {
       ),
       child: Scaffold(
         key: scaffoldKey,
-        backgroundColor: IConstructPanel.creamSoft,
+        backgroundColor: IConstructPanel.cream,
         endDrawer: endDrawer,
         body: Container(
           width: double.infinity,
@@ -83,7 +81,7 @@ class OffsetPanelShell extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              stops: [0.0, 0.56, 1.0],
+              stops: [0.28, 0.55, 1.0],
               colors: [
                 IConstructPanel.creamSoft,
                 IConstructPanel.darkBlue,
@@ -100,7 +98,7 @@ class OffsetPanelShell extends StatelessWidget {
                 if (extent == OffsetPanelExtent.scrollBody)
                   _buildScrollBody(context, showNav: showNav)
                 else
-                  _buildPinnedPanel(context, bottom: bottomClearance),
+                  _buildCenteredPanel(context, bottom: bottomClearance),
                 if (overlay != null) overlay!,
                 if (showNav) OffsetPillNav(activeTab: activeNav!),
               ],
@@ -111,26 +109,25 @@ class OffsetPanelShell extends StatelessWidget {
     );
   }
 
-  Widget _buildPinnedPanel(BuildContext context, {required double bottom}) {
-    final radius = borderRadius ??
-        (extent == OffsetPanelExtent.fillBottom
-            ? IConstructPanel.topRadiusOf(context)
-            : IConstructPanel.flushRadiusOf(context));
+  Widget _buildCenteredPanel(BuildContext context, {required double bottom}) {
+    final margin = IConstructPanel.horizontalMarginOf(context);
+    final radius = borderRadius ?? IConstructPanel.cardRadiusOf(context);
     final padding =
         contentPadding ?? IConstructPanel.contentPaddingOf(context);
+    final maxWidth = IConstructPanel.maxPanelWidthOf(context);
 
     Widget child = body;
     if (wrapPanel) {
       child = Container(
         padding: padding,
         decoration: BoxDecoration(
-          color: panelColor ?? IConstructPanel.navy,
+          color: panelColor ?? IConstructPanel.darkBlue,
           borderRadius: radius,
-          boxShadow: const [
+          boxShadow: [
             BoxShadow(
-              color: Colors.black38,
-              blurRadius: 18,
-              offset: Offset(-4, 8),
+              color: Colors.black.withValues(alpha: 0.25),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
             ),
           ],
         ),
@@ -140,29 +137,48 @@ class OffsetPanelShell extends StatelessWidget {
 
     return Positioned(
       top: IConstructPanel.panelTopOf(context),
-      left: IConstructPanel.leftInsetOf(context),
-      right: 0,
+      left: margin,
+      right: margin,
       bottom: bottom,
-      child: child,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: SizedBox(
+            width: double.infinity,
+            height: double.infinity,
+            child: child,
+          ),
+        ),
+      ),
     );
   }
 
   Widget _buildScrollBody(BuildContext context, {required bool showNav}) {
+    final margin = IConstructPanel.horizontalMarginOf(context);
+
     return Positioned.fill(
       child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
-          IConstructPanel.leftInsetOf(context),
+          margin,
           IConstructPanel.panelTopOf(context),
-          0,
+          margin,
           showNav ? 120 : 24,
         ),
-        child: body,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: IConstructPanel.maxPanelWidthOf(context),
+            ),
+            child: body,
+          ),
+        ),
       ),
     );
   }
 }
 
-/// Shared cream pill navigation used by offset planning screens.
+/// Shared cream pill navigation used by planning screens.
 class OffsetPillNav extends StatelessWidget {
   final OffsetNavTab activeTab;
 
@@ -183,11 +199,11 @@ class OffsetPillNav extends StatelessWidget {
         decoration: BoxDecoration(
           color: IConstructPanel.cream,
           borderRadius: BorderRadius.circular(40),
-          boxShadow: const [
+          boxShadow: [
             BoxShadow(
-              color: Colors.black54,
-              blurRadius: 16,
-              offset: Offset(0, 6),
+              color: Colors.black.withValues(alpha: 0.3),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
             ),
           ],
         ),
@@ -259,7 +275,7 @@ class OffsetPillNav extends StatelessWidget {
   }
 }
 
-/// Common header rows for offset screens.
+/// Common header rows for planning screens.
 class OffsetPanelHeaders {
   const OffsetPanelHeaders._();
 

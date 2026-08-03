@@ -6,16 +6,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconstruct/features/auth/presentation/screens/material_estimator.dart';
 import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
 import 'package:iconstruct/features/bidding/screens/project_bids_screen.dart';
-
-/// Lifecycle stages matching the iConstruct builder user flow.
-const List<String> kProjectLifecycleStages = [
-  'Draft',
-  'Planning',
-  'Waiting for Quotations',
-  'Receiving Quotations',
-  'Supplier Selected',
-  'Completed',
-];
+import 'package:iconstruct/features/project_creation/data/project_lifecycle.dart';
+import 'package:iconstruct/features/project_creation/data/project_status_service.dart';
 
 class ProjectTrackingScreen extends StatelessWidget {
   const ProjectTrackingScreen({super.key});
@@ -162,7 +154,10 @@ class ProjectTrackingScreen extends StatelessWidget {
                               itemBuilder: (context, index) {
                                 final project =
                                     ProjectModel.fromDocument(docs[index]);
-                                return _TrackingCard(project: project);
+                                return _TrackingCard(
+                                  project: project,
+                                  userId: user.uid,
+                                );
                               },
                             );
                           },
@@ -179,43 +174,73 @@ class ProjectTrackingScreen extends StatelessWidget {
 
 class _TrackingCard extends StatelessWidget {
   final ProjectModel project;
+  final String userId;
 
-  const _TrackingCard({required this.project});
+  const _TrackingCard({required this.project, required this.userId});
 
   static const Color _darkBlue = Color(0xFF2C3E50);
 
-  /// Maps stored Firestore status to a lifecycle stage index.
-  int _stageIndex(String status) {
-    switch (status.toLowerCase()) {
-      case 'draft':
-        return 0;
-      case 'planning':
-      case 'ready':
-        return 1;
-      case 'posted':
-      case 'waiting for quotations':
-        return 2;
-      case 'receiving quotations':
-        return 3;
-      case 'offer_accepted':
-      case 'supplier selected':
-        return 4;
-      case 'completed':
-        return 5;
-      default:
-        return 0;
-    }
-  }
-
-  String _displayStatus(String status) {
-    final idx = _stageIndex(status);
-    return kProjectLifecycleStages[idx];
-  }
-
   @override
   Widget build(BuildContext context) {
-    final stage = _stageIndex(project.status);
-    final display = _displayStatus(project.status);
+    final postId = project.postId;
+    if (postId == null || postId.isEmpty) {
+      return _card(context, stage: ProjectLifecycle.stageIndex(project.status));
+    }
+
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('projectPosts')
+          .doc(postId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final post = snapshot.data?.data();
+        final storedStage = ProjectLifecycle.stageIndex(project.status);
+        var stage = storedStage;
+        var bidCount = 0;
+
+        if (post != null) {
+          final rawCount = post['quotationCount'];
+          bidCount = rawCount is num
+              ? rawCount.toInt()
+              : int.tryParse('${rawCount ?? 0}') ?? 0;
+
+          final derived = ProjectLifecycle.stageFromPost(post);
+          if (derived > storedStage &&
+              storedStage < ProjectLifecycle.stageCompleted) {
+            stage = derived;
+            _scheduleSync(post);
+          }
+        }
+
+        return _card(
+          context,
+          stage: stage,
+          bidCount: bidCount,
+          post: post,
+        );
+      },
+    );
+  }
+
+  void _scheduleSync(Map<String, dynamic> post) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ProjectStatusService.instance.syncFromPost(
+        userId: userId,
+        projectId: project.id,
+        storedStatus: project.status,
+        post: post,
+      );
+    });
+  }
+
+  Widget _card(
+    BuildContext context, {
+    required int stage,
+    int bidCount = 0,
+    Map<String, dynamic>? post,
+  }) {
+    final display = ProjectLifecycle.stageLabels[stage];
+    final status = ProjectLifecycle.statusForStage(stage);
 
     return Material(
       color: Colors.white,
@@ -224,7 +249,7 @@ class _TrackingCard extends StatelessWidget {
       shadowColor: Colors.black26,
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
-        onTap: () => _openProject(context),
+        onTap: () => _openProject(context, stage),
         child: Padding(
           padding: const EdgeInsets.all(18),
           child: Column(
@@ -292,6 +317,23 @@ class _TrackingCard extends StatelessWidget {
                       color: _darkBlue.withValues(alpha: 0.6),
                     ),
                   ),
+                  if (bidCount > 0) ...[
+                    const SizedBox(width: 12),
+                    Icon(
+                      Icons.local_offer_outlined,
+                      size: 14,
+                      color: const Color(0xFF059669).withValues(alpha: 0.9),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '$bidCount quotation${bidCount == 1 ? '' : 's'}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF047857),
+                      ),
+                    ),
+                  ],
                   const Spacer(),
                   Text(
                     'Tap to open',
@@ -303,11 +345,93 @@ class _TrackingCard extends StatelessWidget {
                   ),
                 ],
               ),
+              if (ProjectLifecycle.canMarkComplete(status)) ...[
+                const SizedBox(height: 12),
+                _CompleteAction(
+                  label: 'Mark planning complete',
+                  icon: Icons.task_alt_rounded,
+                  onPressed: () => _confirmComplete(context),
+                ),
+              ] else if (stage == ProjectLifecycle.stageCompleted) ...[
+                const SizedBox(height: 12),
+                _CompleteAction(
+                  label: 'Reopen canvassing',
+                  icon: Icons.refresh_rounded,
+                  filled: false,
+                  onPressed: () => _reopen(context, post),
+                ),
+              ],
             ],
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _confirmComplete(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          'Mark planning complete?',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          'Materials are planned and a supplier is selected, so this planning '
+          'and canvassing cycle is done. You can reopen it later to canvass '
+          'again.',
+          style: GoogleFonts.poppins(fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Mark complete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await ProjectStatusService.instance.markCompleted(
+        userId: userId,
+        projectId: project.id,
+      );
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Planning cycle marked complete.')),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not update status: $e')),
+      );
+    }
+  }
+
+  Future<void> _reopen(
+    BuildContext context,
+    Map<String, dynamic>? post,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ProjectStatusService.instance.reopen(
+        userId: userId,
+        projectId: project.id,
+        post: post,
+      );
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Canvassing reopened.')),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not update status: $e')),
+      );
+    }
   }
 
   Color _statusChipColor(int stage) {
@@ -348,17 +472,14 @@ class _TrackingCard extends StatelessWidget {
     }
   }
 
-  void _openProject(BuildContext context) {
-    final status = project.status.toLowerCase();
-    if ((status == 'posted' ||
-            status == 'offer_accepted' ||
-            status.contains('quotation')) &&
-        project.postId != null) {
+  void _openProject(BuildContext context, int stage) {
+    final postId = project.postId;
+    if (stage >= ProjectLifecycle.stageWaiting && postId != null) {
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => ProjectBidsScreen(
-            postId: project.postId!,
+            postId: postId,
             projectName: project.projectName,
           ),
         ),
@@ -380,6 +501,69 @@ class _TrackingCard extends StatelessWidget {
   }
 }
 
+class _CompleteAction extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool filled;
+  final VoidCallback onPressed;
+
+  const _CompleteAction({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    this.filled = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = Color(0xFF047857);
+
+    return SizedBox(
+      width: double.infinity,
+      child: filled
+          ? ElevatedButton.icon(
+              onPressed: onPressed,
+              icon: Icon(icon, size: 18),
+              label: Text(
+                label,
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: accent,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            )
+          : OutlinedButton.icon(
+              onPressed: onPressed,
+              icon: Icon(icon, size: 18),
+              label: Text(
+                label,
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: accent,
+                side: BorderSide(color: accent.withValues(alpha: 0.5)),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+    );
+  }
+}
+
 class _LifecycleTimeline extends StatelessWidget {
   final int currentIndex;
 
@@ -387,10 +571,12 @@ class _LifecycleTimeline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final stageCount = ProjectLifecycle.stageLabels.length;
+
     return Column(
       children: [
         Row(
-          children: List.generate(kProjectLifecycleStages.length * 2 - 1, (i) {
+          children: List.generate(stageCount * 2 - 1, (i) {
             if (i.isOdd) {
               final leftStage = i ~/ 2;
               final done = leftStage < currentIndex;
@@ -422,12 +608,7 @@ class _LifecycleTimeline extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _miniLabel('Draft'),
-            _miniLabel('Plan'),
-            _miniLabel('Wait'),
-            _miniLabel('Quotes'),
-            _miniLabel('Select'),
-            _miniLabel('Done'),
+            for (final label in ProjectLifecycle.shortLabels) _miniLabel(label),
           ],
         ),
       ],

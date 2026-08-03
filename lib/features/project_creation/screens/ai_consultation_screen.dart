@@ -1,8 +1,9 @@
-﻿import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
+import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
+import 'package:iconstruct/core/widgets/offset_panel_shell.dart';
 import 'package:iconstruct/core/widgets/user_avatar.dart';
 import 'package:iconstruct/features/auth/presentation/screens/cost_estimation.dart';
 import 'package:iconstruct/features/auth/presentation/screens/profile_screen.dart';
@@ -52,7 +53,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
   final List<String> _confirmedMaterials = [];
   List<RenovationTemplate> _templates = [];
 
-  /// Free chat after area; optional suggestion chips; then budget â†’ BOM.
+  /// Free chat after area; optional suggestion chips; then budget → BOM.
   static const int _stepArea = 0;
   static const int _stepChat = 1;
   static const int _stepBudget = 2;
@@ -86,7 +87,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
     await Future.delayed(const Duration(milliseconds: 350));
     await _addBotMessage(
       "I use an AI API (not a custom-trained model) and I'm limited to iConstruct only: "
-      "material planning and estimate help for canvassing â€” not general chat or construction site management.\n\n"
+      "material planning and estimate help for canvassing — not general chat or construction site management.\n\n"
       "You lead: describe your ideas freely. I only suggest options; you decide what to keep.\n"
       "Want a ready package? Open Templates on the side.",
     );
@@ -144,7 +145,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
 
     if (_area <= 0) {
       await _addBotMessage(
-        "One number please â€” what's the project area in sqm? Then we can draft your BOM.",
+        "One number please — what's the project area in sqm? Then we can draft your BOM.",
       );
       setState(() {
         _step = _stepArea;
@@ -161,7 +162,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
     });
     await _addBotMessage(
       "Before I draft your Bill of Materials from what you chose: "
-      "Low, Medium, or High budget for material quality? (Guides tier only â€” not a fixed price.)",
+      "Low, Medium, or High budget for material quality? (Guides tier only — not a fixed price.)",
     );
   }
 
@@ -195,8 +196,8 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
           _step = _stepChat;
           setState(() => _showBomChip = true);
           await _addBotMessage(
-            "Noted â€” ${_area.toStringAsFixed(0)} sqm. Tell me what you envision for this project. "
-            "I'll suggest material options when helpful â€” you choose what stays.\n\n"
+            "Noted — ${_area.toStringAsFixed(0)} sqm. Tell me what you envision for this project. "
+            "I'll suggest material options when helpful — you choose what stays.\n\n"
             "When you're ready, tap Build my BOM.",
           );
         }
@@ -211,7 +212,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
         _step = _stepDone;
         await _addBotMessage(
           "Thanks! Drafting a Bill of Materials from your ideas"
-          "${_area > 0 ? ' for ${_area.toStringAsFixed(0)} sqm' : ''}â€¦ "
+          "${_area > 0 ? ' for ${_area.toStringAsFixed(0)} sqm' : ''}… "
           "You can still edit everything on the next screen.",
         );
         _generateBOM();
@@ -271,7 +272,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
     final reply = result.reply.isNotEmpty
         ? result.reply
         : (result.inScope
-            ? "Tell me more about the materials you want â€” I only suggest; you decide."
+            ? "Tell me more about the materials you want — I only suggest; you decide."
             : "I can only help with iConstruct material planning for this estimate.");
 
     setState(() {
@@ -348,7 +349,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Optional picks â€” nothing is added until you choose.',
+                                  'Optional picks — nothing is added until you choose.',
                                   style: GoogleFonts.poppins(
                                     fontSize: 12,
                                     color: _cream.withValues(alpha: 0.75),
@@ -443,7 +444,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
 
     if (!mounted) return;
 
-    // Dismissed without action â€” keep a reopen button via pending list
+    // Dismissed without action — keep a reopen button via pending list
     if (selected == null) {
       setState(() {});
       return;
@@ -463,7 +464,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
   Future<void> _confirmPendingSelection() async {
     if (_pendingSelected.isEmpty) {
       await _addBotMessage(
-        "No materials selected â€” that's fine. Keep describing your idea, or open suggestions again to pick some.",
+        "No materials selected — that's fine. Keep describing your idea, or open suggestions again to pick some.",
       );
       return;
     }
@@ -497,7 +498,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
   Future<void> _skipSuggestions() async {
     setState(() {
       _messages.add(
-        const ChatMessage(text: 'Skip suggestions â€” keep chatting', isUser: true),
+        const ChatMessage(text: 'Skip suggestions — keep chatting', isUser: true),
       );
       _pendingRecommendations = [];
       _pendingSelected.clear();
@@ -506,13 +507,13 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
     });
     _scrollToBottom();
     await _addBotMessage(
-      "No problem â€” your call. Tell me more about what you want for this project.",
+      "No problem — your call. Tell me more about what you want for this project.",
     );
   }
 
   Future<void> _onChipReady() async {
     setState(() {
-      _messages.add(const ChatMessage(text: "I'm ready â€” build my BOM", isUser: true));
+      _messages.add(const ChatMessage(text: "I'm ready — build my BOM", isUser: true));
       _showBomChip = false;
     });
     _scrollToBottom();
@@ -531,9 +532,19 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
   }
 
   Future<void> _generateBOM() async {
-    setState(() => _isTyping = true);
+    final selected = List<String>.from(_confirmedMaterials);
 
-    final selected = _confirmedMaterials;
+    // The builder leads the plan: what they picked is what they review.
+    if (selected.isNotEmpty) {
+      await _addBotMessage(
+        "Building your BOM with the ${selected.length} material"
+        "${selected.length == 1 ? '' : 's'} you selected.",
+      );
+      _openBomFromSelections(selected);
+      return;
+    }
+
+    setState(() => _isTyping = true);
 
     try {
       final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
@@ -544,10 +555,9 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
         'areaSqm': _area,
         'budgetLevel': _budget,
         'additionalNotes': [
-          'User leads the plan. Only include materials they explicitly selected when possible.',
-          'Do not invent a full sequential package unless needed to fill gaps they clearly implied.',
-          if (selected.isNotEmpty) 'Materials the user selected:',
-          ...selected.map((m) => '- $m'),
+          'The user picked no materials from suggestions — draft only the '
+              'essentials implied by the ideas below.',
+          'Do not invent a full sequential package beyond those essentials.',
           if (_ideaLog.isNotEmpty) 'User ideas (in their words):',
           ..._ideaLog.map((e) => '- $e'),
           if (widget.projectNotes != null &&
@@ -577,27 +587,27 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
             ),
           );
         } else {
-          _openLocalBomFallback(selected);
+          _openBomFromSelections(selected);
         }
         return;
       }
 
       setState(() => _isTyping = false);
       await _addBotMessage(
-        "Cloud AI didn't return a list â€” building your BOM from materials you selected.",
+        "Cloud AI didn't return a list — building your BOM from materials you selected.",
       );
-      _openLocalBomFallback(selected);
+      _openBomFromSelections(selected);
     } catch (e) {
       setState(() => _isTyping = false);
       await _addBotMessage(
-        "AI service unavailable â€” building your essential BOM locally from what you selected.",
+        "AI service unavailable — building your essential BOM locally from what you selected.",
       );
-      _openLocalBomFallback(selected);
+      _openBomFromSelections(selected);
     }
   }
 
-  void _openLocalBomFallback(List<String> selected) {
-    // Prefer only what the user explicitly chose â€” never invent a full package here.
+  /// Builds the review BOM from exactly the materials the builder confirmed.
+  void _openBomFromSelections(List<String> selected) {
     final names = selected.isNotEmpty ? selected : _confirmedMaterials;
     if (names.isEmpty) {
       setState(() {
@@ -673,222 +683,140 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final statusTop = MediaQuery.paddingOf(context).top;
-
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
-        statusBarColor: Color(0xFF1E3042),
-        statusBarIconBrightness: Brightness.light,
-        statusBarBrightness: Brightness.dark,
+    return OffsetPanelShell(
+      scaffoldKey: _scaffoldKey,
+      extent: OffsetPanelExtent.fillBottom,
+      panelColor: IConstructPanel.navy,
+      borderRadius: IConstructPanel.topRadiusOf(context),
+      contentPadding: EdgeInsets.zero,
+      endDrawer: _TemplatesDrawer(
+        renovationType: widget.projectName,
+        templates: _templates.isEmpty
+            ? RenovationTemplatesCatalog.threeForType(widget.projectName)
+            : _templates,
+        onSelect: _useTemplateReference,
       ),
-      child: Scaffold(
-        key: _scaffoldKey,
-        backgroundColor: const Color(0xFFE0D7C9),
-        endDrawer: _TemplatesDrawer(
-          renovationType: widget.projectName,
-          templates: _templates.isEmpty
-              ? RenovationTemplatesCatalog.forType(widget.projectName)
-              : _templates,
-          onSelect: _useTemplateReference,
-        ),
-        body: Column(
-          children: [
-            // Dark status-bar strip only â€” keeps phone icons visible
-            ColoredBox(
-              color: _navy,
-              child: SizedBox(height: statusTop, width: double.infinity),
-            ),
-            Expanded(
-              child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    stops: [0.0, 0.56, 1.0],
-                    colors: [
-                      Color(0xFFE0D7C9),
-                      Color(0xFF2C3E50),
-                      Color(0xFF648DB6),
-                    ],
+      header: _buildTopBar(),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 22, 14, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'AI Material\nConsultant',
+                  style: GoogleFonts.poppins(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    height: 1.15,
                   ),
                 ),
-                child: SafeArea(
-                  top: false,
-                  child: Stack(
-                    children: [
-                      const Positioned(
-                        left: 0,
-                        top: -200,
-                        width: 393,
-                        height: 585,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: _cream,
-                            borderRadius: BorderRadius.all(Radius.circular(50)),
-                          ),
-                        ),
-                      ),
-                      _buildTopBar(),
-                      Positioned(
-                        top: 110,
-                        left: 16,
-                        right: 0,
-                        bottom: 0,
-                        child: Container(
-                          decoration: const BoxDecoration(
-                            color: _navy,
-                            borderRadius: BorderRadius.only(
-                              topLeft: Radius.circular(60),
-                              topRight: Radius.circular(60),
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(24, 28, 20, 0),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'AI Material\nConsultant',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white,
-                                        height: 1.15,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      widget.customProjectName?.isNotEmpty == true
-                                          ? widget.customProjectName!
-                                          : widget.projectName,
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 13,
-                                        color: _cream.withValues(alpha: 0.85),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    Text(
-                                      'Powered by AI API Â· iConstruct material planning only. You choose; I suggest.',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 11,
-                                        color: const Color(0xFFE0D7C9),
-                                        height: 1.35,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    const Divider(color: _cream, thickness: 1),
-                                  ],
-                                ),
-                              ),
-                              Expanded(
-                                child: ListView.builder(
-                                  controller: _scrollController,
-                                  padding:
-                                      const EdgeInsets.fromLTRB(20, 12, 20, 12),
-                                  itemCount:
-                                      _messages.length + (_isTyping ? 1 : 0),
-                                  itemBuilder: (context, index) {
-                                    if (index == _messages.length) {
-                                      return _buildTypingIndicator();
-                                    }
-                                    return _buildMessageBubble(_messages[index]);
-                                  },
-                                ),
-                              ),
-                              _buildMessageInput(),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                const SizedBox(height: 6),
+                Text(
+                  widget.customProjectName?.isNotEmpty == true
+                      ? widget.customProjectName!
+                      : widget.projectName,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    color: _cream.withValues(alpha: 0.85),
                   ),
                 ),
-              ),
+                const SizedBox(height: 10),
+                Text(
+                  'Powered by AI API · iConstruct material planning only. You choose; I suggest.',
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    color: const Color(0xFFE0D7C9),
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Divider(color: _cream, thickness: 1),
+              ],
             ),
-          ],
-        ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.fromLTRB(16, 12, 14, 12),
+              itemCount: _messages.length + (_isTyping ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index == _messages.length) {
+                  return _buildTypingIndicator();
+                }
+                return _buildMessageBubble(_messages[index]);
+              },
+            ),
+          ),
+          _buildMessageInput(),
+        ],
       ),
     );
   }
 
   Widget _buildTopBar() {
-    return Align(
-      alignment: Alignment.topCenter,
-      child: Container(
-        height: 96,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        color: _cream,
-        child: Row(
-          children: [
-            Material(
-              color: _darkBlue,
-              shape: const CircleBorder(),
-              child: InkWell(
-                customBorder: const CircleBorder(),
-                onTap: () => Navigator.pop(context),
-                child: const SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: Icon(Icons.arrow_back_rounded, color: _cream, size: 22),
-                ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Material(
+            color: _darkBlue,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: () => Navigator.pop(context),
+              child: const SizedBox(
+                width: 40,
+                height: 40,
+                child: Icon(Icons.arrow_back_rounded, color: _cream, size: 22),
               ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Want a ready package? Templates â†’',
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: _darkBlue.withValues(alpha: 0.75),
-                ),
-              ),
-            ),
-            Material(
-              color: _darkBlue,
+          ),
+          const Spacer(),
+          Material(
+            color: _darkBlue,
+            borderRadius: BorderRadius.circular(20),
+            child: InkWell(
               borderRadius: BorderRadius.circular(20),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: () => _scaffoldKey.currentState?.openEndDrawer(),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.grid_view_rounded,
+              onTap: () => _scaffoldKey.currentState?.openEndDrawer(),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.grid_view_rounded,
+                      color: _cream,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Templates',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
                         color: _cream,
-                        size: 18,
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Templates',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: _cream,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            UserAvatar(
-              size: 36,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                );
-              },
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          UserAvatar(
+            size: 34,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ProfileScreen()),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
@@ -935,7 +863,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
           borderRadius: BorderRadius.circular(16),
         ),
         child: Text(
-          'AI is thinkingâ€¦',
+          'AI is thinking…',
           style: GoogleFonts.poppins(color: _darkBlue, fontSize: 12),
         ),
       ),
@@ -987,8 +915,8 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       hintText: _step == _stepArea
-                          ? 'Area in sqm, or start describingâ€¦'
-                          : 'Describe your project ideas freelyâ€¦',
+                          ? 'Area in sqm, or start describing…'
+                          : 'Describe your project ideas freely…',
                       hintStyle: TextStyle(
                         color: Colors.white.withValues(alpha: 0.55),
                       ),
@@ -1126,7 +1054,7 @@ class _TemplatesDrawer extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Ready packages for $renovationType â€” structured essentials. '
+                            'Ready packages for $renovationType — structured essentials. '
                                 'Select one, enter area, then adjust quantities / material types. '
                                 'Use Templates when you want a fixed sequence; chat stays free-form.',
                             style: GoogleFonts.poppins(

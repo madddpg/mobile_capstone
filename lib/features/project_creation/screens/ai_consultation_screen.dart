@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -52,7 +52,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
   final List<String> _confirmedMaterials = [];
   List<RenovationTemplate> _templates = [];
 
-  /// Free chat after area; optional suggestion chips; then budget → BOM.
+  /// Free chat after area; optional suggestion chips; then budget â†’ BOM.
   static const int _stepArea = 0;
   static const int _stepChat = 1;
   static const int _stepBudget = 2;
@@ -60,7 +60,6 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
 
   List<String> _pendingRecommendations = [];
   final Set<String> _pendingSelected = {};
-  bool _showSelectChips = false;
   bool _showBomChip = false;
 
   static const Color _cream = Color(0xFFEDE4D4);
@@ -87,7 +86,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
     await Future.delayed(const Duration(milliseconds: 350));
     await _addBotMessage(
       "I use an AI API (not a custom-trained model) and I'm limited to iConstruct only: "
-      "material planning and estimate help for canvassing — not general chat or construction site management.\n\n"
+      "material planning and estimate help for canvassing â€” not general chat or construction site management.\n\n"
       "You lead: describe your ideas freely. I only suggest options; you decide what to keep.\n"
       "Want a ready package? Open Templates on the side.",
     );
@@ -145,18 +144,16 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
 
     if (_area <= 0) {
       await _addBotMessage(
-        "One number please — what's the project area in sqm? Then we can draft your BOM.",
+        "One number please â€” what's the project area in sqm? Then we can draft your BOM.",
       );
       setState(() {
         _step = _stepArea;
         _showBomChip = false;
-        _showSelectChips = false;
       });
       return;
     }
 
     setState(() {
-      _showSelectChips = false;
       _showBomChip = false;
       _pendingRecommendations = [];
       _pendingSelected.clear();
@@ -164,7 +161,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
     });
     await _addBotMessage(
       "Before I draft your Bill of Materials from what you chose: "
-      "Low, Medium, or High budget for material quality? (Guides tier only — not a fixed price.)",
+      "Low, Medium, or High budget for material quality? (Guides tier only â€” not a fixed price.)",
     );
   }
 
@@ -198,8 +195,8 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
           _step = _stepChat;
           setState(() => _showBomChip = true);
           await _addBotMessage(
-            "Noted — ${_area.toStringAsFixed(0)} sqm. Tell me what you envision for this project. "
-            "I'll suggest material options when helpful — you choose what stays.\n\n"
+            "Noted â€” ${_area.toStringAsFixed(0)} sqm. Tell me what you envision for this project. "
+            "I'll suggest material options when helpful â€” you choose what stays.\n\n"
             "When you're ready, tap Build my BOM.",
           );
         }
@@ -214,7 +211,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
         _step = _stepDone;
         await _addBotMessage(
           "Thanks! Drafting a Bill of Materials from your ideas"
-          "${_area > 0 ? ' for ${_area.toStringAsFixed(0)} sqm' : ''}… "
+          "${_area > 0 ? ' for ${_area.toStringAsFixed(0)} sqm' : ''}â€¦ "
           "You can still edit everything on the next screen.",
         );
         _generateBOM();
@@ -244,7 +241,6 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
 
     setState(() {
       _isTyping = true;
-      _showSelectChips = false;
       _pendingRecommendations = [];
       _pendingSelected.clear();
       _showBomChip = true;
@@ -275,7 +271,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
     final reply = result.reply.isNotEmpty
         ? result.reply
         : (result.inScope
-            ? "Tell me more about the materials you want — I only suggest; you decide."
+            ? "Tell me more about the materials you want â€” I only suggest; you decide."
             : "I can only help with iConstruct material planning for this estimate.");
 
     setState(() {
@@ -285,7 +281,6 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
 
     if (!result.inScope || result.suggestions.isEmpty) {
       setState(() {
-        _showSelectChips = false;
         _pendingRecommendations = [];
         _pendingSelected.clear();
         _showBomChip = true;
@@ -353,7 +348,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Optional picks — nothing is added until you choose.',
+                                  'Optional picks â€” nothing is added until you choose.',
                                   style: GoogleFonts.poppins(
                                     fontSize: 12,
                                     color: _cream.withValues(alpha: 0.75),
@@ -448,7 +443,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
 
     if (!mounted) return;
 
-    // Dismissed without action — keep a reopen button via pending list
+    // Dismissed without action â€” keep a reopen button via pending list
     if (selected == null) {
       setState(() {});
       return;
@@ -468,7 +463,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
   Future<void> _confirmPendingSelection() async {
     if (_pendingSelected.isEmpty) {
       await _addBotMessage(
-        "No materials selected — that's fine. Keep describing your idea, or open suggestions again to pick some.",
+        "No materials selected â€” that's fine. Keep describing your idea, or open suggestions again to pick some.",
       );
       return;
     }
@@ -485,7 +480,6 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
           isUser: true,
         ),
       );
-      _showSelectChips = false;
       _pendingRecommendations = [];
       _pendingSelected.clear();
       _showBomChip = true;
@@ -503,9 +497,8 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
   Future<void> _skipSuggestions() async {
     setState(() {
       _messages.add(
-        const ChatMessage(text: 'Skip suggestions — keep chatting', isUser: true),
+        const ChatMessage(text: 'Skip suggestions â€” keep chatting', isUser: true),
       );
-      _showSelectChips = false;
       _pendingRecommendations = [];
       _pendingSelected.clear();
       _showBomChip = true;
@@ -513,14 +506,13 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
     });
     _scrollToBottom();
     await _addBotMessage(
-      "No problem — your call. Tell me more about what you want for this project.",
+      "No problem â€” your call. Tell me more about what you want for this project.",
     );
   }
 
   Future<void> _onChipReady() async {
     setState(() {
-      _messages.add(const ChatMessage(text: "I'm ready — build my BOM", isUser: true));
-      _showSelectChips = false;
+      _messages.add(const ChatMessage(text: "I'm ready â€” build my BOM", isUser: true));
       _showBomChip = false;
     });
     _scrollToBottom();
@@ -592,20 +584,20 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
 
       setState(() => _isTyping = false);
       await _addBotMessage(
-        "Cloud AI didn't return a list — building your BOM from materials you selected.",
+        "Cloud AI didn't return a list â€” building your BOM from materials you selected.",
       );
       _openLocalBomFallback(selected);
     } catch (e) {
       setState(() => _isTyping = false);
       await _addBotMessage(
-        "AI service unavailable — building your essential BOM locally from what you selected.",
+        "AI service unavailable â€” building your essential BOM locally from what you selected.",
       );
       _openLocalBomFallback(selected);
     }
   }
 
   void _openLocalBomFallback(List<String> selected) {
-    // Prefer only what the user explicitly chose — never invent a full package here.
+    // Prefer only what the user explicitly chose â€” never invent a full package here.
     final names = selected.isNotEmpty ? selected : _confirmedMaterials;
     if (names.isEmpty) {
       setState(() {
@@ -701,7 +693,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
         ),
         body: Column(
           children: [
-            // Dark status-bar strip only — keeps phone icons visible
+            // Dark status-bar strip only â€” keeps phone icons visible
             ColoredBox(
               color: _navy,
               child: SizedBox(height: statusTop, width: double.infinity),
@@ -779,7 +771,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
                                     ),
                                     const SizedBox(height: 10),
                                     Text(
-                                      'Powered by AI API · iConstruct material planning only. You choose; I suggest.',
+                                      'Powered by AI API Â· iConstruct material planning only. You choose; I suggest.',
                                       style: GoogleFonts.poppins(
                                         fontSize: 11,
                                         color: const Color(0xFFE0D7C9),
@@ -847,7 +839,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'Want a ready package? Templates →',
+                'Want a ready package? Templates â†’',
                 style: GoogleFonts.poppins(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
@@ -943,7 +935,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
           borderRadius: BorderRadius.circular(16),
         ),
         child: Text(
-          'AI is thinking…',
+          'AI is thinkingâ€¦',
           style: GoogleFonts.poppins(color: _darkBlue, fontSize: 12),
         ),
       ),
@@ -995,8 +987,8 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       hintText: _step == _stepArea
-                          ? 'Area in sqm, or start describing…'
-                          : 'Describe your project ideas freely…',
+                          ? 'Area in sqm, or start describingâ€¦'
+                          : 'Describe your project ideas freelyâ€¦',
                       hintStyle: TextStyle(
                         color: Colors.white.withValues(alpha: 0.55),
                       ),
@@ -1134,7 +1126,7 @@ class _TemplatesDrawer extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Ready packages for $renovationType — structured essentials. '
+                            'Ready packages for $renovationType â€” structured essentials. '
                                 'Select one, enter area, then adjust quantities / material types. '
                                 'Use Templates when you want a fixed sequence; chat stays free-form.',
                             style: GoogleFonts.poppins(
@@ -1160,7 +1152,7 @@ class _TemplatesDrawer extends StatelessWidget {
                 child: ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                   itemCount: templates.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final t = templates[index];
                     return Material(
@@ -1183,7 +1175,7 @@ class _TemplatesDrawer extends StatelessWidget {
                                       ? Image.asset(
                                           t.imageAsset!,
                                           fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) =>
+                                          errorBuilder: (_, _, _) =>
                                               _fallback(t),
                                         )
                                       : _fallback(t),

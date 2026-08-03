@@ -64,7 +64,6 @@ class SavedProjectsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     const Color creamBg = Color(0xFFEDE4D4);
     const Color darkBlue = Color(0xFF2C3E50);
-    const Color lightBlue = Color(0xFF648DB6);
 
     return Scaffold(
       body: Stack(

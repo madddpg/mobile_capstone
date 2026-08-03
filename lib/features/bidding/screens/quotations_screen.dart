@@ -49,7 +49,7 @@ class QuotationsScreen extends StatelessWidget {
                     Icon(
                       Icons.inventory_2_outlined,
                       size: 80,
-                      color: navyColor.withOpacity(0.5),
+                      color: navyColor.withValues(alpha: 0.5),
                     ),
                     const SizedBox(height: 16),
                     const Text(
@@ -86,7 +86,7 @@ class QuotationsScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 10,
                       offset: const Offset(0, 5),
                     ),

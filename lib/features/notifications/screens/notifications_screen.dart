@@ -141,7 +141,7 @@ class NotificationsScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
+              color: Colors.white.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -192,9 +192,9 @@ class NotificationBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFF2C3E50).withOpacity(0.1),
+        color: const Color(0xFF2C3E50).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF2C3E50).withOpacity(0.2)),
+        border: Border.all(color: const Color(0xFF2C3E50).withValues(alpha: 0.2)),
       ),
       child: Text(
         _formatProjectType(projectType),
@@ -283,7 +283,7 @@ class NotificationCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.15),
+              color: Colors.black.withValues(alpha: 0.15),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -327,7 +327,7 @@ class NotificationCard extends StatelessWidget {
                         timeFormatted,
                         style: GoogleFonts.poppins(
                           fontSize: 12,
-                          color: const Color(0xFF2C3E50).withOpacity(0.6),
+                          color: const Color(0xFF2C3E50).withValues(alpha: 0.6),
                         ),
                       ),
                     ],
@@ -337,7 +337,7 @@ class NotificationCard extends StatelessWidget {
                     message,
                     style: GoogleFonts.poppins(
                       fontSize: 14,
-                      color: const Color(0xFF2C3E50).withOpacity(0.8),
+                      color: const Color(0xFF2C3E50).withValues(alpha: 0.8),
                       height: 1.4,
                     ),
                   ),

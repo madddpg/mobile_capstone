@@ -88,7 +88,7 @@ class _SelectTemplateScreenState extends State<SelectTemplateScreen> {
           return ListView.separated(
             padding: const EdgeInsets.only(right: 4, bottom: 8),
             itemCount: templates.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 14),
+            separatorBuilder: (_, _) => const SizedBox(height: 14),
             itemBuilder: (context, index) {
               final template = templates[index];
               return _GlitchedTemplateTile(
@@ -205,7 +205,7 @@ class _TemplatePreview extends StatelessWidget {
       return Image.asset(
         asset,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => _fallback(),
+        errorBuilder: (_, _, _) => _fallback(),
       );
     }
 
@@ -213,7 +213,7 @@ class _TemplatePreview extends StatelessWidget {
       return Image.network(
         url,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => _fallback(),
+        errorBuilder: (_, _, _) => _fallback(),
       );
     }
 

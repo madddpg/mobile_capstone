@@ -221,8 +221,10 @@ class PostedProjectDetailsScreen extends StatelessWidget {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) =>
-                                          QuotationsScreen(postId: postId),
+                                      builder: (_) => QuotationsScreen(
+                                        postId: postId,
+                                        projectName: projectName,
+                                      ),
                                     ),
                                   );
                                 },

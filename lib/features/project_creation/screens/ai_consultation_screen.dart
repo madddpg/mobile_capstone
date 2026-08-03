@@ -1,8 +1,9 @@
-﻿import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
+import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
+import 'package:iconstruct/core/widgets/offset_panel_shell.dart';
 import 'package:iconstruct/core/widgets/user_avatar.dart';
 import 'package:iconstruct/features/auth/presentation/screens/cost_estimation.dart';
 import 'package:iconstruct/features/auth/presentation/screens/profile_screen.dart';
@@ -512,7 +513,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
 
   Future<void> _onChipReady() async {
     setState(() {
-      _messages.add(const ChatMessage(text: "I'm ready â€” build my BOM", isUser: true));
+      _messages.add(const ChatMessage(text: "I'm ready — build my BOM", isUser: true));
       _showBomChip = false;
     });
     _scrollToBottom();
@@ -531,9 +532,19 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
   }
 
   Future<void> _generateBOM() async {
-    setState(() => _isTyping = true);
+    final selected = List<String>.from(_confirmedMaterials);
 
-    final selected = _confirmedMaterials;
+    // The builder leads the plan: what they picked is what they review.
+    if (selected.isNotEmpty) {
+      await _addBotMessage(
+        "Building your BOM with the ${selected.length} material"
+        "${selected.length == 1 ? '' : 's'} you selected.",
+      );
+      _openBomFromSelections(selected);
+      return;
+    }
+
+    setState(() => _isTyping = true);
 
     try {
       final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
@@ -544,10 +555,9 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
         'areaSqm': _area,
         'budgetLevel': _budget,
         'additionalNotes': [
-          'User leads the plan. Only include materials they explicitly selected when possible.',
-          'Do not invent a full sequential package unless needed to fill gaps they clearly implied.',
-          if (selected.isNotEmpty) 'Materials the user selected:',
-          ...selected.map((m) => '- $m'),
+          'The user picked no materials from suggestions — draft only the '
+              'essentials implied by the ideas below.',
+          'Do not invent a full sequential package beyond those essentials.',
           if (_ideaLog.isNotEmpty) 'User ideas (in their words):',
           ..._ideaLog.map((e) => '- $e'),
           if (widget.projectNotes != null &&
@@ -577,7 +587,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
             ),
           );
         } else {
-          _openLocalBomFallback(selected);
+          _openBomFromSelections(selected);
         }
         return;
       }
@@ -586,18 +596,18 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
       await _addBotMessage(
         "Cloud AI didn't return a list â€” building your BOM from materials you selected.",
       );
-      _openLocalBomFallback(selected);
+      _openBomFromSelections(selected);
     } catch (e) {
       setState(() => _isTyping = false);
       await _addBotMessage(
         "AI service unavailable â€” building your essential BOM locally from what you selected.",
       );
-      _openLocalBomFallback(selected);
+      _openBomFromSelections(selected);
     }
   }
 
-  void _openLocalBomFallback(List<String> selected) {
-    // Prefer only what the user explicitly chose â€” never invent a full package here.
+  /// Builds the review BOM from exactly the materials the builder confirmed.
+  void _openBomFromSelections(List<String> selected) {
     final names = selected.isNotEmpty ? selected : _confirmedMaterials;
     if (names.isEmpty) {
       setState(() {
@@ -673,222 +683,140 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final statusTop = MediaQuery.paddingOf(context).top;
-
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
-        statusBarColor: Color(0xFF1E3042),
-        statusBarIconBrightness: Brightness.light,
-        statusBarBrightness: Brightness.dark,
+    return OffsetPanelShell(
+      scaffoldKey: _scaffoldKey,
+      extent: OffsetPanelExtent.fillBottom,
+      panelColor: IConstructPanel.navy,
+      borderRadius: IConstructPanel.topRadiusOf(context),
+      contentPadding: EdgeInsets.zero,
+      endDrawer: _TemplatesDrawer(
+        renovationType: widget.projectName,
+        templates: _templates.isEmpty
+            ? RenovationTemplatesCatalog.threeForType(widget.projectName)
+            : _templates,
+        onSelect: _useTemplateReference,
       ),
-      child: Scaffold(
-        key: _scaffoldKey,
-        backgroundColor: const Color(0xFFE0D7C9),
-        endDrawer: _TemplatesDrawer(
-          renovationType: widget.projectName,
-          templates: _templates.isEmpty
-              ? RenovationTemplatesCatalog.forType(widget.projectName)
-              : _templates,
-          onSelect: _useTemplateReference,
-        ),
-        body: Column(
-          children: [
-            // Dark status-bar strip only â€” keeps phone icons visible
-            ColoredBox(
-              color: _navy,
-              child: SizedBox(height: statusTop, width: double.infinity),
-            ),
-            Expanded(
-              child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    stops: [0.0, 0.56, 1.0],
-                    colors: [
-                      Color(0xFFE0D7C9),
-                      Color(0xFF2C3E50),
-                      Color(0xFF648DB6),
-                    ],
+      header: _buildTopBar(),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 22, 14, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'AI Material\nConsultant',
+                  style: GoogleFonts.poppins(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    height: 1.15,
                   ),
                 ),
-                child: SafeArea(
-                  top: false,
-                  child: Stack(
-                    children: [
-                      const Positioned(
-                        left: 0,
-                        top: -200,
-                        width: 393,
-                        height: 585,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: _cream,
-                            borderRadius: BorderRadius.all(Radius.circular(50)),
-                          ),
-                        ),
-                      ),
-                      _buildTopBar(),
-                      Positioned(
-                        top: 110,
-                        left: 16,
-                        right: 0,
-                        bottom: 0,
-                        child: Container(
-                          decoration: const BoxDecoration(
-                            color: _navy,
-                            borderRadius: BorderRadius.only(
-                              topLeft: Radius.circular(60),
-                              topRight: Radius.circular(60),
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(24, 28, 20, 0),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'AI Material\nConsultant',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white,
-                                        height: 1.15,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      widget.customProjectName?.isNotEmpty == true
-                                          ? widget.customProjectName!
-                                          : widget.projectName,
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 13,
-                                        color: _cream.withValues(alpha: 0.85),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    Text(
-                                      'Powered by AI API Â· iConstruct material planning only. You choose; I suggest.',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 11,
-                                        color: const Color(0xFFE0D7C9),
-                                        height: 1.35,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    const Divider(color: _cream, thickness: 1),
-                                  ],
-                                ),
-                              ),
-                              Expanded(
-                                child: ListView.builder(
-                                  controller: _scrollController,
-                                  padding:
-                                      const EdgeInsets.fromLTRB(20, 12, 20, 12),
-                                  itemCount:
-                                      _messages.length + (_isTyping ? 1 : 0),
-                                  itemBuilder: (context, index) {
-                                    if (index == _messages.length) {
-                                      return _buildTypingIndicator();
-                                    }
-                                    return _buildMessageBubble(_messages[index]);
-                                  },
-                                ),
-                              ),
-                              _buildMessageInput(),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                const SizedBox(height: 6),
+                Text(
+                  widget.customProjectName?.isNotEmpty == true
+                      ? widget.customProjectName!
+                      : widget.projectName,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    color: _cream.withValues(alpha: 0.85),
                   ),
                 ),
-              ),
+                const SizedBox(height: 10),
+                Text(
+                  'Powered by AI API · iConstruct material planning only. You choose; I suggest.',
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    color: const Color(0xFFE0D7C9),
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Divider(color: _cream, thickness: 1),
+              ],
             ),
-          ],
-        ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.fromLTRB(16, 12, 14, 12),
+              itemCount: _messages.length + (_isTyping ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index == _messages.length) {
+                  return _buildTypingIndicator();
+                }
+                return _buildMessageBubble(_messages[index]);
+              },
+            ),
+          ),
+          _buildMessageInput(),
+        ],
       ),
     );
   }
 
   Widget _buildTopBar() {
-    return Align(
-      alignment: Alignment.topCenter,
-      child: Container(
-        height: 96,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        color: _cream,
-        child: Row(
-          children: [
-            Material(
-              color: _darkBlue,
-              shape: const CircleBorder(),
-              child: InkWell(
-                customBorder: const CircleBorder(),
-                onTap: () => Navigator.pop(context),
-                child: const SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: Icon(Icons.arrow_back_rounded, color: _cream, size: 22),
-                ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Material(
+            color: _darkBlue,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: () => Navigator.pop(context),
+              child: const SizedBox(
+                width: 40,
+                height: 40,
+                child: Icon(Icons.arrow_back_rounded, color: _cream, size: 22),
               ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Want a ready package? Templates â†’',
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: _darkBlue.withValues(alpha: 0.75),
-                ),
-              ),
-            ),
-            Material(
-              color: _darkBlue,
+          ),
+          const Spacer(),
+          Material(
+            color: _darkBlue,
+            borderRadius: BorderRadius.circular(20),
+            child: InkWell(
               borderRadius: BorderRadius.circular(20),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: () => _scaffoldKey.currentState?.openEndDrawer(),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.grid_view_rounded,
+              onTap: () => _scaffoldKey.currentState?.openEndDrawer(),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.grid_view_rounded,
+                      color: _cream,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Templates',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
                         color: _cream,
-                        size: 18,
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Templates',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: _cream,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            UserAvatar(
-              size: 36,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                );
-              },
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          UserAvatar(
+            size: 34,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ProfileScreen()),
+              );
+            },
+          ),
+        ],
       ),
     );
   }

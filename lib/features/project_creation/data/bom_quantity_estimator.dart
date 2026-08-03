@@ -154,9 +154,11 @@ class BomQuantityEstimator {
     required List<String> materialNames,
   }) {
     final names = <String>[];
+    final seen = <String>{};
     for (final raw in materialNames) {
       for (final name in expandVagueMaterialName(raw.trim())) {
-        if (name.isNotEmpty && !names.contains(name)) names.add(name);
+        if (name.isEmpty) continue;
+        if (seen.add(name.toLowerCase())) names.add(name);
       }
     }
 
@@ -164,7 +166,9 @@ class BomQuantityEstimator {
       names.addAll(_defaultBasicsForType(projectType));
     }
 
-    final items = names.map((name) {
+    final items = names.map((raw) {
+      final detail = _splitNameAndDetail(raw);
+      final name = detail.name;
       final lower = name.toLowerCase();
       final isSurface = lower.contains('tile') ||
           lower.contains('paint') ||
@@ -205,6 +209,8 @@ class BomQuantityEstimator {
           unit: unit,
           defaultQuantity: 1,
           qtyPerSqm: qtyPerSqm,
+          size: detail.size,
+          notes: detail.notes,
         ),
       );
     }).toList();
@@ -231,7 +237,51 @@ class BomQuantityEstimator {
     );
   }
 
+  /// Splits "Ceramic floor tiles (600x600, non-slip)" into a short material
+  /// name plus its size and notes, so detail is kept without a bloated label.
+  static ({String name, String? size, String? notes}) _splitNameAndDetail(
+    String raw,
+  ) {
+    final match = RegExp(r'^(.*?)\s*\(([^)]*)\)\s*$').firstMatch(raw.trim());
+    if (match == null) {
+      return (name: raw.trim(), size: null, notes: null);
+    }
+
+    final name = match.group(1)?.trim() ?? '';
+    final detail = match.group(2)?.trim() ?? '';
+    if (name.isEmpty || detail.isEmpty) {
+      return (name: raw.trim(), size: null, notes: null);
+    }
+
+    final parts = detail.split(',').map((e) => e.trim()).toList();
+    final sizePattern = RegExp(
+      r'^\d+\s*[x×]\s*\d+|^\d+\s*(mm|cm|m|sqm|in|inch|inches|ft)\b',
+      caseSensitive: false,
+    );
+
+    String? size;
+    final notes = <String>[];
+    for (final part in parts) {
+      if (part.isEmpty) continue;
+      if (size == null && sizePattern.hasMatch(part)) {
+        size = part;
+      } else {
+        notes.add(part);
+      }
+    }
+
+    return (
+      name: name,
+      size: size,
+      notes: notes.isEmpty ? null : notes.join(', '),
+    );
+  }
+
   /// Turns vague labels into concrete basic materials builders recognize.
+  ///
+  /// A concrete pick always stays one line item — only category-style labels
+  /// ("Essential materials for flooring") fan out into basics, so a builder who
+  /// picked four materials reviews four materials.
   static List<String> expandVagueMaterialName(String raw) {
     if (raw.isEmpty) return const [];
     final lower = raw.toLowerCase();
@@ -243,12 +293,7 @@ class BomQuantityEstimator {
         lower.contains('or underlayment') ||
         (lower.contains('matching') && lower.contains('"'));
 
-    if (!looksVague &&
-        raw.length <= 48 &&
-        !raw.contains(' / ') &&
-        !raw.contains('(')) {
-      return [raw];
-    }
+    if (!looksVague) return [raw];
 
     if (lower.contains('floor') || lower.contains('tile')) {
       return const ['Ceramic floor tiles', 'Tile adhesive', 'Tile grout'];

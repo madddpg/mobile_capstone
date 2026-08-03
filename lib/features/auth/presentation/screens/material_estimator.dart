@@ -6,11 +6,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:iconstruct/features/auth/presentation/screens/cost_estimation.dart'
     show AddedTileSelection, AddedPlumbingSelection;
 import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
-import 'package:iconstruct/features/auth/presentation/screens/main_home_screen.dart';
-import 'package:iconstruct/features/auth/presentation/screens/profile_screen.dart';
-import 'package:iconstruct/core/utils/hammer_nav.dart';
-import 'package:iconstruct/core/widgets/user_avatar.dart';
+import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
+import 'package:iconstruct/core/widgets/offset_panel_shell.dart';
 import 'package:iconstruct/features/bidding/screens/posted_project_details_screen.dart';
+import 'package:iconstruct/features/project_creation/data/bom_export.dart';
+import 'package:iconstruct/features/project_creation/data/project_lifecycle.dart';
+import 'package:iconstruct/features/project_creation/widgets/bom_share_sheet.dart';
 
 class MaterialEstimatorScreen extends StatefulWidget {
   final String projectName;
@@ -140,98 +141,19 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            stops: [0.0, 0.56, 1.0],
-            colors: [Color(0xFFE0D7C9), Color(0xFF2C3E50), Color(0xFF648DB6)],
-          ),
-        ),
-        child: SafeArea(
-          child: Stack(
-            children: [
-              const Positioned(
-                left: 0,
-                top: -200,
-                width: 393,
-                height: 585,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Color(0xFFEDE4D4),
-                    borderRadius: BorderRadius.all(Radius.circular(50)),
-                  ),
-                ),
-              ),
-              _buildTopBar(context),
-              Positioned.fill(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(16, 110, 0, 120),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildContentCard(context),
-                      const SizedBox(height: 20),
-                      _buildFinalizeCard(context),
-                      const SizedBox(height: 24),
-                    ],
-                  ),
-                ),
-              ),
-              _buildBottomNav(context),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTopBar(BuildContext context) {
-    return Align(
-      alignment: Alignment.topCenter,
-      child: Container(
-        height: 96,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        decoration: const BoxDecoration(color: Color(0xFFEDE4D4)),
-        child: Row(
-          children: [
-            Material(
-              color: const Color(0xFF2C3E50),
-              shape: const CircleBorder(),
-              elevation: 2,
-              shadowColor: Colors.black26,
-              child: InkWell(
-                customBorder: const CircleBorder(),
-                onTap: () => Navigator.pop(context),
-                child: const SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: Icon(
-                    Icons.arrow_back_rounded,
-                    color: Color(0xFFEDE4D4),
-                    size: 22,
-                  ),
-                ),
-              ),
-            ),
-            const Spacer(),
-            UserAvatar(
-              size: 36,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const ProfileScreen(),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
+    return OffsetPanelShell(
+      extent: OffsetPanelExtent.scrollBody,
+      wrapPanel: false,
+      activeNav: OffsetNavTab.finalize,
+      header: OffsetPanelHeaders.backAndAvatar(context),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildContentCard(context),
+          const SizedBox(height: 20),
+          _buildFinalizeCard(context),
+          const SizedBox(height: 24),
+        ],
       ),
     );
   }
@@ -239,19 +161,15 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
   Widget _buildContentCard(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(24, 28, 20, 24),
-      decoration: const BoxDecoration(
-        color: Color(0xFF1E3042),
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(60),
-          topRight: Radius.circular(60),
-          bottomLeft: Radius.circular(60),
-        ),
-        boxShadow: [
+      padding: IConstructPanel.contentPaddingOf(context),
+      decoration: BoxDecoration(
+        color: IConstructPanel.darkBlue,
+        borderRadius: IConstructPanel.offsetRadiusOf(context),
+        boxShadow: const [
           BoxShadow(
-            color: Colors.black38,
-            blurRadius: 18,
-            offset: Offset(-4, 8),
+            color: Colors.black26,
+            blurRadius: 15,
+            offset: Offset(-5, 10),
           ),
         ],
       ),
@@ -464,18 +382,15 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
   Widget _buildFinalizeCard(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(24, 28, 20, 24),
-      decoration: const BoxDecoration(
-        color: Color(0xFF1E3042),
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(60),
-          bottomLeft: Radius.circular(60),
-        ),
-        boxShadow: [
+      padding: const EdgeInsets.fromLTRB(22, 24, 18, 22),
+      decoration: BoxDecoration(
+        color: IConstructPanel.darkBlue,
+        borderRadius: IConstructPanel.offsetRadiusOf(context),
+        boxShadow: const [
           BoxShadow(
             color: Colors.black26,
-            blurRadius: 10,
-            offset: Offset(0, 4),
+            blurRadius: 15,
+            offset: Offset(-5, 10),
           ),
         ],
       ),
@@ -546,6 +461,29 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
                   fontWeight: FontWeight.w700,
                   fontSize: 14,
                 ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _materialCount == 0 ? null : _shareMaterialList,
+              icon: const Icon(Icons.ios_share_rounded, size: 18),
+              label: Text(
+                'Share / Print Material List',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFEDE4D4),
+                side: const BorderSide(color: Color(0xFFEDE4D4)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 14),
               ),
             ),
           ),
@@ -696,35 +634,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
     }
 
     try {
-      final materialsList = [
-        ..._localMaterials.map(
-          (name) => {
-            'name': name,
-            'quantity': 0,
-            'unit': '',
-            'size': null,
-            'category': 'Material',
-          },
-        ),
-        ..._localTiles.map(
-          (t) => {
-            'name': t.tileTypeName,
-            'quantity': t.quantity,
-            'unit': 'Qty.',
-            'size': t.tileSizeName,
-            'category': 'Tiles',
-          },
-        ),
-        ..._localPlumbing.map(
-          (p) => {
-            'name': p.materialName,
-            'quantity': p.quantity,
-            'unit': p.unit,
-            'size': p.size,
-            'category': p.categoryTitle,
-          },
-        ),
-      ];
+      final materialsList = _buildMaterialMaps();
 
       // Convert selectedBudget strings to expected costLevel logic
       String costLevel = 'medium';
@@ -743,7 +653,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         'materials': materialsList,
         'materialsCount': materialsList.length,
         'totalAreaSqm': _projectArea,
-        'status': widget.existingProject?.status ?? 'draft',
+        'status': widget.existingProject?.status ?? ProjectLifecycle.draft,
         'updatedAt': FieldValue.serverTimestamp(),
         if (_remarksController.text.trim().isNotEmpty)
           'projectNotes': _remarksController.text.trim(),
@@ -788,27 +698,9 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
     }
   }
 
-  Future<void> _postProjectForBidding() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please log in to post projects')),
-        );
-      }
-      return;
-    }
-
-    if (_projectName.trim().isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter an Estimate Name')),
-        );
-      }
-      return;
-    }
-
-    final materialsList = [
+  /// Material rows shared by saving, posting, and the shareable canvass sheet.
+  List<Map<String, dynamic>> _buildMaterialMaps() {
+    return [
       ..._localMaterials.map(
         (name) => {
           'name': name,
@@ -837,6 +729,47 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         },
       ),
     ];
+  }
+
+  Future<void> _shareMaterialList() async {
+    await showBomShareSheet(
+      context,
+      BomExportData.fromMaterials(
+        estimateName: _projectName.trim().isEmpty
+            ? _projectType
+            : _projectName.trim(),
+        renovationType: _projectType,
+        areaSqm: _projectArea,
+        budgetPreference: _selectedBudget,
+        notes: _remarksController.text.trim().isEmpty
+            ? null
+            : _remarksController.text.trim(),
+        materials: _buildMaterialMaps(),
+      ),
+    );
+  }
+
+  Future<void> _postProjectForBidding() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please log in to post projects')),
+        );
+      }
+      return;
+    }
+
+    if (_projectName.trim().isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter an Estimate Name')),
+        );
+      }
+      return;
+    }
+
+    final materialsList = _buildMaterialMaps();
 
     if (materialsList.isEmpty) {
       if (mounted) {
@@ -907,7 +840,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         'materials': materialsList,
         'materialsCount': materialsList.length,
         'totalAreaSqm': _projectArea,
-        'status': 'posted',
+        'status': ProjectLifecycle.waitingForQuotations,
         'postId': newPostRef.id,
         'postedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -1124,144 +1057,6 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
     );
   }
 
-  Widget _buildBottomNav(BuildContext context) {
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: Container(
-        height: 72,
-        margin: const EdgeInsets.only(bottom: 24),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFFEDE4D4),
-          borderRadius: BorderRadius.circular(40),
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black54,
-              blurRadius: 16,
-              offset: Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _BottomIconButton(
-              icon: Icons.home_rounded,
-              onTap: () {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const MainHomeScreen(),
-                  ),
-                  (route) => false,
-                );
-              },
-            ),
-            const SizedBox(width: 10),
-            _BottomIconButton(
-              imagePath: 'assets/images/hammer.png',
-              onTap: () => handleHammerTap(context),
-            ),
-            const SizedBox(width: 10),
-            const _BottomNavItem(
-              icon: Icons.fact_check_rounded,
-              label: 'Finalize',
-              isActive: true,
-            ),
-            const SizedBox(width: 10),
-            _BottomIconButton(
-              icon: Icons.folder_rounded,
-              onTap: () {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const SavedProjectsScreen(),
-                  ),
-                  (route) => false,
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _BottomNavItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool isActive;
-
-  const _BottomNavItem({
-    required this.icon,
-    required this.label,
-    this.isActive = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-      decoration: BoxDecoration(
-        color: isActive ? const Color(0xFF2C3E50) : Colors.transparent,
-        borderRadius: BorderRadius.circular(30),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 22,
-            color: isActive ? const Color(0xFFEDE4D4) : const Color(0xFF2C3E50),
-          ),
-          if (isActive) ...[
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: const Color(0xFFEDE4D4),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _BottomIconButton extends StatelessWidget {
-  final IconData? icon;
-  final String? imagePath;
-  final VoidCallback? onTap;
-
-  const _BottomIconButton({this.icon, this.imagePath, this.onTap})
-    : assert(icon != null || imagePath != null);
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 44,
-        height: 44,
-        color: Colors.transparent,
-        child: Center(
-          child: imagePath != null
-              ? Image.asset(
-                  imagePath!,
-                  width: 24,
-                  height: 24,
-                  fit: BoxFit.contain,
-                  color: const Color(0xFF2C3E50),
-                )
-              : Icon(icon, size: 24, color: const Color(0xFF2C3E50)),
-        ),
-      ),
-    );
-  }
 }
 
 class SelectedMaterialCard extends StatelessWidget {

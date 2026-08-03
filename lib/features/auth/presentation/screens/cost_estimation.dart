@@ -5,12 +5,10 @@ import 'package:iconstruct/core/materials/material_recommendation_controller.dar
 import 'package:iconstruct/core/materials/models/material_item.dart';
 import 'package:iconstruct/core/materials/services/firestore_materials_service.dart';
 import 'package:iconstruct/core/materials/services/favorites_service.dart';
-import 'package:iconstruct/core/widgets/user_avatar.dart';
+import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
+import 'package:iconstruct/core/widgets/offset_panel_shell.dart';
 
 import 'package:iconstruct/features/auth/presentation/screens/material_estimator.dart';
-import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
-import 'package:iconstruct/features/auth/presentation/screens/main_home_screen.dart';
-import 'package:iconstruct/features/auth/presentation/screens/profile_screen.dart';
 import 'package:iconstruct/features/project_creation/data/bom_quantity_estimator.dart';
 import 'package:iconstruct/features/project_creation/data/renovation_templates.dart';
 
@@ -163,98 +161,6 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            stops: [0.0, 0.56, 1.0],
-            colors: [Color(0xFFE0D7C9), Color(0xFF2C3E50), Color(0xFF648DB6)],
-          ),
-        ),
-        child: SafeArea(
-          child: Stack(
-            children: [
-              _buildBackgroundPanel(),
-              _buildHeader(context),
-              _buildContentCard(context),
-              if (!_isTemplateMode) _buildFloatingFilter(),
-              _buildBottomNav(context),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBackgroundPanel() {
-    return const Positioned(
-      left: 0,
-      top: -200,
-      width: 393,
-      height: 585,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Color(0xFFEDE4D4),
-          borderRadius: BorderRadius.all(Radius.circular(50)),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    return Align(
-      alignment: Alignment.topCenter,
-      child: Container(
-        height: 96,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        decoration: const BoxDecoration(color: Color(0xFFEDE4D4)),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            UserAvatar(
-              size: 36,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const ProfileScreen(),
-                  ),
-                );
-              },
-            ),
-            Container(
-              width: 28,
-              height: 28,
-              alignment: Alignment.centerRight,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Container(
-                    width: 18,
-                    height: 2.4,
-                    color: const Color(0xFF2C3E50),
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    width: 14,
-                    height: 2.4,
-                    color: const Color(0xFF2C3E50),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildContentCard(BuildContext context) {
     final templateName = widget.template?.name;
     final titleText = templateName != null && templateName.isNotEmpty
         ? templateName
@@ -262,67 +168,52 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
             ? widget.projectName
             : widget.projectName.replaceFirst(' ', '\n'));
 
-    return Positioned(
-      top: 110,
-      right: 0,
-      left: _isTemplateMode ? 16 : 72,
-      bottom: 80,
-      child: Container(
-        padding: EdgeInsets.fromLTRB(_isTemplateMode ? 24 : 24, 28, 16, 32),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1E3042),
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(60),
-            topRight: const Radius.circular(60),
-            bottomLeft: Radius.circular(_isTemplateMode ? 60 : 60),
-            bottomRight: Radius.circular(_isTemplateMode ? 60 : 0),
+    return OffsetPanelShell(
+      activeNav: OffsetNavTab.estimate,
+      panelColor: IConstructPanel.navy,
+      header: OffsetPanelHeaders.avatarAndMenu(context),
+      contentPadding:
+          IConstructPanel.contentPaddingOf(context).copyWith(bottom: 20),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            titleText,
+            style: GoogleFonts.poppins(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              titleText,
-              style: GoogleFonts.poppins(
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
+          const SizedBox(height: 10),
+          const Divider(color: Color(0xFFEDE4D4), thickness: 1),
+          const SizedBox(height: 10),
+          Text(
+            _isTemplateMode
+                ? 'Reference package — quantities scaled from area.\nEdit qty, remove items, or drag alternatives onto any material row to change type.'
+                : 'Select products for your project.\nSizes will appear after clicking a product.',
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: const Color(0xFFE0D7C9),
+              height: 1.4,
             ),
+          ),
+          if (!_isTemplateMode) ...[
             const SizedBox(height: 12),
-            const Divider(color: Color(0xFFEDE4D4), thickness: 1),
-            const SizedBox(height: 12),
-            Text(
-              _isTemplateMode
-                  ? 'Reference package — quantities scaled from area.\nEdit qty, remove items, or drag alternatives onto any material row to change type.'
-                  : 'Select products for your project.\nSizes will appear after clicking a product.',
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                color: const Color(0xFFE0D7C9),
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Divider(color: Color(0xFFEDE4D4), thickness: 1),
-            const SizedBox(height: 14),
-            Expanded(
-              child: _isTemplateMode
-                  ? _buildTemplateBomBody(context)
-                  : _buildMaterialsBody(context),
+            FloatingFilterRail(
+              selectedFilter: _materials.selectedFilter,
+              onChanged: _onFilterSelected,
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFloatingFilter() {
-    return Positioned(
-      top: 360,
-      left: 10,
-      child: FloatingFilterRail(
-        selectedFilter: _materials.selectedFilter,
-        onChanged: _onFilterSelected,
+          const SizedBox(height: 12),
+          const Divider(color: Color(0xFFEDE4D4), thickness: 1),
+          const SizedBox(height: 12),
+          Expanded(
+            child: _isTemplateMode
+                ? _buildTemplateBomBody(context)
+                : _buildMaterialsBody(context),
+          ),
+        ],
       ),
     );
   }
@@ -985,68 +876,6 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     });
   }
 
-  Widget _buildBottomNav(BuildContext context) {
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: Container(
-        height: 72,
-        margin: const EdgeInsets.only(bottom: 24),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFFEDE4D4),
-          borderRadius: BorderRadius.circular(40),
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black54,
-              blurRadius: 16,
-              offset: Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _BottomIconButton(
-              icon: Icons.home_rounded,
-              onTap: () {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const MainHomeScreen(),
-                  ),
-                  (route) => false,
-                );
-              },
-            ),
-            const SizedBox(width: 10),
-            _BottomIconButton(
-              imagePath: 'assets/images/hammer.png',
-              onTap: () {},
-            ),
-            const SizedBox(width: 10),
-            const _BottomNavItem(
-              icon: Icons.calculate_rounded,
-              label: 'Estimate',
-              isActive: true,
-            ),
-            const SizedBox(width: 10),
-            _BottomIconButton(
-              icon: Icons.folder_rounded,
-              onTap: () {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const SavedProjectsScreen(),
-                  ),
-                  (route) => false,
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _FilterSection extends StatelessWidget {
@@ -1394,62 +1223,69 @@ class _AddedMaterialItem extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
 
-          Container(
-            width: 140,
-            height: 38,
-            decoration: BoxDecoration(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: const Color(0xFFEDE4D4).withAlpha(120),
-                width: 1,
+          // Loose fit so the field gives way on narrow panels instead of
+          // overflowing the row.
+          Flexible(
+            child: Container(
+              width: 132,
+              height: 38,
+              decoration: BoxDecoration(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: const Color(0xFFEDE4D4).withAlpha(120),
+                  width: 1,
+                ),
               ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
                     controller: qtyController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    onChanged: onChanged,
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.poppins(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                    decoration: InputDecoration(
-                      hintText: 'Enter quantity',
-                      hintStyle: GoogleFonts.poppins(
-                        color: Colors.white38,
-                        fontSize: 10,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
                       ),
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
-                      border: InputBorder.none,
+                      onChanged: onChanged,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Qty',
+                        hintStyle: GoogleFonts.poppins(
+                          color: Colors.white38,
+                          fontSize: 10,
+                        ),
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                        border: InputBorder.none,
+                      ),
                     ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: Text(
-                    unit,
-                    style: GoogleFonts.poppins(
-                      fontSize: 11,
-                      color: const Color(0xFFEDE4D4).withAlpha(180),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Text(
+                      unit,
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        color: const Color(0xFFEDE4D4).withAlpha(180),
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
 
           IconButton(
             onPressed: onRemove,
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.only(left: 4),
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             icon: const Icon(
               Icons.close_rounded,
               color: Color(0xFFEDE4D4),
@@ -1480,142 +1316,74 @@ class FloatingFilterRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEDE4D4),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: 14,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final f in _filters) ...[
-            _FloatingFilterButton(
+    // Horizontal chips inside the centered card (no left-offset gutter).
+    return Row(
+      children: [
+        for (final f in _filters) ...[
+          Expanded(
+            child: _FloatingFilterButton(
               icon: getFilterIcon(f),
+              label: f,
               isSelected: selectedFilter == f,
               onTap: () => onChanged(f),
             ),
-            if (f != _filters.last) const SizedBox(height: 8),
-          ],
+          ),
+          if (f != _filters.last) const SizedBox(width: 8),
         ],
-      ),
+      ],
     );
   }
 }
 
 class _FloatingFilterButton extends StatelessWidget {
   final IconData icon;
+  final String label;
   final bool isSelected;
   final VoidCallback onTap;
 
   const _FloatingFilterButton({
     required this.icon,
+    required this.label,
     required this.isSelected,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final background = isSelected ? const Color(0xFF2C3E50) : Colors.white;
-    final foreground = isSelected ? Colors.white : const Color(0xFF2C3E50);
+    final background =
+        isSelected ? IConstructPanel.cream : Colors.white.withValues(alpha: 0.12);
+    final foreground =
+        isSelected ? IConstructPanel.darkBlue : IConstructPanel.cream;
 
     return InkWell(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(18),
       onTap: onTap,
       child: Container(
-        width: 50,
-        height: 50,
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: const Color(0xFF2C3E50).withAlpha(90),
-            width: 1.2,
+            color: IConstructPanel.cream.withValues(alpha: 0.45),
+            width: 1,
           ),
         ),
-        child: Icon(icon, color: foreground, size: 22),
-      ),
-    );
-  }
-}
-
-class _BottomNavItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool isActive;
-
-  const _BottomNavItem({
-    required this.icon,
-    required this.label,
-    this.isActive = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-      decoration: BoxDecoration(
-        color: isActive ? const Color(0xFF2C3E50) : Colors.transparent,
-        borderRadius: BorderRadius.circular(30),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 22,
-            color: isActive ? const Color(0xFFEDE4D4) : const Color(0xFF2C3E50),
-          ),
-          if (isActive) ...[
-            const SizedBox(width: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: foreground, size: 18),
+            const SizedBox(height: 2),
             Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.poppins(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: const Color(0xFFEDE4D4),
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: foreground,
               ),
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-class _BottomIconButton extends StatelessWidget {
-  final IconData? icon;
-  final String? imagePath;
-  final VoidCallback? onTap;
-
-  const _BottomIconButton({this.icon, this.imagePath, this.onTap})
-    : assert(icon != null || imagePath != null);
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 44,
-        height: 44,
-        color: Colors.transparent,
-        child: Center(
-          child: imagePath != null
-              ? Image.asset(
-                  imagePath!,
-                  width: 24,
-                  height: 24,
-                  fit: BoxFit.contain,
-                  color: const Color(0xFF2C3E50),
-                )
-              : Icon(icon!, size: 24, color: const Color(0xFF2C3E50)),
         ),
       ),
     );

@@ -16,7 +16,9 @@ service cloud.firestore {
 
     // Builder / user profiles
     match /users/{userId} {
-      allow read, create, update: if isOwner(userId);
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create, update: if isOwner(userId);
       allow delete: if false;
 
       match /favorites/{favoriteId} {
@@ -65,7 +67,7 @@ service cloud.firestore {
         && resource.data.recipientId == request.auth.uid;
     }
 
-    // Hardware shops (ranking / comparison) — read for signed-in builders
+    // Hardware shops - read for signed-in builders
     match /shops/{shopId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn() && request.auth.uid == shopId;

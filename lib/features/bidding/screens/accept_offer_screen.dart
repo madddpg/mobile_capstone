@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'package:iconstruct/features/project_creation/data/project_lifecycle.dart';
+
 class AcceptOfferScreen extends StatefulWidget {
   final String postId;
   final String quotationId;
@@ -85,6 +87,22 @@ class _AcceptOfferScreenState extends State<AcceptOfferScreen> {
         'status': 'offer_accepted',
         'acceptedAt': FieldValue.serverTimestamp(),
       });
+
+      // Advance the builder's saved estimate to Supplier Selected
+      final savedProjectId = projectDoc.data()?['projectId']?.toString();
+      if (savedProjectId != null && savedProjectId.isNotEmpty) {
+        final savedProjectRef = FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('saved_projects')
+            .doc(savedProjectId);
+        batch.set(savedProjectRef, {
+          'status': ProjectLifecycle.supplierSelected,
+          'selectedShopName': widget.shopName,
+          'supplierSelectedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
 
       // Update accepted quotation
       final quotationRef = projectRef

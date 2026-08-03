@@ -72,7 +72,6 @@ class SavedProjectsScreen extends StatelessWidget {
       safeAreaBottom: false,
       activeNav: OffsetNavTab.files,
       panelColor: IConstructPanel.darkBlue,
-      borderRadius: IConstructPanel.topRadiusOf(context),
       contentPadding: EdgeInsets.zero,
       header: OffsetPanelHeaders.backOnly(context),
       body: Column(

@@ -163,13 +163,13 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       width: double.infinity,
       padding: IConstructPanel.contentPaddingOf(context),
       decoration: BoxDecoration(
-        color: IConstructPanel.navy,
-        borderRadius: IConstructPanel.flushRadiusOf(context),
-        boxShadow: const [
+        color: IConstructPanel.darkBlue,
+        borderRadius: IConstructPanel.cardRadiusOf(context),
+        boxShadow: [
           BoxShadow(
-            color: Colors.black38,
-            blurRadius: 18,
-            offset: Offset(-4, 8),
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
@@ -384,13 +384,13 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(22, 24, 18, 22),
       decoration: BoxDecoration(
-        color: IConstructPanel.navy,
-        borderRadius: IConstructPanel.flushRadiusOf(context),
-        boxShadow: const [
+        color: IConstructPanel.darkBlue,
+        borderRadius: IConstructPanel.cardRadiusOf(context),
+        boxShadow: [
           BoxShadow(
-            color: Colors.black26,
-            blurRadius: 10,
-            offset: Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
           ),
         ],
       ),

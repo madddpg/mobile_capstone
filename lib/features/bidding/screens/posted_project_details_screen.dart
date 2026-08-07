@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
-import 'package:iconstruct/features/auth/presentation/screens/main_home_screen.dart';
-import 'package:iconstruct/features/auth/presentation/screens/cost_estimation.dart';
+import 'package:iconstruct/core/widgets/offset_pill_nav.dart';
 import 'quotations_screen.dart';
 
 class PostedProjectDetailsScreen extends StatelessWidget {
@@ -245,8 +243,7 @@ class PostedProjectDetailsScreen extends StatelessWidget {
                 ),
               ),
 
-              // --- BOTTOM NAVIGATION BAR ---
-              _buildBottomNav(context),
+              const OffsetPillNav(activeTab: OffsetNavTab.bidding),
             ],
           );
         },
@@ -261,180 +258,6 @@ class PostedProjectDetailsScreen extends StatelessWidget {
         color: textLight,
         fontSize: 14,
         fontWeight: FontWeight.w400,
-      ),
-    );
-  }
-
-  Widget _buildBottomNav(BuildContext context) {
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: SafeArea(
-        child: Container(
-          height: 72,
-          margin: const EdgeInsets.only(bottom: 24),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-          decoration: BoxDecoration(
-            color: creamBg,
-            borderRadius: BorderRadius.circular(40),
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black54,
-                blurRadius: 16,
-                offset: Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _BottomIconButton(
-                icon: Icons.home_rounded,
-                onTap: () {
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const MainHomeScreen(),
-                    ),
-                    (route) => false,
-                  );
-                },
-              ),
-              const SizedBox(width: 8),
-
-              // Active "Bidding" state (hammer icon)
-              const _BottomNavItem(
-                imagePath: 'assets/images/hammer.png',
-                label: 'Bidding',
-                isActive: true,
-              ),
-
-              const SizedBox(width: 8),
-              _BottomIconButton(
-                icon: Icons.calculate_rounded,
-                onTap: () {
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) =>
-                          const CostEstimationScreen(projectName: ''),
-                    ),
-                    (route) => false,
-                  );
-                },
-              ),
-              const SizedBox(width: 8),
-              _BottomIconButton(
-                icon: Icons.folder_rounded,
-                onTap: () {
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const SavedProjectsScreen(),
-                    ),
-                    (route) => false,
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BottomNavItem extends StatelessWidget {
-  final IconData? icon;
-  final String? imagePath;
-  final String label;
-  final bool isActive;
-
-  const _BottomNavItem({
-    this.icon,
-    this.imagePath,
-    required this.label,
-    this.isActive = false,
-  }) : assert(icon != null || imagePath != null);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      decoration: BoxDecoration(
-        color: isActive
-            ? PostedProjectDetailsScreen.navyCard
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(30),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (imagePath != null)
-            Image.asset(
-              imagePath!,
-              width: 22,
-              height: 22,
-              color: isActive
-                  ? PostedProjectDetailsScreen.creamBg
-                  : PostedProjectDetailsScreen.navyCard,
-            )
-          else if (icon != null)
-            Icon(
-              icon,
-              size: 22,
-              color: isActive
-                  ? PostedProjectDetailsScreen.creamBg
-                  : PostedProjectDetailsScreen.navyCard,
-            ),
-
-          if (isActive) ...[
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: PostedProjectDetailsScreen.creamBg,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _BottomIconButton extends StatelessWidget {
-  final IconData? icon;
-  final String? imagePath;
-  final VoidCallback? onTap;
-
-  const _BottomIconButton({this.icon, this.imagePath, this.onTap})
-    : assert(icon != null || imagePath != null);
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 44,
-        height: 44,
-        color: Colors.transparent,
-        child: Center(
-          child: imagePath != null
-              ? Image.asset(
-                  imagePath!,
-                  width: 24,
-                  height: 24,
-                  fit: BoxFit.contain,
-                  color: PostedProjectDetailsScreen.navyCard,
-                )
-              : Icon(
-                  icon,
-                  size: 24,
-                  color: PostedProjectDetailsScreen.navyCard,
-                ),
-        ),
       ),
     );
   }

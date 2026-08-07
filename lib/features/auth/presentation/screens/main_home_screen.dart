@@ -6,23 +6,16 @@ import 'package:iconstruct/features/auth/presentation/screens/top_shops_screen.d
 import 'package:iconstruct/features/auth/presentation/screens/home_screen.dart';
 import 'package:iconstruct/features/auth/presentation/models/ranked_shop.dart';
 import 'package:iconstruct/features/auth/presentation/services/shop_ranking_service.dart';
+import 'package:iconstruct/core/widgets/offset_pill_nav.dart';
 import 'package:iconstruct/core/widgets/user_avatar.dart';
-import 'package:iconstruct/core/utils/hammer_nav.dart';
 import 'package:iconstruct/features/project_creation/screens/project_tracking_screen.dart';
 
-class MainHomeScreen extends StatefulWidget {
+class MainHomeScreen extends StatelessWidget {
   const MainHomeScreen({super.key});
 
-  @override
-  State<MainHomeScreen> createState() => _MainHomeScreenState();
-}
-
-class _MainHomeScreenState extends State<MainHomeScreen> {
-  int _navIndex = 0;
-
-  Color get _cream => const Color(0xFFEBE0CC);
-  Color get _darkBlue => const Color(0xFF2C3E50);
-  Color get _midBlue => const Color(0xFF648DB6);
+  static const Color _cream = Color(0xFFEBE0CC);
+  static const Color _darkBlue = Color(0xFF2C3E50);
+  static const Color _midBlue = Color(0xFF648DB6);
 
   @override
   Widget build(BuildContext context) {
@@ -32,12 +25,12 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
         children: [
           Positioned.fill(
             child: Container(
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [_darkBlue, _midBlue],
-                  stops: const [0.3, 1.0],
+                  stops: [0.3, 1.0],
                 ),
               ),
             ),
@@ -194,15 +187,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
             ),
           ),
 
-          Positioned(
-            left: 20,
-            right: 20,
-            bottom: 24,
-            child: _BottomPillNav(
-              index: _navIndex,
-              onChanged: (i) => setState(() => _navIndex = i),
-            ),
-          ),
+          const OffsetPillNav(activeTab: OffsetNavTab.home),
         ],
       ),
     );
@@ -626,197 +611,3 @@ class _TopShopsSectionState extends State<_TopShopsSection> {
   }
 }
 
-class _BottomPillNav extends StatelessWidget {
-  final int index;
-  final ValueChanged<int> onChanged;
-
-  const _BottomPillNav({required this.index, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    const cream = Color(0xFFEBE0CC);
-
-    return Container(
-      height: 72,
-      decoration: BoxDecoration(
-        color: cream,
-        borderRadius: BorderRadius.circular(40),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 25,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          Expanded(
-            flex: index == 0 ? 4 : 2,
-            child: _NavItem(
-              selected: index == 0,
-              icon: Icons.home_rounded,
-              label: 'Home',
-              onTap: () => onChanged(0),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: _NavIconOnly(
-              selected: index == 1,
-              imagePath: 'assets/images/hammer.png',
-              onTap: () {
-                onChanged(1);
-                handleHammerTap(context);
-              },
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: _NavIconOnly(
-              selected: index == 2,
-              icon: Icons.calculate_rounded,
-              onTap: () {
-                onChanged(2);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const HomeScreen(),
-                  ),
-                );
-              },
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: _NavIconOnly(
-              selected: index == 3,
-              icon: Icons.folder_rounded,
-              onTap: () {
-                onChanged(3);
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const SavedProjectsScreen(),
-                  ),
-                  (route) => false,
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NavItem extends StatelessWidget {
-  final bool selected;
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _NavItem({
-    required this.selected,
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    const dark = Color(0xFF2C3E50);
-    const cream = Color(0xFFEBE0CC);
-
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOutCubic,
-        height: double.infinity,
-        decoration: BoxDecoration(
-          color: selected ? dark : Colors.transparent,
-          borderRadius: BorderRadius.circular(32),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: selected
-                  ? const BoxDecoration(color: cream, shape: BoxShape.circle)
-                  : null,
-              child: Icon(
-                icon,
-                size: 20,
-                color: selected ? dark : dark.withValues(alpha: 0.7),
-              ),
-            ),
-            if (selected) ...[
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: const TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: cream,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _NavIconOnly extends StatelessWidget {
-  final bool selected;
-  final IconData? icon;
-  final String? imagePath;
-  final VoidCallback onTap;
-
-  const _NavIconOnly({
-    required this.selected,
-    this.icon,
-    this.imagePath,
-    required this.onTap,
-  }) : assert(icon != null || imagePath != null);
-
-  @override
-  Widget build(BuildContext context) {
-    const dark = Color(0xFF2C3E50);
-    final color = selected ? dark : dark.withValues(alpha: 0.7);
-    final opacity = selected ? 1.0 : 0.7;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        color: Colors.transparent,
-        child: Center(
-          child: imagePath != null
-              ? Opacity(
-                  opacity: opacity,
-                  child: Image.asset(
-                    imagePath!,
-                    width: 26,
-                    height: 26,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Icon(
-                        Icons.handyman_rounded,
-                        size: 26,
-                        color: color,
-                      );
-                    },
-                  ),
-                )
-              : Icon(icon!, size: 26, color: color),
-        ),
-      ),
-    );
-  }
-}

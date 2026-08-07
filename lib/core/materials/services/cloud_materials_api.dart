@@ -54,14 +54,15 @@ class MaterialsByCategoryDto {
   }
 }
 
-class MaterialsApi {
+/// HTTP client for the Firebase Functions materials catalog API.
+class CloudMaterialsApi {
   final String baseUrl;
   final http.Client _client;
 
-  MaterialsApi({required this.baseUrl, http.Client? client})
+  CloudMaterialsApi({required this.baseUrl, http.Client? client})
     : _client = client ?? http.Client();
 
-  factory MaterialsApi.forFirebaseFunctions({
+  factory CloudMaterialsApi.forFirebaseFunctions({
     required String projectId,
     String region = 'us-central1',
     bool useEmulator = false,
@@ -74,11 +75,11 @@ class MaterialsApi {
           ? 'localhost'
           : emulatorHost.trim();
       final url = 'http://$host:$emulatorPort/$projectId/$region/api';
-      return MaterialsApi(baseUrl: url, client: client);
+      return CloudMaterialsApi(baseUrl: url, client: client);
     }
 
     final url = 'https://$region-$projectId.cloudfunctions.net/api';
-    return MaterialsApi(baseUrl: url, client: client);
+    return CloudMaterialsApi(baseUrl: url, client: client);
   }
 
   Uri _uri(String path, Map<String, String> query) {

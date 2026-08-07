@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:iconstruct/features/auth/presentation/screens/material_estimator.dart';
-import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
+import 'package:iconstruct/core/models/project_model.dart';
 import 'package:iconstruct/features/bidding/screens/project_bids_screen.dart';
 import 'package:iconstruct/features/project_creation/data/project_lifecycle.dart';
 import 'package:iconstruct/features/project_creation/data/project_status_service.dart';

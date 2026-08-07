@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart'
-    show ProjectModel;
+import 'package:iconstruct/core/models/project_model.dart';
 
 class ActiveProjectState extends ChangeNotifier {
   // Singleton instance for lightweight global state access

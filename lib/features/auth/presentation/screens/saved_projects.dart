@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-import 'package:iconstruct/features/auth/presentation/screens/material_estimator.dart';
+import 'package:iconstruct/core/models/project_model.dart';
+import 'package:iconstruct/core/navigation/planning_nav.dart';
 import 'package:iconstruct/core/state/active_project_state.dart';
 import 'package:iconstruct/features/bidding/screens/project_bids_screen.dart';
 import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
@@ -10,54 +11,6 @@ import 'package:iconstruct/core/widgets/offset_panel_shell.dart';
 import 'package:iconstruct/features/project_creation/data/bom_export.dart';
 import 'package:iconstruct/features/project_creation/data/project_lifecycle.dart';
 import 'package:iconstruct/features/project_creation/widgets/bom_share_sheet.dart';
-
-// --- Data Model ---
-class ProjectModel {
-  final String id;
-  final String projectName;
-  final String projectType;
-  final int materialCount;
-  final double projectArea;
-  final String costLevel; // Low, Medium, High
-  final List<dynamic> materials;
-  final String status; // Draft, Ready, Posted
-  final DateTime lastUpdated;
-  final String? postId;
-
-  ProjectModel({
-    required this.id,
-    required this.projectName,
-    required this.projectType,
-    required this.materialCount,
-    required this.projectArea,
-    required this.costLevel,
-    required this.materials,
-    required this.status,
-    required this.lastUpdated,
-    this.postId,
-  });
-
-  factory ProjectModel.fromDocument(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    return ProjectModel(
-      id: doc.id,
-      projectName: data['projectName'] ?? 'Unknown Project',
-      projectType: data['projectType'] ?? '',
-      materialCount: data['materialsCount'] ?? 0,
-      projectArea: (data['totalAreaSqm'] ?? 0.0).toDouble(),
-      costLevel: data['costLevel'] ?? 'Unknown',
-      // Materials may be stored as a list of strings (legacy) or
-      // as a list of structured maps containing name/quantity/unit, etc.
-      materials: List<dynamic>.from(
-        data['materials'] ?? data['selectedMaterials'] ?? [],
-      ),
-      status: data['status'] ?? 'Draft',
-      lastUpdated:
-          (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      postId: data['postId'],
-    );
-  }
-}
 
 // --- Screen ---
 class SavedProjectsScreen extends StatelessWidget {
@@ -541,14 +494,10 @@ class ProjectCard extends StatelessWidget {
                     ],
                     onSelected: (value) {
                       if (value == 'edit') {
-                        Navigator.push(
+                        PlanningNav.openMaterialEstimator(
                           context,
-                          MaterialPageRoute(
-                            builder: (context) => MaterialEstimatorScreen(
-                              projectName: project.projectName,
-                              existingProject: project,
-                            ),
-                          ),
+                          projectName: project.projectName,
+                          existingProject: project,
                         );
                       } else if (value == 'post') {
                         _handlePostProject(context);

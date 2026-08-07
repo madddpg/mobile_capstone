@@ -47,13 +47,16 @@ class BomExportService {
   /// Opens the system share sheet with the canvass sheet as a PDF.
   static Future<void> sharePdf(BomExportData data) async {
     final bytes = await buildPdf(data);
-    await SharePlus.instance.share(
-      ShareParams(
-        subject: '${data.estimateName} — material list',
-        text: _shareMessage(data),
-        files: [XFile.fromData(bytes, mimeType: 'application/pdf')],
-        fileNameOverrides: ['${data.fileBaseName}.pdf'],
-      ),
+    await Share.shareXFiles(
+      [
+        XFile.fromData(
+          bytes,
+          mimeType: 'application/pdf',
+          name: '${data.fileBaseName}.pdf',
+        ),
+      ],
+      subject: '${data.estimateName} — material list',
+      text: _shareMessage(data),
     );
   }
 
@@ -62,12 +65,16 @@ class BomExportService {
     final bytes = await buildPdf(data);
 
     final files = <XFile>[];
-    final names = <String>[];
     var page = 1;
     await for (final raster in Printing.raster(bytes, dpi: 144)) {
       final png = await raster.toPng();
-      files.add(XFile.fromData(png, mimeType: 'image/png'));
-      names.add('${data.fileBaseName}-p$page.png');
+      files.add(
+        XFile.fromData(
+          png,
+          mimeType: 'image/png',
+          name: '${data.fileBaseName}-p$page.png',
+        ),
+      );
       page++;
     }
 
@@ -76,13 +83,10 @@ class BomExportService {
       return;
     }
 
-    await SharePlus.instance.share(
-      ShareParams(
-        subject: '${data.estimateName} — material list',
-        text: _shareMessage(data),
-        files: files,
-        fileNameOverrides: names,
-      ),
+    await Share.shareXFiles(
+      files,
+      subject: '${data.estimateName} — material list',
+      text: _shareMessage(data),
     );
   }
 

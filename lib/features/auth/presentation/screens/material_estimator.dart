@@ -5,7 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:iconstruct/features/auth/presentation/screens/cost_estimation.dart'
     show AddedTileSelection, AddedPlumbingSelection;
-import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
+import 'package:iconstruct/core/models/project_model.dart';
+import 'package:iconstruct/core/navigation/planning_nav.dart';
 import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
 import 'package:iconstruct/core/widgets/offset_panel_shell.dart';
 import 'package:iconstruct/features/bidding/screens/posted_project_details_screen.dart';
@@ -684,10 +685,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         // By using `push` instead of `pushReplacement`, the current screen
         // stays in the navigation stack, preserving values. When the user taps
         // "Back" on SavedProjectsScreen, they will perfectly return here.
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const SavedProjectsScreen()),
-        );
+        await PlanningNav.openSavedProjects(context);
       }
     } catch (e) {
       if (mounted) {

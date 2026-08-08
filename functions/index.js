@@ -560,27 +560,40 @@ async function advanceSavedProject(userId, projectId, targetStage, extra = {}) {
 /**
  * Recounts submitted quotations so the builder's tracking view and the bidding
  * board agree, even when a shop client forgets to bump the counter.
+ *
+ * Uses a transaction so two near-simultaneous first bids cannot each read
+ * count=1 and leave quotationCount permanently undercounted.
  */
 async function syncPostQuotationState(postId) {
   const postRef = db.collection("projectPosts").doc(postId);
-  const postSnap = await postRef.get();
-  if (!postSnap.exists) return null;
 
-  const post = postSnap.data() || {};
-  const quotations = await postRef.collection("quotations").get();
-  const quotationCount = quotations.size;
+  const { post, quotationCount, isClosed } = await db.runTransaction(
+    async (transaction) => {
+      const postSnap = await transaction.get(postRef);
+      if (!postSnap.exists) {
+        return { post: null, quotationCount: 0, isClosed: true };
+      }
 
-  const updates = { quotationCount, updatedAt: Timestamp.now() };
-  const closedStatuses = ["closed", "cancelled", "awarded", "offer_accepted"];
-  const isClosed =
-    post.selectedQuotationId != null ||
-    closedStatuses.includes(String(post.status || "").toLowerCase());
+      const postData = postSnap.data() || {};
+      const quotations = await transaction.get(postRef.collection("quotations"));
+      const count = quotations.size;
 
-  if (!isClosed && quotationCount > 0 && post.status !== "has_quotations") {
-    updates.status = "has_quotations";
-  }
+      const updates = { quotationCount: count, updatedAt: Timestamp.now() };
+      const closedStatuses = ["closed", "cancelled", "awarded", "offer_accepted"];
+      const closed =
+        postData.selectedQuotationId != null ||
+        closedStatuses.includes(String(postData.status || "").toLowerCase());
 
-  await postRef.update(updates);
+      if (!closed && count > 0 && postData.status !== "has_quotations") {
+        updates.status = "has_quotations";
+      }
+
+      transaction.update(postRef, updates);
+      return { post: postData, quotationCount: count, isClosed: closed };
+    }
+  );
+
+  if (!post) return null;
 
   if (!isClosed && quotationCount > 0) {
     await advanceSavedProject(
@@ -601,13 +614,9 @@ exports.onQuotationSubmitted = onDocumentCreated("projectPosts/{postId}/quotatio
   const postId = event.params.postId;
   const shopId = event.params.shopId;
 
-  let post = null;
-  try {
-    // Auto-advance the builder's estimate to "Receiving Quotations".
-    post = await syncPostQuotationState(postId);
-  } catch (error) {
-    logger.error("Error syncing quotation state:", error);
-  }
+  // Let sync failures propagate so Cloud Functions retries the trigger —
+  // swallowing them left quotationCount stuck at 0 with no recovery.
+  const post = await syncPostQuotationState(postId);
 
   // Prefer the post owner — shop payloads sometimes put the shop uid in userId.
   const userId = (post && post.userId) || quotation.userId;

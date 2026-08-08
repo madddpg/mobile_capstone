@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:iconstruct/core/services/fcm_service.dart';
 import 'user_model.dart';
 
 class UserProvider extends ChangeNotifier {
@@ -18,9 +19,11 @@ class UserProvider extends ChangeNotifier {
   }
 
   void _initListener() {
-    _auth.authStateChanges().listen((User? user) {
+    _auth.authStateChanges().listen((User? user) async {
       if (user != null) {
         _subscribeToUserData(user.uid);
+        // Register / refresh device token on every signed-in session restore.
+        await FCMService().initFCM(user.uid);
       } else {
         _userSubscription?.cancel();
         _currentUser = null;

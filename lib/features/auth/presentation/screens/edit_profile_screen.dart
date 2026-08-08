@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:iconstruct/core/firebase/firestore_error.dart';
 import 'package:iconstruct/core/widgets/user_avatar.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -67,9 +68,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to update profile: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(firestoreUserMessage(e, action: 'update your profile')),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

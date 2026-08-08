@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'package:iconstruct/core/firebase/firestore_error.dart';
 import 'package:iconstruct/features/project_creation/data/project_lifecycle.dart';
 
 class AcceptOfferScreen extends StatefulWidget {
@@ -156,7 +157,9 @@ class _AcceptOfferScreenState extends State<AcceptOfferScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error accepting offer: ${e.toString()}'),
+            content: Text(
+              firestoreUserMessage(e, action: 'accept this offer'),
+            ),
             backgroundColor: Colors.red,
           ),
         );

@@ -238,7 +238,6 @@ class _MainCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 330,
-      height: 643,
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(50),
@@ -250,7 +249,7 @@ class _MainCard extends StatelessWidget {
           ),
         ],
       ),
-      padding: const EdgeInsets.fromLTRB(26, 36, 26, 0),
+      padding: const EdgeInsets.fromLTRB(18, 28, 18, 28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -261,8 +260,7 @@ class _MainCard extends StatelessWidget {
                 'Begin a new renovation project: choose type, create details, plan materials with a template or AI, then request supplier quotations.',
             onTap: onStartNewRenovation,
           ),
-          const _ThinDivider(),
-
+          const SizedBox(height: 12),
           _ActionTile(
             icon: Icons.folder_open_outlined,
             title: 'My Projects',
@@ -270,8 +268,7 @@ class _MainCard extends StatelessWidget {
                 'Access and manage your previous material estimates and project drafts in one secure place.',
             onTap: onSavedProjects,
           ),
-          const _ThinDivider(),
-
+          const SizedBox(height: 12),
           _ActionTile(
             icon: Icons.campaign_outlined,
             title: 'Post for Bidding',
@@ -279,8 +276,7 @@ class _MainCard extends StatelessWidget {
                 'Publish your project and receive quotations from nearby hardware shops based on your material requirements.',
             onTap: onPostProject,
           ),
-          const _ThinDivider(),
-
+          const SizedBox(height: 12),
           _ActionTile(
             icon: Icons.timeline_outlined,
             title: 'Project Tracking',
@@ -288,26 +284,7 @@ class _MainCard extends StatelessWidget {
                 'Monitor project progress from draft through quotations, supplier selection, and completion.',
             onTap: onViewQuotations,
           ),
-
-          const Spacer(),
-          const SizedBox(height: 24),
         ],
-      ),
-    );
-  }
-}
-
-class _ThinDivider extends StatelessWidget {
-  const _ThinDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      child: Container(
-        height: 1,
-        width: double.infinity,
-        color: Colors.white.withValues(alpha: 0.25),
       ),
     );
   }
@@ -328,41 +305,78 @@ class _ActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: const Color(0xFFEBE0CC), size: 32),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFFEBE0CC),
+    const cream = Color(0xFFEBE0CC);
+
+    return Semantics(
+      button: true,
+      label: title,
+      hint: 'Opens $title',
+      child: Material(
+        color: cream.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          splashColor: cream.withValues(alpha: 0.22),
+          highlightColor: cream.withValues(alpha: 0.12),
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: cream.withValues(alpha: 0.32)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 14, 8, 14),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: cream.withValues(alpha: 0.16),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(icon, color: cream, size: 24),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            height: 1.2,
+                            color: cream,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 12.5,
+                            height: 1.4,
+                            fontWeight: FontWeight.w400,
+                            color: cream.withValues(alpha: 0.78),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: cream.withValues(alpha: 0.9),
+                    size: 28,
+                  ),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            subtitle,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 14,
-              height: 1.45,
-              fontWeight: FontWeight.w400,
-              color: const Color(0xFFEBE0CC).withValues(alpha: 0.8),
             ),
           ),
-        ],
+        ),
       ),
     );
   }

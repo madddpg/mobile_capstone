@@ -9,6 +9,19 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == uid;
     }
 
+    // Only shops vetted by an admin may see the bidding board and submit bids.
+    function isApprovedShop() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/shops/$(request.auth.uid))
+        && get(/databases/$(database)/documents/shops/$(request.auth.uid))
+             .data.get('status', 'pending') == 'approved';
+    }
+
+    function postOwner(postId) {
+      return get(/databases/$(database)/documents/projectPosts/$(postId))
+        .data.userId;
+    }
+
     // OTP docs are Cloud Functions only
     match /email_otp/{email} {
       allow read, write: if false;
@@ -32,45 +45,100 @@ service cloud.firestore {
 
     // Project posts for supplier canvassing / bidding
     match /projectPosts/{postId} {
-      allow read: if isSignedIn();
+      // A builder's material plan is only visible to that builder and to
+      // approved hardware shops that can actually quote on it.
+      allow get, list: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isApprovedShop());
+
+      // Clients may not seed bid state; quotationCount/status are server-owned
+      // from that point on (see functions/index.js syncPostQuotationState).
       allow create: if isSignedIn()
-        && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.projectName is string
+        && request.resource.data.projectName.size() > 0
+        && request.resource.data.projectName.size() <= 200
+        && request.resource.data.materials is list
+        && request.resource.data.materials.size() <= 500
+        && request.resource.data.status == 'open'
+        && request.resource.data.quotationCount == 0;
+
+      // Only the owning builder may edit or withdraw a post, and ownership
+      // itself can never be reassigned.
+      allow update: if isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == resource.data.userId;
+      allow delete: if isSignedIn()
         && resource.data.userId == request.auth.uid;
 
       match /quotations/{shopId} {
-        allow read: if isSignedIn()
-          && (get(/databases/$(database)/documents/projectPosts/$(postId)).data.userId
-              == request.auth.uid
+        allow get, list: if isSignedIn()
+          && (postOwner(postId) == request.auth.uid
               || request.auth.uid == shopId);
-        allow create, update: if isSignedIn();
+
+        // A bid may only be written by the approved shop that owns it, so a
+        // rival shop or a builder cannot forge or undercut someone's offer.
+        allow create: if isOwner(shopId)
+          && isApprovedShop()
+          && request.resource.data.estimatedTotal is number
+          && request.resource.data.estimatedTotal >= 0
+          && request.resource.data.shopId == shopId
+          && request.resource.data.postId == postId
+          && request.resource.data.status == 'submitted';
+
+        allow update: if isSignedIn() && (
+          // The shop revising its own bid.
+          (isOwner(shopId)
+            && isApprovedShop()
+            && request.resource.data.estimatedTotal is number
+            && request.resource.data.estimatedTotal >= 0
+            && request.resource.data.shopId == resource.data.shopId
+            && request.resource.data.postId == resource.data.postId)
+          // The builder accepting or rejecting it, and nothing else.
+          || (postOwner(postId) == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['status', 'acceptedAt'])
+            && request.resource.data.status in ['accepted', 'rejected'])
+        );
+
         allow delete: if false;
       }
 
       match /acceptance/{acceptanceId} {
         allow read: if isSignedIn()
-          && get(/databases/$(database)/documents/projectPosts/$(postId)).data.userId
-            == request.auth.uid;
+          && postOwner(postId) == request.auth.uid;
         allow create: if isSignedIn()
-          && get(/databases/$(database)/documents/projectPosts/$(postId)).data.userId
-            == request.auth.uid;
+          && postOwner(postId) == request.auth.uid
+          && request.resource.data.userId == request.auth.uid;
         allow update, delete: if false;
       }
     }
 
-    // In-app notifications
+    // In-app notifications. Written exclusively by Cloud Functions via the
+    // Admin SDK (which bypasses these rules) so recipients cannot be spoofed.
     match /notifications/{notificationId} {
-      allow read, update: if isSignedIn()
+      allow read: if isSignedIn()
         && resource.data.recipientId == request.auth.uid;
-      allow create: if isSignedIn();
+      // Recipients may only flip read state on their own notifications.
+      allow update: if isSignedIn()
+        && resource.data.recipientId == request.auth.uid
+        && request.resource.data.recipientId == resource.data.recipientId
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['isRead']);
+      allow create: if false;
       allow delete: if isSignedIn()
         && resource.data.recipientId == request.auth.uid;
     }
 
-    // Hardware shops - read for signed-in builders
+    // Hardware shops - read for signed-in builders. Approval is granted out of
+    // band (admin / Cloud Function) so a shop cannot vet itself.
     match /shops/{shopId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && request.auth.uid == shopId;
+      allow create: if isOwner(shopId)
+        && request.resource.data.get('status', 'pending') != 'approved';
+      allow update: if isOwner(shopId)
+        && request.resource.data.get('status', 'pending')
+           == resource.data.get('status', 'pending');
+      allow delete: if false;
     }
 
     // Material catalog / products

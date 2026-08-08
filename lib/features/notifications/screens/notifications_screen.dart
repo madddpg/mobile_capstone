@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:iconstruct/core/firebase/firestore_error.dart';
 import 'package:iconstruct/features/bidding/screens/posted_project_details_screen.dart';
-// Assuming you have a QuotationsScreen or similar:
-// import 'package:iconstruct/features/bidding/screens/quotations_screen.dart';
+import 'package:iconstruct/features/bidding/screens/quotations_screen.dart';
 
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
@@ -107,9 +107,16 @@ class NotificationsScreen extends StatelessWidget {
 
         if (snapshot.hasError) {
           return Center(
-            child: Text(
-              'Error loading notifications: ${snapshot.error}',
-              style: GoogleFonts.poppins(color: Colors.white),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Text(
+                firestoreUserMessage(
+                  snapshot.error!,
+                  action: 'load your notifications',
+                ),
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(color: Colors.white),
+              ),
             ),
           );
         }
@@ -254,13 +261,12 @@ class NotificationCard extends StatelessWidget {
         ),
       );
     } else if (type == 'new_quotation' && postId.isNotEmpty) {
-      // NOTE: Ensure QuotationsScreen is imported if using.
-      // Navigator.push(
-      //   context,
-      //   MaterialPageRoute(
-      //     builder: (context) => QuotationsScreen(postId: postId),
-      //   ),
-      // );
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => QuotationsScreen(postId: postId),
+        ),
+      );
     }
   }
 

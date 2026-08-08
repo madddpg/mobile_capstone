@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:iconstruct/core/firebase/firestore_error.dart';
+import 'package:iconstruct/core/validation/password_policy.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
   const ChangePasswordScreen({super.key});
@@ -42,12 +44,11 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       return;
     }
 
-    if (newPassword.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('New password must be at least 6 characters.'),
-        ),
-      );
+    final policyError = PasswordPolicy.validate(newPassword);
+    if (policyError != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$policyError.')));
       return;
     }
 
@@ -128,7 +129,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: $e'),
+            content: Text(
+              firestoreUserMessage(e, action: 'change your password'),
+            ),
             backgroundColor: Colors.red.shade400,
           ),
         );
@@ -250,6 +253,15 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                     _obscureNew = !_obscureNew;
                   });
                 },
+              ),
+              const SizedBox(height: 8),
+              Text(
+                PasswordPolicy.hint,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  height: 1.4,
+                  color: const Color(0xFF5C6F84),
+                ),
               ),
               const SizedBox(height: 16),
               _buildPasswordField(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:iconstruct/core/validation/password_policy.dart';
 import 'package:iconstruct/features/auth/data/email_service.dart';
 import 'package:iconstruct/features/auth/presentation/screens/login_screen.dart';
 
@@ -37,25 +38,16 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
   void _validatePassword(String value) {
     setState(() {
-      if (value.isEmpty) {
-        _passwordError = 'Password is required';
-      } else if (value.length < 6) {
-        _passwordError = 'Password must be at least 6 characters';
-      } else {
-        _passwordError = null;
-      }
+      _passwordError = PasswordPolicy.validate(value);
     });
   }
 
   void _validateConfirm(String value) {
     setState(() {
-      if (value.isEmpty) {
-        _confirmError = 'Please confirm your password';
-      } else if (value != _passwordController.text) {
-        _confirmError = 'Passwords do not match';
-      } else {
-        _confirmError = null;
-      }
+      _confirmError = PasswordPolicy.validateConfirmation(
+        _passwordController.text,
+        value,
+      );
     });
   }
 
@@ -166,6 +158,15 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                               fontWeight: FontWeight.w500,
                               fontStyle: FontStyle.italic,
                               color: const Color(0xFFEADFD0),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            PasswordPolicy.hint,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              height: 1.4,
+                              color: const Color(0xFFE3D7C3),
                             ),
                           ),
                           const SizedBox(height: 36),

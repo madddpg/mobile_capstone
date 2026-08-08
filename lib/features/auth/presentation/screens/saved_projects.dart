@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'package:iconstruct/core/firebase/firestore_error.dart';
 import 'package:iconstruct/core/models/project_model.dart';
 import 'package:iconstruct/core/navigation/planning_nav.dart';
 import 'package:iconstruct/core/state/active_project_state.dart';
@@ -54,64 +55,98 @@ class SavedProjectsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseAuth.instance.currentUser == null
-                  ? const Stream.empty()
-                  : FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(FirebaseAuth.instance.currentUser!.uid)
-                        .collection('saved_projects')
-                        .orderBy('updatedAt', descending: true)
-                        .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
+            child: StreamBuilder<User?>(
+              stream: FirebaseAuth.instance.authStateChanges(),
+              builder: (context, authSnapshot) {
+                final user = authSnapshot.data;
+                if (authSnapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
                     child: CircularProgressIndicator(color: creamBg),
                   );
                 }
-
-                if (snapshot.hasError) {
+                if (user == null) {
                   return Center(
                     child: Text(
-                      'Error loading projects.',
-                      style: TextStyle(color: creamBg.withAlpha(150)),
-                    ),
-                  );
-                }
-
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return Center(
-                    child: Text(
-                      'No saved projects yet.',
+                      'Please log in to view saved estimates.',
                       style: TextStyle(
                         color: creamBg.withAlpha(150),
                         fontSize: 16,
                       ),
+                      textAlign: TextAlign.center,
                     ),
                   );
                 }
 
-                final projects = snapshot.data!.docs
-                    .map((doc) => ProjectModel.fromDocument(doc))
-                    .toList();
+                return StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(user.uid)
+                      .collection('saved_projects')
+                      .orderBy('updatedAt', descending: true)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(
+                        child: CircularProgressIndicator(color: creamBg),
+                      );
+                    }
 
-                return AnimatedBuilder(
-                  animation: ActiveProjectState.instance,
-                  builder: (context, child) {
-                    return ListView.builder(
-                      padding: const EdgeInsets.only(
-                        left: 20,
-                        right: 20,
-                        top: 8,
-                        bottom: 120,
-                      ),
-                      itemCount: projects.length,
-                      itemBuilder: (context, index) {
-                        final project = projects[index];
-                        return ProjectCard(
-                          project: project,
-                          isActive: project.id ==
-                              ActiveProjectState.instance.activeProject?.id,
+                    if (snapshot.hasError) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 28),
+                        child: Center(
+                          child: Text(
+                            firestoreUserMessage(
+                              snapshot.error!,
+                              action: 'load saved projects',
+                            ),
+                            style: TextStyle(
+                              color: creamBg.withAlpha(180),
+                              fontSize: 14,
+                              height: 1.4,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      );
+                    }
+
+                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return Center(
+                        child: Text(
+                          'No saved projects yet.',
+                          style: TextStyle(
+                            color: creamBg.withAlpha(150),
+                            fontSize: 16,
+                          ),
+                        ),
+                      );
+                    }
+
+                    final projects = snapshot.data!.docs
+                        .map((doc) => ProjectModel.fromDocument(doc))
+                        .toList();
+
+                    return AnimatedBuilder(
+                      animation: ActiveProjectState.instance,
+                      builder: (context, child) {
+                        return ListView.builder(
+                          padding: const EdgeInsets.only(
+                            left: 20,
+                            right: 20,
+                            top: 8,
+                            bottom: 120,
+                          ),
+                          itemCount: projects.length,
+                          itemBuilder: (context, index) {
+                            final project = projects[index];
+                            return ProjectCard(
+                              project: project,
+                              isActive: project.id ==
+                                  ActiveProjectState
+                                      .instance.activeProject?.id,
+                            );
+                          },
                         );
                       },
                     );
@@ -211,6 +246,8 @@ class ProjectCard extends StatelessWidget {
     );
 
     try {
+      await FirebaseAuth.instance.currentUser?.getIdToken(true);
+
       final batch = FirebaseFirestore.instance.batch();
       final newPostRef = FirebaseFirestore.instance
           .collection('projectPosts')
@@ -227,8 +264,7 @@ class ProjectCard extends StatelessWidget {
         'projectId': project.id,
         'projectName': project.projectName,
         'projectType': project.projectType,
-        'materials': project
-            .materials, // assuming it's exactly the correct property string map
+        'materials': project.materials,
         'materialsCount': project.materialCount,
         'totalAreaSqm': project.projectArea,
         'budget': project.costLevel,
@@ -239,13 +275,16 @@ class ProjectCard extends StatelessWidget {
       };
 
       batch.set(newPostRef, projectPostData);
-
-      batch.update(savedProjectRef, {
-        'status': ProjectLifecycle.waitingForQuotations,
-        'postId': newPostRef.id,
-        'postedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      batch.set(
+        savedProjectRef,
+        {
+          'status': ProjectLifecycle.waitingForQuotations,
+          'postId': newPostRef.id,
+          'postedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
 
       await batch.commit();
 
@@ -260,9 +299,14 @@ class ProjectCard extends StatelessWidget {
     } catch (e) {
       if (context.mounted) {
         Navigator.pop(context); // Remove loading
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error posting project: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              firestoreUserMessage(e, action: 'post this estimate for bidding'),
+            ),
+            duration: const Duration(seconds: 6),
+          ),
+        );
       }
     }
   }
@@ -342,7 +386,14 @@ class ProjectCard extends StatelessWidget {
                 } catch (e) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error deleting project: $e')),
+                      SnackBar(
+                        content: Text(
+                          firestoreUserMessage(
+                            e,
+                            action: 'delete this estimate',
+                          ),
+                        ),
+                      ),
                     );
                   }
                 }
@@ -379,6 +430,7 @@ class ProjectCard extends StatelessWidget {
     final materialsText = remainingCount > 0
         ? '$previewMaterials +$remainingCount more'
         : previewMaterials;
+    final hasMaterials = project.materials.isNotEmpty;
 
     return GestureDetector(
       onTap: () {
@@ -524,6 +576,40 @@ class ProjectCard extends StatelessWidget {
                       fontSize: 22,
                       fontWeight: FontWeight.w700,
                       height: 1.2,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                // Download / share the material list without opening the menu
+                Semantics(
+                  button: true,
+                  label: 'Download material list',
+                  hint: 'Save, print, or share ${project.projectName}',
+                  child: Tooltip(
+                    message: hasMaterials
+                        ? 'Download material list'
+                        : 'Add materials to download this list',
+                    child: Material(
+                      color: textDark.withValues(
+                        alpha: hasMaterials ? 0.10 : 0.05,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      child: InkWell(
+                        onTap: () => _handleShareProject(context),
+                        borderRadius: BorderRadius.circular(12),
+                        splashColor: textDark.withValues(alpha: 0.16),
+                        child: SizedBox(
+                          width: 38,
+                          height: 38,
+                          child: Icon(
+                            Icons.download_rounded,
+                            size: 21,
+                            color: textDark.withValues(
+                              alpha: hasMaterials ? 1.0 : 0.4,
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),

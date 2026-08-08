@@ -18,10 +18,11 @@ class IConstructPanel {
   static const double pillBottomMargin = 12;
   static const double panelNavGap = 10;
 
-  /// Left cream gutter.
+  /// Left cream gutter. Widening this pushes the whole offset panel further
+  /// right on every screen built with [OffsetPanelShell].
   static double leftInsetOf(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    return (width * 0.155).clamp(52.0, 64.0);
+    return (width * 0.205).clamp(70.0, 90.0);
   }
 
   static double railLeftOf(BuildContext context) =>

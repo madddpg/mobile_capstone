@@ -60,71 +60,78 @@ class _AcceptOfferScreenState extends State<AcceptOfferScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('User not authenticated');
 
-      // Check if already accepted
       final projectRef = FirebaseFirestore.instance
           .collection('projectPosts')
           .doc(widget.postId);
-      final projectDoc = await projectRef.get();
-      if (projectDoc.exists &&
-          projectDoc.data()?['selectedQuotationId'] != null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('You already accepted an offer for this project.'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-        return;
-      }
-
-      final batch = FirebaseFirestore.instance.batch();
-
-      // Update project post
-      batch.update(projectRef, {
-        'selectedQuotationId': widget.quotationId,
-        'selectedShopId': widget.shopId,
-        'selectedShopName': widget.shopName,
-        'status': 'offer_accepted',
-        'acceptedAt': FieldValue.serverTimestamp(),
-      });
-
-      // Advance the builder's saved estimate to Supplier Selected
-      final savedProjectId = projectDoc.data()?['projectId']?.toString();
-      if (savedProjectId != null && savedProjectId.isNotEmpty) {
-        final savedProjectRef = FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('saved_projects')
-            .doc(savedProjectId);
-        batch.set(savedProjectRef, {
-          'status': ProjectLifecycle.supplierSelected,
-          'selectedShopName': widget.shopName,
-          'supplierSelectedAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-      }
-
-      // Update accepted quotation
       final quotationRef = projectRef
           .collection('quotations')
           .doc(widget.quotationId);
-      batch.update(quotationRef, {
-        'status': 'accepted',
-        'acceptedAt': FieldValue.serverTimestamp(),
+
+      // Atomically claim the selected shop so two devices cannot accept
+      // different quotations for the same post.
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final projectDoc = await transaction.get(projectRef);
+        if (!projectDoc.exists) {
+          throw Exception('Project post not found');
+        }
+
+        final postData = projectDoc.data() ?? <String, dynamic>{};
+        if (postData['userId'] != user.uid) {
+          throw Exception('Not authorized to accept offers for this project');
+        }
+        if (postData['selectedQuotationId'] != null) {
+          throw Exception('already_accepted');
+        }
+
+        final quotationDoc = await transaction.get(quotationRef);
+        if (!quotationDoc.exists) {
+          throw Exception('Quotation not found');
+        }
+
+        transaction.update(projectRef, {
+          'selectedQuotationId': widget.quotationId,
+          'selectedShopId': widget.shopId,
+          'selectedShopName': widget.shopName,
+          'status': 'offer_accepted',
+          'acceptedAt': FieldValue.serverTimestamp(),
+        });
+
+        transaction.update(quotationRef, {
+          'status': 'accepted',
+          'acceptedAt': FieldValue.serverTimestamp(),
+        });
+
+        final savedProjectId = postData['projectId']?.toString();
+        if (savedProjectId != null && savedProjectId.isNotEmpty) {
+          final savedProjectRef = FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .collection('saved_projects')
+              .doc(savedProjectId);
+          transaction.set(
+            savedProjectRef,
+            {
+              'status': ProjectLifecycle.supplierSelected,
+              'selectedShopName': widget.shopName,
+              'supplierSelectedAt': FieldValue.serverTimestamp(),
+              'updatedAt': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true),
+          );
+        }
       });
 
-      // Set other quotations to rejected
-      final quotationsSnapshot = await projectRef
-          .collection('quotations')
-          .get();
+      // Best-effort follow-up: reject remaining bids + record acceptance
+      // contact details. Selection above is already committed.
+      final batch = FirebaseFirestore.instance.batch();
+      final quotationsSnapshot =
+          await projectRef.collection('quotations').get();
       for (final doc in quotationsSnapshot.docs) {
         if (doc.id != widget.quotationId) {
           batch.update(doc.reference, {'status': 'rejected'});
         }
       }
 
-      // Create acceptance document
       final acceptanceRef = projectRef.collection('acceptance').doc();
       batch.set(acceptanceRef, {
         'userId': user.uid,
@@ -136,6 +143,7 @@ class _AcceptOfferScreenState extends State<AcceptOfferScreen> {
         'socialContact': _socialContactController.text.trim(),
         'paymentArrangement': _paymentArrangement,
         'remarks': _remarksController.text.trim(),
+        'totalAmount': widget.totalAmount,
         'createdAt': FieldValue.serverTimestamp(),
         'note': 'No transaction/payment processed inside iConstruct.',
       });
@@ -155,12 +163,15 @@ class _AcceptOfferScreenState extends State<AcceptOfferScreen> {
       }
     } catch (e) {
       if (mounted) {
+        final already = e.toString().contains('already_accepted');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              firestoreUserMessage(e, action: 'accept this offer'),
+              already
+                  ? 'You already accepted an offer for this project.'
+                  : firestoreUserMessage(e, action: 'accept this offer'),
             ),
-            backgroundColor: Colors.red,
+            backgroundColor: already ? Colors.orange : Colors.red,
           ),
         );
       }

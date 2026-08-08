@@ -50,6 +50,7 @@ class PlanningNav {
       return;
     }
 
+    var loaderOpen = true;
     showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -57,6 +58,12 @@ class PlanningNav {
         child: CircularProgressIndicator(color: Color(0xFFEDE4D4)),
       ),
     );
+
+    void dismissLoader() {
+      if (!loaderOpen || !context.mounted) return;
+      loaderOpen = false;
+      Navigator.of(context, rootNavigator: true).pop();
+    }
 
     try {
       ProjectModel? last = _unfinishedOrNull(
@@ -81,8 +88,8 @@ class PlanningNav {
         }
       }
 
+      dismissLoader();
       if (!context.mounted) return;
-      Navigator.of(context, rootNavigator: true).pop();
 
       if (last == null) {
         _toast(context, 'No estimate in progress. Start a new one.');
@@ -119,8 +126,8 @@ class PlanningNav {
         existingProject: project,
       );
     } catch (_) {
+      dismissLoader();
       if (!context.mounted) return;
-      Navigator.of(context, rootNavigator: true).pop();
       _toast(context, 'Could not open your last estimate. Try again.');
     }
   }

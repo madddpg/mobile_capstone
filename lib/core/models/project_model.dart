@@ -28,9 +28,14 @@ class ProjectModel {
 
   factory ProjectModel.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
+    return ProjectModel.fromMap(doc.id, data);
+  }
+
+  /// Shared parser for Firestore docs and unit tests.
+  factory ProjectModel.fromMap(String id, Map<String, dynamic> data) {
     final rawPostId = data['postId']?.toString();
     return ProjectModel(
-      id: doc.id,
+      id: id,
       projectName: (data['projectName'] ?? 'Unknown Project').toString(),
       projectType: (data['projectType'] ?? '').toString(),
       materialCount: _asInt(data['materialsCount']),

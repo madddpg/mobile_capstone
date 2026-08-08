@@ -65,17 +65,19 @@ function readOtp(request) {
   return otp;
 }
 
-function readVerificationToken(request) {
-  const verificationToken = String(request.data?.verificationToken || "").trim();
+const {
+  readVerificationTokenFromData,
+} = require("./src/readVerificationToken");
 
-  if (!verificationToken) {
+function readVerificationToken(request) {
+  try {
+    return readVerificationTokenFromData(request.data);
+  } catch (error) {
     throw new HttpsError(
       "failed-precondition",
       "Verify the OTP before finishing registration."
     );
   }
-
-  return verificationToken;
 }
 
 function generateOtp() {

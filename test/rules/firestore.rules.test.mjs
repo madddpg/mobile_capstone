@@ -156,3 +156,71 @@ test('unrelated builder cannot read another builder post', async () => {
   const stranger = authed('builder-2');
   await assertFails(stranger.doc('projectPosts/post-1').get());
 });
+
+test('owner cannot forge isVerified on their profile', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    await context.firestore().doc('users/builder-1').set({
+      email: 'builder@example.com',
+      isVerified: false,
+      firstName: 'Pat',
+      lastName: 'Builder',
+    });
+  });
+
+  const builder = authed('builder-1');
+  await assertFails(
+    builder.doc('users/builder-1').update({ isVerified: true }),
+  );
+  await assertSucceeds(
+    builder.doc('users/builder-1').update({ firstName: 'Patched' }),
+  );
+});
+
+test('owner cannot create a pre-verified profile', async () => {
+  const builder = authed('builder-1');
+  await assertFails(
+    builder.doc('users/builder-1').set({
+      email: 'builder@example.com',
+      isVerified: true,
+      firstName: 'Pat',
+      lastName: 'Builder',
+    }),
+  );
+  await assertSucceeds(
+    builder.doc('users/builder-1').set({
+      email: 'builder@example.com',
+      isVerified: false,
+      firstName: 'Pat',
+      lastName: 'Builder',
+    }),
+  );
+});
+
+test('shop cannot rewrite quotation after it was accepted', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await db.doc('projectPosts/post-1').set({
+      userId: 'builder-1',
+      projectName: 'Bath',
+      materials: [],
+      status: 'offer_accepted',
+      quotationCount: 1,
+      selectedQuotationId: 'shop-a',
+    });
+    await db.doc('shops/shop-a').set({ status: 'approved', name: 'A' });
+    await db.doc('projectPosts/post-1/quotations/shop-a').set({
+      shopId: 'shop-a',
+      postId: 'post-1',
+      estimatedTotal: 1200,
+      status: 'accepted',
+    });
+  });
+
+  const shopA = authed('shop-a');
+  await assertFails(
+    shopA.doc('projectPosts/post-1/quotations/shop-a').update({
+      estimatedTotal: 1,
+      status: 'submitted',
+    }),
+  );
+});

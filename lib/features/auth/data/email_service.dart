@@ -306,7 +306,10 @@ class EmailService {
       debugPrint('Fetched Firestore doc ID: ${userDocRef.id}');
       debugPrint('Firestore doc exists: ${userDoc.exists}');
 
-      // 3. Auto-create missing profile with merge-safe defaults
+      // 3. Auto-create missing profile with merge-safe defaults.
+      // isVerified is server-owned (OTP Cloud Function / Admin SDK). Clients
+      // may only create the profile as unverified; never trust a client-set
+      // flag for login.
       if (!userDoc.exists) {
         debugPrint(
           'Profile missing! Auto-creating Firestore document for $uid',
@@ -316,17 +319,17 @@ class EmailService {
           'email': trimmedEmail,
           'firstName': '', // Defaults
           'lastName': '', // Defaults
-          'isVerified': credential.user?.emailVerified ?? false,
+          'isVerified': false,
           'created_at': FieldValue.serverTimestamp(),
           'verified_at': null,
         }, SetOptions(merge: true));
       }
 
-      // 4. Refuse to hand out a session to an unverified account. A fresh code
-      // is sent so the caller can surface the OTP step right away.
-      final profileVerified = userDoc.data()?['isVerified'] == true;
+      // 4. Refuse to hand out a session to an unverified account. Trust Firebase
+      // Auth's emailVerified only — Firestore isVerified is forgeable by the
+      // document owner under older rules and must not bypass OTP.
       final authVerified = credential.user?.emailVerified ?? false;
-      if (!profileVerified && !authVerified) {
+      if (!authVerified) {
         debugPrint('Login blocked: email not verified for $uid');
         await _auth.signOut();
         try {
@@ -360,6 +363,24 @@ class EmailService {
     }
   }
 
+  /// Payload for the `resetPasswordWithToken` callable.
+  ///
+  /// The Cloud Function reads `verificationToken` (see
+  /// `readVerificationToken` in functions/index.js). Sending `token` instead
+  /// makes every reset fail with failed-precondition after a valid OTP.
+  @visibleForTesting
+  static Map<String, dynamic> resetPasswordCallableData({
+    required String email,
+    required String verificationToken,
+    required String newPassword,
+  }) {
+    return {
+      'email': email.trim(),
+      'verificationToken': verificationToken,
+      'newPassword': newPassword,
+    };
+  }
+
   Future<void> resetPassword({
     required String email,
     required String verificationToken,
@@ -376,11 +397,13 @@ class EmailService {
       final httpsCallable = FirebaseFunctions.instance.httpsCallable(
         'resetPasswordWithToken',
       );
-      await httpsCallable.call({
-        'email': trimmedEmail,
-        'token': verificationToken,
-        'newPassword': newPassword,
-      });
+      await httpsCallable.call(
+        resetPasswordCallableData(
+          email: trimmedEmail,
+          verificationToken: verificationToken,
+          newPassword: newPassword,
+        ),
+      );
     } on FirebaseFunctionsException catch (e) {
       throw EmailApiException(
         'Failed to reset password: ${e.message}',

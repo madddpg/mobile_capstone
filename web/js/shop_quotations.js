@@ -26,7 +26,12 @@ export async function submitQuotation(db, postId, shopParams) {
 
       const postData = postDoc.data();
       const postStatus = postData.status;
-      if (postStatus === "closed" || postStatus === "awarded" || postStatus === "cancelled") {
+      if (
+        postStatus === "closed" ||
+        postStatus === "awarded" ||
+        postStatus === "cancelled" ||
+        postStatus === "offer_accepted"
+      ) {
         throw new Error("You can no longer submit quotations to this project.");
       }
 

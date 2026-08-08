@@ -31,7 +31,15 @@ service cloud.firestore {
     match /users/{userId} {
       allow get: if isOwner(userId);
       allow list: if false;
-      allow create, update: if isOwner(userId);
+      // isVerified / verified_at are server-owned (OTP Cloud Function via Admin
+      // SDK). Owners must not forge verification to skip email OTP at login.
+      allow create: if isOwner(userId)
+        && request.resource.data.get('isVerified', false) == false;
+      allow update: if isOwner(userId)
+        && request.resource.data.get('isVerified', false)
+             == resource.data.get('isVerified', false)
+        && request.resource.data.get('verified_at', null)
+             == resource.data.get('verified_at', null);
       allow delete: if false;
 
       match /favorites/{favoriteId} {
@@ -90,9 +98,12 @@ service cloud.firestore {
           && request.resource.data.status == 'submitted';
 
         allow update: if isSignedIn() && (
-          // The shop revising its own bid.
+          // The shop may revise only while the bid is still open. Once a
+          // builder accepts/rejects (or a rival wins), totals must stay fixed.
           (isOwner(shopId)
             && isApprovedShop()
+            && resource.data.status == 'submitted'
+            && request.resource.data.status == 'submitted'
             && request.resource.data.estimatedTotal is number
             && request.resource.data.estimatedTotal >= 0
             && request.resource.data.shopId == resource.data.shopId

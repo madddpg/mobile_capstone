@@ -61,6 +61,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
   late final TextEditingController _remarksController;
 
   int _currentMaterialPage = 0;
+  bool _isPosting = false;
 
   List<AddedTileSelection> _localTiles = [];
   List<AddedPlumbingSelection> _localPlumbing = [];
@@ -753,6 +754,8 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
   }
 
   Future<void> _postProjectForBidding() async {
+    if (_isPosting) return;
+
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       if (mounted) {
@@ -785,8 +788,23 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       return;
     }
 
+    // Existing estimate already canvassing — do not create a second post.
+    final existingPostId = widget.existingProject?.postId;
+    if (existingPostId != null && existingPostId.isNotEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('This estimate is already posted for bidding.'),
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isPosting = true);
+
     try {
-      // Fresh ID token before security-rule checks on the batch write.
+      // Fresh ID token before security-rule checks on the write.
       await user.getIdToken(true);
 
       String costLevel = 'medium';
@@ -799,27 +817,23 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       }
 
       final firestore = FirebaseFirestore.instance;
-      final batch = firestore.batch();
 
       final String uid = user.uid;
-      DocumentReference savedProjectRef;
-      if (widget.existingProject != null) {
-        savedProjectRef = firestore
-            .collection('users')
-            .doc(uid)
-            .collection('saved_projects')
-            .doc(widget.existingProject!.id);
-      } else {
-        savedProjectRef = firestore
-            .collection('users')
-            .doc(uid)
-            .collection('saved_projects')
-            .doc();
-      }
+      final DocumentReference<Map<String, dynamic>> savedProjectRef =
+          widget.existingProject != null
+              ? firestore
+                  .collection('users')
+                  .doc(uid)
+                  .collection('saved_projects')
+                  .doc(widget.existingProject!.id)
+              : firestore
+                  .collection('users')
+                  .doc(uid)
+                  .collection('saved_projects')
+                  .doc();
 
-      final DocumentReference newPostRef = firestore
-          .collection('projectPosts')
-          .doc();
+      final DocumentReference<Map<String, dynamic>> newPostRef =
+          firestore.collection('projectPosts').doc();
 
       final Map<String, dynamic> projectPostData = {
         'postId': newPostRef.id,
@@ -856,11 +870,23 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
           'projectNotes': _remarksController.text.trim(),
       };
 
-      // Merge-safe write so a missing draft doc cannot fail the whole batch.
-      batch.set(savedProjectRef, savedProjectData, SetOptions(merge: true));
-      batch.set(newPostRef, projectPostData);
+      await firestore.runTransaction((transaction) async {
+        if (widget.existingProject != null) {
+          final existing = await transaction.get(savedProjectRef);
+          final postedId = existing.data()?['postId']?.toString();
+          if (postedId != null && postedId.isNotEmpty) {
+            throw Exception('already_posted');
+          }
+        }
 
-      await batch.commit();
+        // Merge-safe write so a missing draft doc cannot fail the transaction.
+        transaction.set(
+          savedProjectRef,
+          savedProjectData,
+          SetOptions(merge: true),
+        );
+        transaction.set(newPostRef, projectPostData);
+      });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -880,14 +906,26 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       }
     } catch (e) {
       if (mounted) {
+        final already = e.toString().contains('already_posted');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              firestoreUserMessage(e, action: 'request supplier quotations'),
+              already
+                  ? 'This estimate is already posted for bidding.'
+                  : firestoreUserMessage(
+                      e,
+                      action: 'request supplier quotations',
+                    ),
             ),
             duration: const Duration(seconds: 6),
           ),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isPosting = false);
+      } else {
+        _isPosting = false;
       }
     }
   }

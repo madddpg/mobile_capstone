@@ -189,13 +189,26 @@ class ProjectBidsScreen extends StatelessWidget {
 
                   final quotedMaterials = _parseMaterials(data['materials']);
 
-                  final totalAmount =
-                      data['totalAmount'] ?? data['amount'] ?? 0;
+                  // Canonical shop field is `estimatedTotal` (see
+                  // web/js/shop_quotations.js + firestore.rules). Keep legacy
+                  // fallbacks so older docs still display.
+                  final quoteTotal = _toDouble(
+                    data['estimatedTotal'] ??
+                        data['totalAmount'] ??
+                        data['amount'],
+                  );
+                  final deliveryFee = _toDouble(data['deliveryFee']);
+                  final totalAmount = quoteTotal + deliveryFee;
 
-                  final status = data['status'] ?? 'pending';
+                  final status =
+                      (data['status'] ?? 'submitted').toString().toLowerCase();
 
                   final isAccepted = selectedQuotationId == quotationId;
                   final hasAcceptedOffer = selectedQuotationId != null;
+                  // Rules + shop client write status `submitted`; treat that
+                  // (and legacy `pending`) as open for acceptance.
+                  final canAccept = !hasAcceptedOffer &&
+                      (status == 'submitted' || status == 'pending');
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 16),
@@ -227,7 +240,9 @@ class ProjectBidsScreen extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            _buildStatusBadge(status),
+                            _buildStatusBadge(
+                              isAccepted ? 'accepted' : status,
+                            ),
                           ],
                         ),
 
@@ -370,8 +385,7 @@ class ProjectBidsScreen extends StatelessWidget {
                         const SizedBox(height: 16),
 
                         // Accept Offer Button
-                        if (status.toLowerCase() == 'pending' &&
-                            !hasAcceptedOffer)
+                        if (canAccept)
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton(
@@ -406,8 +420,9 @@ class ProjectBidsScreen extends StatelessWidget {
                                         postId: postId,
                                         quotationId: quotationId,
                                         shopName: shopName,
-                                        shopId: data['shopId'] ?? '',
-                                        totalAmount: _toDouble(totalAmount),
+                                        shopId:
+                                            (data['shopId'] ?? '').toString(),
+                                        totalAmount: totalAmount,
                                       ),
                                     ),
                                   );

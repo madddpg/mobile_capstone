@@ -10,6 +10,23 @@ void main() {
     });
   });
 
+  group('BidQuote.fromMap', () {
+    test('reads estimatedTotal written by shop quotations', () {
+      final quote = BidQuote.fromMap('shop-1', {
+        'shopName': 'Corner Hardware',
+        'estimatedTotal': 12500,
+        'deliveryFee': 250,
+        'estimatedLeadTime': '4 days',
+        'availableMaterials': ['Tile', 'Grout'],
+        'status': 'submitted',
+      });
+
+      expect(quote.estimatedTotal, 12500);
+      expect(quote.allInTotal, 12750);
+      expect(quote.materialsCovered, 2);
+    });
+  });
+
   group('BidComparison', () {
     final quotes = [
       const BidQuote(

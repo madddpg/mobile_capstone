@@ -75,6 +75,15 @@ extension on SavedProjectsSort {
   }
 }
 
+/// Process-local guard so a double-tap cannot start two post writes.
+class _PostInFlight {
+  static final Set<String> _ids = <String>{};
+
+  static bool tryBegin(String projectId) => _ids.add(projectId);
+
+  static void end(String projectId) => _ids.remove(projectId);
+}
+
 // --- Screen ---
 class SavedProjectsScreen extends StatefulWidget {
   final SavedProjectsFocus focus;
@@ -474,6 +483,10 @@ class ProjectCard extends StatelessWidget {
       return;
     }
 
+    if (!_PostInFlight.tryBegin(project.id)) {
+      return;
+    }
+
     // Show loading
     showDialog(
       context: context,
@@ -484,10 +497,7 @@ class ProjectCard extends StatelessWidget {
     try {
       await FirebaseAuth.instance.currentUser?.getIdToken(true);
 
-      final batch = FirebaseFirestore.instance.batch();
-      final newPostRef = FirebaseFirestore.instance
-          .collection('projectPosts')
-          .doc();
+      final newPostRef = FirebaseFirestore.instance.collection('projectPosts').doc();
       final savedProjectRef = FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
@@ -510,19 +520,26 @@ class ProjectCard extends StatelessWidget {
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
-      batch.set(newPostRef, projectPostData);
-      batch.set(
-        savedProjectRef,
-        {
-          'status': ProjectLifecycle.waitingForQuotations,
-          'postId': newPostRef.id,
-          'postedAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      // Transaction re-checks postId so a double-tap cannot orphan a live post.
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final existing = await transaction.get(savedProjectRef);
+        final existingPostId = existing.data()?['postId']?.toString();
+        if (existingPostId != null && existingPostId.isNotEmpty) {
+          throw Exception('already_posted');
+        }
 
-      await batch.commit();
+        transaction.set(newPostRef, projectPostData);
+        transaction.set(
+          savedProjectRef,
+          {
+            'status': ProjectLifecycle.waitingForQuotations,
+            'postId': newPostRef.id,
+            'postedAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      });
 
       if (context.mounted) {
         Navigator.pop(context); // Remove loading
@@ -535,15 +552,23 @@ class ProjectCard extends StatelessWidget {
     } catch (e) {
       if (context.mounted) {
         Navigator.pop(context); // Remove loading
+        final already = e.toString().contains('already_posted');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              firestoreUserMessage(e, action: 'post this estimate for bidding'),
+              already
+                  ? 'This project is already posted for bidding.'
+                  : firestoreUserMessage(
+                      e,
+                      action: 'post this estimate for bidding',
+                    ),
             ),
             duration: const Duration(seconds: 6),
           ),
         );
       }
+    } finally {
+      _PostInFlight.end(project.id);
     }
   }
 

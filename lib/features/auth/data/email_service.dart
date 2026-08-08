@@ -285,15 +285,22 @@ class EmailService {
       try {
         userDoc = await userDocRef.get(const GetOptions(source: Source.server));
       } on FirebaseException catch (e) {
-        if (e.code == 'permission-denied') {
+        if (e.code == 'unavailable' || e.code == 'deadline-exceeded') {
+          // Prefer a cached profile when the device is offline so builders are
+          // not locked out of estimates they already have on this phone.
+          userDoc = await userDocRef.get(
+            const GetOptions(source: Source.cache),
+          );
+        } else if (e.code == 'permission-denied') {
           throw const EmailApiException(
             'Login blocked by Firestore permissions. '
             'In Firebase Console → App Check, set Cloud Firestore to Monitor '
             '(not Enforced) while developing, or install an App Check provider. '
             'Also confirm firestore.rules allow users/{uid} for signed-in owners.',
           );
+        } else {
+          rethrow;
         }
-        rethrow;
       }
 
       debugPrint('Fetched Firestore doc ID: ${userDocRef.id}');

@@ -79,7 +79,8 @@ class ProductModel {
       projectType: json['projectType']?.toString() ?? '',
       category: json['category']?.toString() ?? '',
       type: json['type']?.toString() ?? '',
-      price: json['price'] as num? ?? 0,
+      // Catalog prices stay private to shops; builders only see quotations.
+      price: 0,
       unit: json['unit']?.toString() ?? '',
       currency: json['currency']?.toString() ?? '',
       available: json['available'] as bool? ?? false,
@@ -104,7 +105,6 @@ class ProductModel {
       'projectType': projectType,
       'category': category,
       'type': type,
-      'price': price,
       'unit': unit,
       'currency': currency,
       'available': available,

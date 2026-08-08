@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:iconstruct/core/state/onboarding_preferences.dart';
+import 'package:iconstruct/core/widgets/app_image.dart';
 import 'package:iconstruct/features/onboarding/presentation/screens/landing_screen.dart';
 
 class MainDisplayScreen extends StatefulWidget {
@@ -199,7 +200,18 @@ class _SlideBackground extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        Image.asset(imagePath, fit: BoxFit.cover),
+        Builder(
+          builder: (context) {
+            final size = MediaQuery.sizeOf(context);
+            return AppImage.asset(
+              context,
+              imagePath,
+              width: size.width,
+              height: size.height,
+              fit: BoxFit.cover,
+            );
+          },
+        ),
         // dark gradient overlay for text legibility (prototype style)
         const _BottomFadeOverlay(),
       ],

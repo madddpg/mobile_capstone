@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:iconstruct/core/navigation/planning_nav.dart';
+import 'package:iconstruct/core/services/unread_notifications.dart';
 import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
 import 'package:iconstruct/features/auth/presentation/screens/profile_screen.dart';
 import 'package:iconstruct/features/auth/presentation/screens/top_shops_screen.dart';
@@ -8,6 +10,7 @@ import 'package:iconstruct/features/auth/presentation/models/ranked_shop.dart';
 import 'package:iconstruct/features/auth/presentation/services/shop_ranking_service.dart';
 import 'package:iconstruct/core/widgets/offset_pill_nav.dart';
 import 'package:iconstruct/core/widgets/user_avatar.dart';
+import 'package:iconstruct/features/notifications/screens/notifications_screen.dart';
 import 'package:iconstruct/features/project_creation/screens/project_tracking_screen.dart';
 
 class MainHomeScreen extends StatelessWidget {
@@ -81,9 +84,19 @@ class MainHomeScreen extends StatelessWidget {
                                   );
                                 },
                               ),
-                              _TopIconButton(
-                                icon: Icons.menu_rounded,
-                                onTap: () {},
+                              UnreadNotificationsBadge(
+                                child: _TopIconButton(
+                                  icon: Icons.notifications_none_rounded,
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const NotificationsScreen(),
+                                      ),
+                                    );
+                                  },
+                                ),
                               ),
                             ],
                           ),
@@ -137,6 +150,9 @@ class MainHomeScreen extends StatelessWidget {
                     backgroundColor: _darkBlue,
                     cream: _cream,
                     onSeeLocations: () {},
+                    onContinueLastEstimate: () {
+                      PlanningNav.continueLastEstimate(context);
+                    },
                     onStartNewRenovation: () {
                       Navigator.push(
                         context,
@@ -149,7 +165,9 @@ class MainHomeScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const SavedProjectsScreen(),
+                          builder: (context) => const SavedProjectsScreen(
+                            focus: SavedProjectsFocus.all,
+                          ),
                         ),
                       );
                     },
@@ -157,7 +175,9 @@ class MainHomeScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const SavedProjectsScreen(),
+                          builder: (context) => const SavedProjectsScreen(
+                            focus: SavedProjectsFocus.readyToPost,
+                          ),
                         ),
                       );
                     },
@@ -217,6 +237,7 @@ class _MainCard extends StatelessWidget {
   final Color backgroundColor;
   final Color cream;
   final VoidCallback onSeeLocations;
+  final VoidCallback onContinueLastEstimate;
   final VoidCallback onStartNewRenovation;
   final VoidCallback onSavedProjects;
   final VoidCallback onPostProject;
@@ -227,6 +248,7 @@ class _MainCard extends StatelessWidget {
     required this.backgroundColor,
     required this.cream,
     required this.onSeeLocations,
+    required this.onContinueLastEstimate,
     required this.onStartNewRenovation,
     required this.onSavedProjects,
     required this.onPostProject,
@@ -254,10 +276,18 @@ class _MainCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _ActionTile(
-            icon: Icons.home_repair_service_outlined,
-            title: 'Start New Renovation',
+            icon: Icons.play_circle_outline_rounded,
+            title: 'Continue Last Estimate',
             subtitle:
-                'Begin a new renovation project: choose type, create details, plan materials with a template or AI, then request supplier quotations.',
+                'Resume your most recent unfinished material plan or open its quotations.',
+            onTap: onContinueLastEstimate,
+          ),
+          const SizedBox(height: 12),
+          _ActionTile(
+            icon: Icons.home_repair_service_outlined,
+            title: 'Start New Estimate',
+            subtitle:
+                'Name an estimate, plan materials with AI or a template, then get ready to canvass shops.',
             onTap: onStartNewRenovation,
           ),
           const SizedBox(height: 12),
@@ -265,7 +295,7 @@ class _MainCard extends StatelessWidget {
             icon: Icons.folder_open_outlined,
             title: 'My Projects',
             subtitle:
-                'Access and manage your previous material estimates and project drafts in one secure place.',
+                'Browse and edit all your saved material estimates, downloads, and drafts.',
             onTap: onSavedProjects,
           ),
           const SizedBox(height: 12),
@@ -273,15 +303,15 @@ class _MainCard extends StatelessWidget {
             icon: Icons.campaign_outlined,
             title: 'Post for Bidding',
             subtitle:
-                'Publish your project and receive quotations from nearby hardware shops based on your material requirements.',
+                'Choose an estimate that is ready and request private quotations from hardware shops.',
             onTap: onPostProject,
           ),
           const SizedBox(height: 12),
           _ActionTile(
             icon: Icons.timeline_outlined,
-            title: 'Project Tracking',
+            title: 'Canvass Tracking',
             subtitle:
-                'Monitor project progress from draft through quotations, supplier selection, and completion.',
+                'Follow each estimate from planning through bids received to supplier selected.',
             onTap: onViewQuotations,
           ),
         ],

@@ -8,6 +8,7 @@ import 'package:iconstruct/core/services/fcm_service.dart';
 import 'package:iconstruct/core/state/user_state/user_provider.dart';
 import 'firebase_options.dart';
 import 'package:iconstruct/core/theme/app_theme.dart';
+import 'package:iconstruct/core/widgets/offline_banner.dart';
 import 'package:iconstruct/features/onboarding/presentation/screens/display_screen.dart';
 
 Future<void> main() async {
@@ -17,18 +18,22 @@ Future<void> main() async {
   // Required so bid pushes still deliver when the app is backgrounded/killed.
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-  // App Check: in debug, skip activation so local runs work when Firestore is
-  // set to Monitor. If you enforce App Check, register the debug token printed
-  // by FlutterFire instead of skipping, then re-enable the debug provider.
-  if (kReleaseMode) {
-    await FirebaseAppCheck.instance.activate(
-      androidProvider: AndroidProvider.playIntegrity,
-      appleProvider: AppleProvider.deviceCheck,
-    );
-  } else {
+  // App Check: release uses Play Integrity / DeviceCheck. Debug uses the
+  // debug provider so you can register the printed token in Firebase Console
+  // and later switch Firestore App Check from Monitor → Enforced.
+  await FirebaseAppCheck.instance.activate(
+    androidProvider: kReleaseMode
+        ? AndroidProvider.playIntegrity
+        : AndroidProvider.debug,
+    appleProvider: kReleaseMode
+        ? AppleProvider.deviceCheck
+        : AppleProvider.debug,
+  );
+  if (!kReleaseMode) {
     debugPrint(
-      'App Check skipped in debug. Keep Firestore App Check on Monitor, '
-      'or enforce it only after registering a debug token.',
+      'App Check debug provider active. Copy the debug token from logcat '
+      '(or Xcode) into Firebase Console → App Check → Manage debug tokens, '
+      'then you can safely set Firestore App Check to Enforced.',
     );
   }
 
@@ -63,7 +68,7 @@ class MyApp extends StatelessWidget {
               maxScaleFactor: 1.3,
             ),
           ),
-          child: child ?? const SizedBox.shrink(),
+          child: OfflineBannerHost(child: child ?? const SizedBox.shrink()),
         );
       },
       home: const DisplayScreen(),

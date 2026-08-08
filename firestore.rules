@@ -52,6 +52,7 @@ service cloud.firestore {
 
       // Clients may not seed bid state; quotationCount/status are server-owned
       // from that point on (see functions/index.js syncPostQuotationState).
+      // Posts also must not broadcast catalog/list prices — shops quote privately.
       allow create: if isSignedIn()
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.projectName is string
@@ -60,7 +61,10 @@ service cloud.firestore {
         && request.resource.data.materials is list
         && request.resource.data.materials.size() <= 500
         && request.resource.data.status == 'open'
-        && request.resource.data.quotationCount == 0;
+        && request.resource.data.quotationCount == 0
+        && !request.resource.data.keys().hasAny([
+             'price', 'unitPrice', 'catalogPrice', 'estimatedTotal', 'listPrice'
+           ]);
 
       // Only the owning builder may edit or withdraw a post, and ownership
       // itself can never be reassigned.
@@ -141,7 +145,10 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Material catalog / products
+    // Material catalog / products.
+    // Reads are allowed so builders can browse material options (name, unit,
+    // image). Catalog list prices must not be treated as public quotes — the
+    // Flutter client ignores `price`, and shops submit private quotations.
     match /products/{productId} {
       allow read: if isSignedIn();
       allow write: if false;

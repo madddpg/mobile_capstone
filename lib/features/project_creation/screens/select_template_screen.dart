@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:iconstruct/core/widgets/app_image.dart';
 import 'package:iconstruct/features/project_creation/screens/template_area_screen.dart';
 import 'package:iconstruct/features/project_creation/data/renovation_template_service.dart';
 import 'package:iconstruct/features/project_creation/data/renovation_templates.dart';
@@ -221,18 +222,28 @@ class _TemplatePreview extends StatelessWidget {
     final url = template.imageUrl?.trim();
 
     if (asset != null && asset.isNotEmpty) {
-      return Image.asset(
-        asset,
-        fit: BoxFit.cover,
-        errorBuilder: (_, _, _) => _fallback(),
+      return Builder(
+        builder: (context) => AppImage.asset(
+          context,
+          asset,
+          width: 72,
+          height: 72,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _fallback(),
+        ),
       );
     }
 
     if (url != null && url.isNotEmpty) {
-      return Image.network(
-        url,
-        fit: BoxFit.cover,
-        errorBuilder: (_, _, _) => _fallback(),
+      return Builder(
+        builder: (context) => AppImage.network(
+          context,
+          url,
+          width: 72,
+          height: 72,
+          fit: BoxFit.cover,
+          error: _fallback(),
+        ),
       );
     }
 

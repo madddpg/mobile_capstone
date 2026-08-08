@@ -5,7 +5,25 @@ import 'package:iconstruct/features/auth/presentation/models/ranked_shop.dart';
 class ShopRankingService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  Future<List<RankedShop>> fetchRankedShops() async {
+  static List<RankedShop>? _cache;
+  static DateTime? _cachedAt;
+  static const Duration _ttl = Duration(minutes: 5);
+
+  /// Clears the in-memory ranking cache (e.g. after pull-to-refresh).
+  static void clearCache() {
+    _cache = null;
+    _cachedAt = null;
+  }
+
+  Future<List<RankedShop>> fetchRankedShops({bool forceRefresh = false}) async {
+    final now = DateTime.now();
+    if (!forceRefresh &&
+        _cache != null &&
+        _cachedAt != null &&
+        now.difference(_cachedAt!) < _ttl) {
+      return _cache!;
+    }
+
     try {
       // 1. Fetch all approved and active shops
       final shopsQuery = await _firestore
@@ -17,10 +35,14 @@ class ShopRankingService {
       debugPrint('ShopRankingService: Fetched ${shopsQuery.docs.length} shops');
 
       if (shopsQuery.docs.isEmpty) {
-        return [];
+        _cache = const [];
+        _cachedAt = now;
+        return _cache!;
       }
 
       // 2. Fetch all quotations using collectionGroup
+      // TODO: denormalize quotationCount onto shop docs so home never
+      // needs a full collectionGroup scan as the catalog grows.
       final quotationsQuery = await _firestore
           .collectionGroup('quotations')
           .get();
@@ -45,10 +67,6 @@ class ShopRankingService {
         final uid = data['uid'] as String? ?? doc.id;
         final count = quotationCounts[uid] ?? 0;
 
-        debugPrint(
-          'ShopRankingService: Shop "${data['shopName']}" | Quotations: $count',
-        );
-
         return RankedShop(
           uid: uid,
           shopName: data['shopName'] ?? 'Unknown Shop',
@@ -63,12 +81,12 @@ class ShopRankingService {
       // 5. Sort shops by quotation count descending
       rankedShops.sort((a, b) => b.quotationCount.compareTo(a.quotationCount));
 
-      // 8. If a shop has 0 quotations, still show it after ranked shops (already handled by natural int sorting)
-
+      _cache = rankedShops;
+      _cachedAt = now;
       return rankedShops;
     } catch (e) {
       debugPrint('ShopRankingService Error: $e');
-      return [];
+      return _cache ?? [];
     }
   }
 }

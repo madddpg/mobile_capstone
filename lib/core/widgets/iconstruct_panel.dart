@@ -22,7 +22,7 @@ class IConstructPanel {
   /// right on every screen built with [OffsetPanelShell].
   static double leftInsetOf(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    return (width * 0.205).clamp(70.0, 90.0);
+    return (width * 0.23).clamp(78.0, 100.0);
   }
 
   static double railLeftOf(BuildContext context) =>
@@ -69,10 +69,13 @@ class IConstructPanel {
 
   static EdgeInsets contentPaddingOf(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    final left = width < 360 ? 18.0 : 22.0;
-    final right = width < 360 ? 14.0 : 18.0;
-    return EdgeInsets.fromLTRB(left, 24, right, 20);
+    // Extra left inset keeps titles (e.g. "Name Your Estimate") clear of the
+    // rounded left edge; right stays a bit tighter because the panel is flush.
+    final left = width < 360 ? 26.0 : 30.0;
+    final right = width < 360 ? 18.0 : 22.0;
+    return EdgeInsets.fromLTRB(left, 26, right, 22);
   }
+
 
   static double panelTopOf(BuildContext context) =>
       MediaQuery.paddingOf(context).top + topInsetOf(context);
@@ -96,7 +99,7 @@ class IConstructPanel {
     topLeft: Radius.circular(48),
     topRight: Radius.circular(48),
   );
-  static const EdgeInsets contentPadding = EdgeInsets.fromLTRB(22, 24, 18, 20);
+  static const EdgeInsets contentPadding = EdgeInsets.fromLTRB(30, 26, 22, 22);
 
   static BorderRadius cardRadiusOf(BuildContext context) =>
       offsetRadiusOf(context);

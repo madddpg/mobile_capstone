@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:iconstruct/core/state/onboarding_preferences.dart';
+import 'package:iconstruct/core/widgets/app_image.dart';
 import 'package:iconstruct/features/auth/presentation/screens/main_home_screen.dart';
 import 'package:iconstruct/features/onboarding/presentation/screens/landing_screen.dart';
 import 'package:iconstruct/features/onboarding/presentation/screens/main_display.dart';
@@ -85,7 +86,8 @@ class _DisplayScreenState extends State<DisplayScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Image.asset(
+                      AppImage.asset(
+                        context,
                         'assets/images/logo.png',
                         width: 120,
                         height: 120,

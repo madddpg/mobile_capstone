@@ -5,6 +5,7 @@ import 'package:iconstruct/core/materials/material_recommendation_controller.dar
 import 'package:iconstruct/core/materials/models/material_item.dart';
 import 'package:iconstruct/core/materials/services/firestore_materials_service.dart';
 import 'package:iconstruct/core/materials/services/favorites_service.dart';
+import 'package:iconstruct/core/widgets/app_image.dart';
 import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
 import 'package:iconstruct/core/widgets/offset_panel_shell.dart';
 
@@ -686,19 +687,21 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
                         borderRadius: BorderRadius.circular(14),
                         child: AspectRatio(
                           aspectRatio: 16 / 9,
-                          child: Image.network(
+                          child: AppImage.network(
+                            context,
                             item.imageUrl,
+                            // Dialog hero — decode near screen width, not full photo.
+                            width: MediaQuery.sizeOf(context).width,
+                            height: MediaQuery.sizeOf(context).width * 9 / 16,
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
-                                color: const Color(0xFF2C3E50).withAlpha(15),
-                                alignment: Alignment.center,
-                                child: const Icon(
-                                  Icons.broken_image,
-                                  color: Color(0xFF2C3E50),
-                                ),
-                              );
-                            },
+                            error: Container(
+                              color: const Color(0xFF2C3E50).withAlpha(15),
+                              alignment: Alignment.center,
+                              child: const Icon(
+                                Icons.broken_image,
+                                color: Color(0xFF2C3E50),
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -1103,18 +1106,19 @@ class _MaterialThumb extends StatelessWidget {
           ),
           child: imageUrl.isEmpty
               ? const Icon(Icons.image, size: 18, color: Color(0xFFEDE4D4))
-              : Image.network(
+              : AppImage.network(
+                  context,
                   imageUrl,
+                  width: 44,
+                  height: 44,
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return const Center(
-                      child: Icon(
-                        Icons.broken_image,
-                        size: 18,
-                        color: Color(0xFFEDE4D4),
-                      ),
-                    );
-                  },
+                  error: const Center(
+                    child: Icon(
+                      Icons.broken_image,
+                      size: 18,
+                      color: Color(0xFFEDE4D4),
+                    ),
+                  ),
                 ),
         ),
       ),

@@ -41,6 +41,26 @@ class ProjectLifecycle {
     'Completed',
   ];
 
+  /// Card chips — short enough that long titles keep a full line.
+  static const List<String> cardLabels = [
+    'Draft',
+    'Planning',
+    'Awaiting bids',
+    'New bids',
+    'Supplier picked',
+    'Done',
+  ];
+
+  /// One-line next step shown under the status chip on saved-project cards.
+  static const List<String> nextActions = [
+    'Add materials to finish this estimate',
+    'Review materials, then request quotations',
+    'Waiting for hardware shops to reply',
+    'Compare bids and pick a supplier',
+    'Coordinate with your selected shop',
+    'Planning cycle complete',
+  ];
+
   /// Compact labels for the timeline.
   static const List<String> shortLabels = [
     'Draft',
@@ -79,6 +99,16 @@ class ProjectLifecycle {
   }
 
   static String label(String status) => stageLabels[stageIndex(status)];
+
+  static String cardLabel(String status) => cardLabels[stageIndex(status)];
+
+  static String nextAction(String status, {int bidCount = 0}) {
+    final stage = stageIndex(status);
+    if (stage == stageReceiving && bidCount > 0) {
+      return 'Compare $bidCount bid${bidCount == 1 ? '' : 's'} and pick a supplier';
+    }
+    return nextActions[stage];
+  }
 
   static String statusForStage(int stage) =>
       statuses[stage.clamp(0, statuses.length - 1)];

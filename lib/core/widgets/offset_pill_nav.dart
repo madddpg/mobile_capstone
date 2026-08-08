@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:iconstruct/core/services/unread_notifications.dart';
 import 'package:iconstruct/core/utils/hammer_nav.dart';
 import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
 import 'package:iconstruct/features/auth/presentation/screens/home_screen.dart';
 import 'package:iconstruct/features/auth/presentation/screens/main_home_screen.dart';
 import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
-
 /// Which pill-nav label is active.
 enum OffsetNavTab { home, estimate, finalize, files, bidding }
 
@@ -42,82 +42,93 @@ class OffsetPillNav extends StatelessWidget {
               ),
             ],
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (activeTab == OffsetNavTab.home)
-                const _ActiveNavChip(
-                  icon: Icons.home_rounded,
-                  label: 'Home',
-                )
-              else
-                _NavIcon(
-                  icon: Icons.home_rounded,
-                  onTap: () {
-                    Navigator.pushAndRemoveUntil(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const MainHomeScreen(),
-                      ),
-                      (route) => false,
-                    );
-                  },
-                ),
-              const SizedBox(width: 10),
-              if (activeTab == OffsetNavTab.bidding)
-                const _ActiveNavChip(
-                  imagePath: 'assets/images/hammer.png',
-                  label: 'Bidding',
-                )
-              else
-                _NavIcon(
-                  imagePath: 'assets/images/hammer.png',
-                  onTap: () => handleHammerTap(context),
-                ),
-              const SizedBox(width: 10),
-              if (activeTab == OffsetNavTab.files ||
-                  activeTab == OffsetNavTab.bidding ||
-                  activeTab == OffsetNavTab.home)
-                _NavIcon(
-                  icon: Icons.calculate_rounded,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const HomeScreen(),
-                      ),
-                    );
-                  },
-                )
-              else
-                _ActiveNavChip(
-                  icon: activeTab == OffsetNavTab.finalize
-                      ? Icons.fact_check_rounded
-                      : Icons.calculate_rounded,
-                  label: activeTab == OffsetNavTab.finalize
-                      ? 'Finalize'
-                      : 'Estimate',
-                ),
-              const SizedBox(width: 10),
-              if (activeTab == OffsetNavTab.files)
-                const _ActiveNavChip(
-                  icon: Icons.folder_rounded,
-                  label: 'Files',
-                )
-              else
-                _NavIcon(
-                  icon: Icons.folder_rounded,
-                  onTap: () {
-                    Navigator.pushAndRemoveUntil(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const SavedProjectsScreen(),
-                      ),
-                      (route) => false,
-                    );
-                  },
-                ),
-            ],
+          child: StreamBuilder<int>(
+            stream: unreadNotificationCountStream(),
+            builder: (context, snapshot) {
+              final unread = snapshot.data ?? 0;
+
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (activeTab == OffsetNavTab.home)
+                    const _ActiveNavChip(
+                      icon: Icons.home_rounded,
+                      label: 'Home',
+                    )
+                  else
+                    _NavIcon(
+                      icon: Icons.home_rounded,
+                      onTap: () {
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const MainHomeScreen(),
+                          ),
+                          (route) => false,
+                        );
+                      },
+                    ),
+                  const SizedBox(width: 10),
+                  if (activeTab == OffsetNavTab.bidding)
+                    _ActiveNavChip(
+                      imagePath: 'assets/images/hammer.png',
+                      label: 'Bidding',
+                      badgeCount: unread,
+                    )
+                  else
+                    _NavIcon(
+                      imagePath: 'assets/images/hammer.png',
+                      badgeCount: unread,
+                      onTap: () => handleHammerTap(context),
+                    ),
+                  const SizedBox(width: 10),
+                  if (activeTab == OffsetNavTab.files ||
+                      activeTab == OffsetNavTab.bidding ||
+                      activeTab == OffsetNavTab.home)
+                    _NavIcon(
+                      icon: Icons.calculate_rounded,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const HomeScreen(),
+                          ),
+                        );
+                      },
+                    )
+                  else
+                    _ActiveNavChip(
+                      icon: activeTab == OffsetNavTab.finalize
+                          ? Icons.fact_check_rounded
+                          : Icons.calculate_rounded,
+                      label: activeTab == OffsetNavTab.finalize
+                          ? 'Finalize'
+                          : 'Estimate',
+                    ),
+                  const SizedBox(width: 10),
+                  if (activeTab == OffsetNavTab.files)
+                    _ActiveNavChip(
+                      icon: Icons.folder_rounded,
+                      label: 'Files',
+                      badgeCount: unread,
+                    )
+                  else
+                    _NavIcon(
+                      icon: Icons.folder_rounded,
+                      badgeCount: unread,
+                      onTap: () {
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SavedProjectsScreen(),
+                          ),
+                          (route) => false,
+                        );
+                      },
+                    ),
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -129,16 +140,18 @@ class _ActiveNavChip extends StatelessWidget {
   final IconData? icon;
   final String? imagePath;
   final String label;
+  final int badgeCount;
 
   const _ActiveNavChip({
     this.icon,
     this.imagePath,
     required this.label,
+    this.badgeCount = 0,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final chip = Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: IConstructPanel.darkBlue,
@@ -167,6 +180,8 @@ class _ActiveNavChip extends StatelessWidget {
         ],
       ),
     );
+
+    return UnreadBadge(count: badgeCount, offset: 0, child: chip);
   }
 }
 
@@ -174,32 +189,36 @@ class _NavIcon extends StatelessWidget {
   final IconData? icon;
   final String? imagePath;
   final VoidCallback onTap;
+  final int badgeCount;
 
   const _NavIcon({
     this.icon,
     this.imagePath,
     required this.onTap,
+    this.badgeCount = 0,
   });
 
   @override
   Widget build(BuildContext context) {
+    final iconChild = SizedBox(
+      width: 40,
+      height: 40,
+      child: Center(
+        child: imagePath != null
+            ? Image.asset(
+                imagePath!,
+                width: 22,
+                height: 22,
+                color: IConstructPanel.darkBlue,
+              )
+            : Icon(icon, color: IConstructPanel.darkBlue, size: 24),
+      ),
+    );
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(24),
-      child: SizedBox(
-        width: 40,
-        height: 40,
-        child: Center(
-          child: imagePath != null
-              ? Image.asset(
-                  imagePath!,
-                  width: 22,
-                  height: 22,
-                  color: IConstructPanel.darkBlue,
-                )
-              : Icon(icon, color: IConstructPanel.darkBlue, size: 24),
-        ),
-      ),
+      child: UnreadBadge(count: badgeCount, child: iconChild),
     );
   }
 }

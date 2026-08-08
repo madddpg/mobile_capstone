@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'package:iconstruct/core/firebase/firestore_error.dart';
 import 'package:iconstruct/core/models/project_model.dart';
 import 'package:iconstruct/core/navigation/planning_nav.dart';
 import 'package:iconstruct/core/state/active_project_state.dart';
@@ -12,13 +13,88 @@ import 'package:iconstruct/features/project_creation/data/bom_export.dart';
 import 'package:iconstruct/features/project_creation/data/project_lifecycle.dart';
 import 'package:iconstruct/features/project_creation/widgets/bom_share_sheet.dart';
 
+/// How [SavedProjectsScreen] focuses the list for different home entry points.
+enum SavedProjectsFocus {
+  /// All saved estimates (My Projects).
+  all,
+
+  /// Estimates that still need quotations requested (Post for Bidding).
+  readyToPost,
+}
+
+/// Client-side sort for the saved estimates list.
+enum SavedProjectsSort {
+  newestUpdated,
+  oldestUpdated,
+  nameAsc,
+  nameDesc,
+  status,
+  areaHigh,
+  areaLow,
+}
+
+extension on SavedProjectsSort {
+  String get label => switch (this) {
+        SavedProjectsSort.newestUpdated => 'Newest updated',
+        SavedProjectsSort.oldestUpdated => 'Oldest updated',
+        SavedProjectsSort.nameAsc => 'Name A–Z',
+        SavedProjectsSort.nameDesc => 'Name Z–A',
+        SavedProjectsSort.status => 'Planning status',
+        SavedProjectsSort.areaHigh => 'Largest area',
+        SavedProjectsSort.areaLow => 'Smallest area',
+      };
+
+  List<ProjectModel> apply(List<ProjectModel> source) {
+    final list = List<ProjectModel>.from(source);
+    int byName(ProjectModel a, ProjectModel b) =>
+        a.projectName.toLowerCase().compareTo(b.projectName.toLowerCase());
+
+    switch (this) {
+      case SavedProjectsSort.newestUpdated:
+        list.sort((a, b) => b.lastUpdated.compareTo(a.lastUpdated));
+      case SavedProjectsSort.oldestUpdated:
+        list.sort((a, b) => a.lastUpdated.compareTo(b.lastUpdated));
+      case SavedProjectsSort.nameAsc:
+        list.sort(byName);
+      case SavedProjectsSort.nameDesc:
+        list.sort((a, b) => byName(b, a));
+      case SavedProjectsSort.status:
+        list.sort((a, b) {
+          final stage = ProjectLifecycle.stageIndex(
+            b.status,
+          ).compareTo(ProjectLifecycle.stageIndex(a.status));
+          if (stage != 0) return stage;
+          return b.lastUpdated.compareTo(a.lastUpdated);
+        });
+      case SavedProjectsSort.areaHigh:
+        list.sort((a, b) => b.projectArea.compareTo(a.projectArea));
+      case SavedProjectsSort.areaLow:
+        list.sort((a, b) => a.projectArea.compareTo(b.projectArea));
+    }
+    return list;
+  }
+}
+
 // --- Screen ---
-class SavedProjectsScreen extends StatelessWidget {
-  const SavedProjectsScreen({super.key});
+class SavedProjectsScreen extends StatefulWidget {
+  final SavedProjectsFocus focus;
+
+  const SavedProjectsScreen({
+    super.key,
+    this.focus = SavedProjectsFocus.all,
+  });
+
+  @override
+  State<SavedProjectsScreen> createState() => _SavedProjectsScreenState();
+}
+
+class _SavedProjectsScreenState extends State<SavedProjectsScreen> {
+  SavedProjectsSort _sort = SavedProjectsSort.newestUpdated;
 
   @override
   Widget build(BuildContext context) {
     const Color creamBg = Color(0xFFEDE4D4);
+    final isPostFocus = widget.focus == SavedProjectsFocus.readyToPost;
 
     return OffsetPanelShell(
       extent: OffsetPanelExtent.fillBottom,
@@ -31,20 +107,58 @@ class SavedProjectsScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 28),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 28),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(
+                    isPostFocus ? 'Request Quotations' : 'Saved Projects',
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      color: creamBg,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                ),
+                _SortControl(
+                  value: _sort,
+                  onChanged: (next) => setState(() => _sort = next),
+                ),
+              ],
+            ),
+          ),
+          if (isPostFocus) ...[
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 28),
+              child: Text(
+                'Pick an estimate that is ready, then use Post to canvass hardware shops. Bids stay private between you and each shop.',
+                style: TextStyle(
+                  color: creamBg.withValues(alpha: 0.85),
+                  fontSize: 13,
+                  height: 1.35,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28),
             child: Text(
-              'Saved Projects',
+              'Sorted by ${_sort.label.toLowerCase()}',
               style: TextStyle(
-                fontFamily: 'Inter',
-                color: creamBg,
-                fontSize: 24,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.5,
+                color: creamBg.withValues(alpha: 0.65),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 28),
             child: Container(
@@ -54,64 +168,138 @@ class SavedProjectsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseAuth.instance.currentUser == null
-                  ? const Stream.empty()
-                  : FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(FirebaseAuth.instance.currentUser!.uid)
-                        .collection('saved_projects')
-                        .orderBy('updatedAt', descending: true)
-                        .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
+            child: StreamBuilder<User?>(
+              stream: FirebaseAuth.instance.authStateChanges(),
+              builder: (context, authSnapshot) {
+                final user = authSnapshot.data;
+                if (authSnapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
                     child: CircularProgressIndicator(color: creamBg),
                   );
                 }
-
-                if (snapshot.hasError) {
+                if (user == null) {
                   return Center(
                     child: Text(
-                      'Error loading projects.',
-                      style: TextStyle(color: creamBg.withAlpha(150)),
-                    ),
-                  );
-                }
-
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return Center(
-                    child: Text(
-                      'No saved projects yet.',
+                      'Please log in to view saved estimates.',
                       style: TextStyle(
                         color: creamBg.withAlpha(150),
                         fontSize: 16,
                       ),
+                      textAlign: TextAlign.center,
                     ),
                   );
                 }
 
-                final projects = snapshot.data!.docs
-                    .map((doc) => ProjectModel.fromDocument(doc))
-                    .toList();
+                return StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(user.uid)
+                      .collection('saved_projects')
+                      .orderBy('updatedAt', descending: true)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(
+                        child: CircularProgressIndicator(color: creamBg),
+                      );
+                    }
 
-                return AnimatedBuilder(
-                  animation: ActiveProjectState.instance,
-                  builder: (context, child) {
-                    return ListView.builder(
-                      padding: const EdgeInsets.only(
-                        left: 20,
-                        right: 20,
-                        top: 8,
-                        bottom: 120,
-                      ),
-                      itemCount: projects.length,
-                      itemBuilder: (context, index) {
-                        final project = projects[index];
-                        return ProjectCard(
-                          project: project,
-                          isActive: project.id ==
-                              ActiveProjectState.instance.activeProject?.id,
+                    if (snapshot.hasError) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 28),
+                        child: Center(
+                          child: Text(
+                            firestoreUserMessage(
+                              snapshot.error!,
+                              action: 'load saved projects',
+                            ),
+                            style: TextStyle(
+                              color: creamBg.withAlpha(180),
+                              fontSize: 14,
+                              height: 1.4,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      );
+                    }
+
+                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 32),
+                          child: Text(
+                            isPostFocus
+                                ? 'No estimates ready to canvass yet. Create a material list first, then come back here to request quotations.'
+                                : 'No saved projects yet.',
+                            style: TextStyle(
+                              color: creamBg.withAlpha(150),
+                              fontSize: 16,
+                              height: 1.4,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      );
+                    }
+
+                    final allProjects = snapshot.data!.docs
+                        .map((doc) => ProjectModel.fromDocument(doc))
+                        .toList();
+
+                    // Post-for-bidding: estimates with materials that are not
+                    // already on the canvassing board.
+                    final filtered = isPostFocus
+                        ? allProjects
+                            .where(
+                              (p) =>
+                                  p.materials.isNotEmpty && p.postId == null,
+                            )
+                            .toList()
+                        : allProjects;
+
+                    final projects = _sort.apply(filtered);
+
+                    if (projects.isEmpty) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 32),
+                          child: Text(
+                            isPostFocus
+                                ? 'Every estimate with materials is already posted, or still needs materials. Open My Projects to review them.'
+                                : 'No saved projects yet.',
+                            style: TextStyle(
+                              color: creamBg.withAlpha(150),
+                              fontSize: 16,
+                              height: 1.4,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      );
+                    }
+
+                    return AnimatedBuilder(
+                      animation: ActiveProjectState.instance,
+                      builder: (context, child) {
+                        return ListView.builder(
+                          padding: const EdgeInsets.only(
+                            left: 20,
+                            right: 20,
+                            top: 8,
+                            bottom: 120,
+                          ),
+                          itemCount: projects.length,
+                          itemBuilder: (context, index) {
+                            final project = projects[index];
+                            return ProjectCard(
+                              project: project,
+                              isActive: project.id ==
+                                  ActiveProjectState
+                                      .instance.activeProject?.id,
+                              emphasizePost: isPostFocus,
+                            );
+                          },
                         );
                       },
                     );
@@ -126,12 +314,95 @@ class SavedProjectsScreen extends StatelessWidget {
   }
 }
 
+class _SortControl extends StatelessWidget {
+  final SavedProjectsSort value;
+  final ValueChanged<SavedProjectsSort> onChanged;
+
+  const _SortControl({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    const creamBg = Color(0xFFEDE4D4);
+
+    return PopupMenuButton<SavedProjectsSort>(
+      tooltip: 'Sort estimates',
+      initialValue: value,
+      onSelected: onChanged,
+      offset: const Offset(0, 40),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      color: creamBg,
+      itemBuilder: (context) => [
+        for (final option in SavedProjectsSort.values)
+          PopupMenuItem(
+            value: option,
+            child: Row(
+              children: [
+                Icon(
+                  option == value
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_off,
+                  size: 18,
+                  color: const Color(0xFF2A3E4E),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  option.label,
+                  style: TextStyle(
+                    color: const Color(0xFF2A3E4E),
+                    fontWeight:
+                        option == value ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+      child: Semantics(
+        button: true,
+        label: 'Sort estimates',
+        hint: 'Currently ${_sortHint(value)}',
+        child: Material(
+          color: creamBg.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.sort_rounded,
+                  size: 20,
+                  color: creamBg.withValues(alpha: 0.95),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.expand_more_rounded,
+                  size: 18,
+                  color: creamBg.withValues(alpha: 0.85),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _sortHint(SavedProjectsSort sort) => sort.label;
+}
+
 // --- Reusable Card ---
 class ProjectCard extends StatelessWidget {
   final ProjectModel project;
   final bool isActive;
+  final bool emphasizePost;
 
-  const ProjectCard({super.key, required this.project, this.isActive = false});
+  const ProjectCard({
+    super.key,
+    required this.project,
+    this.isActive = false,
+    this.emphasizePost = false,
+  });
 
   String _formatTimeAgo(DateTime time) {
     final diff = DateTime.now().difference(time);
@@ -211,6 +482,8 @@ class ProjectCard extends StatelessWidget {
     );
 
     try {
+      await FirebaseAuth.instance.currentUser?.getIdToken(true);
+
       final batch = FirebaseFirestore.instance.batch();
       final newPostRef = FirebaseFirestore.instance
           .collection('projectPosts')
@@ -227,8 +500,7 @@ class ProjectCard extends StatelessWidget {
         'projectId': project.id,
         'projectName': project.projectName,
         'projectType': project.projectType,
-        'materials': project
-            .materials, // assuming it's exactly the correct property string map
+        'materials': project.materials,
         'materialsCount': project.materialCount,
         'totalAreaSqm': project.projectArea,
         'budget': project.costLevel,
@@ -239,13 +511,16 @@ class ProjectCard extends StatelessWidget {
       };
 
       batch.set(newPostRef, projectPostData);
-
-      batch.update(savedProjectRef, {
-        'status': ProjectLifecycle.waitingForQuotations,
-        'postId': newPostRef.id,
-        'postedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      batch.set(
+        savedProjectRef,
+        {
+          'status': ProjectLifecycle.waitingForQuotations,
+          'postId': newPostRef.id,
+          'postedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
 
       await batch.commit();
 
@@ -260,9 +535,14 @@ class ProjectCard extends StatelessWidget {
     } catch (e) {
       if (context.mounted) {
         Navigator.pop(context); // Remove loading
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error posting project: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              firestoreUserMessage(e, action: 'post this estimate for bidding'),
+            ),
+            duration: const Duration(seconds: 6),
+          ),
+        );
       }
     }
   }
@@ -284,6 +564,19 @@ class ProjectCard extends StatelessWidget {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
+    final materialCount = project.materials.length;
+    final isPosted = project.postId != null;
+    final lossLines = <String>[
+      if (materialCount > 0)
+        '$materialCount material${materialCount == 1 ? '' : 's'} in this estimate'
+      else
+        'This empty estimate draft',
+      if (isPosted)
+        'Your saved copy only — the open bidding post stays live until you withdraw it'
+      else
+        'This estimate cannot be recovered after delete',
+    ];
+
     showDialog(
       context: context,
       builder: (context) {
@@ -291,25 +584,50 @@ class ProjectCard extends StatelessWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          backgroundColor: const Color(0xFFEDE4D4), // Matching cream UI
-          title: const Text(
-            'Delete local project?',
-            style: TextStyle(
+          backgroundColor: const Color(0xFFEDE4D4),
+          title: Text(
+            'Delete "${project.projectName}"?',
+            style: const TextStyle(
               color: Color(0xFF2A3E4E),
               fontWeight: FontWeight.bold,
             ),
           ),
-          content: Text(
-            project.postId != null
-                ? 'This project is already posted for bidding. Deleting this will only remove your saved local copy, not the active bidding board post. Proceed?'
-                : 'Are you sure you want to permanently delete this saved project?',
-            style: const TextStyle(color: Color(0xFF5A6E7E)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'You will lose:',
+                style: TextStyle(
+                  color: Color(0xFF2A3E4E),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...lossLines.map(
+                (line) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('•  ', style: TextStyle(color: Color(0xFF5A6E7E))),
+                      Expanded(
+                        child: Text(
+                          line,
+                          style: const TextStyle(color: Color(0xFF5A6E7E)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text(
-                'Cancel',
+                'Keep estimate',
                 style: TextStyle(color: Color(0xFF5A6E7E)),
               ),
             ),
@@ -318,7 +636,7 @@ class ProjectCard extends StatelessWidget {
                 backgroundColor: Colors.red.shade400,
               ),
               onPressed: () async {
-                Navigator.pop(context); // Close dialog
+                Navigator.pop(context);
                 try {
                   await FirebaseFirestore.instance
                       .collection('users')
@@ -330,11 +648,10 @@ class ProjectCard extends StatelessWidget {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Project deleted successfully.'),
+                        content: Text('Estimate deleted.'),
                       ),
                     );
 
-                    // Clear the active state if the deleted project was the currently active project
                     if (isActive) {
                       ActiveProjectState.instance.setActiveProject(null);
                     }
@@ -342,13 +659,20 @@ class ProjectCard extends StatelessWidget {
                 } catch (e) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error deleting project: $e')),
+                      SnackBar(
+                        content: Text(
+                          firestoreUserMessage(
+                            e,
+                            action: 'delete this estimate',
+                          ),
+                        ),
+                      ),
                     );
                   }
                 }
               },
               child: const Text(
-                'Delete',
+                'Delete permanently',
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
@@ -379,6 +703,7 @@ class ProjectCard extends StatelessWidget {
     final materialsText = remainingCount > 0
         ? '$previewMaterials +$remainingCount more'
         : previewMaterials;
+    final hasMaterials = project.materials.isNotEmpty;
 
     return GestureDetector(
       onTap: () {
@@ -421,7 +746,7 @@ class ProjectCard extends StatelessWidget {
             // 1. Top Row: Small Title Label & Action Menu
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 const Text(
                   'Project Name',
@@ -432,82 +757,125 @@ class ProjectCard extends StatelessWidget {
                     letterSpacing: 0.5,
                   ),
                 ),
-                // Three-dot Quick Actions Menu
-                SizedBox(
-                  height: 24,
-                  width: 24,
-                  child: PopupMenuButton<String>(
-                    padding: EdgeInsets.zero,
-                    icon: const Icon(
-                      Icons.more_vert,
-                      color: textDark,
-                      size: 22,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            Icon(Icons.edit_outlined, size: 20),
-                            SizedBox(width: 10),
-                            Text('Edit'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'post',
-                        child: Row(
-                          children: [
-                            Icon(Icons.upload_outlined, size: 20),
-                            SizedBox(width: 10),
-                            Text('Post'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'share',
-                        child: Row(
-                          children: [
-                            Icon(Icons.ios_share_rounded, size: 20),
-                            SizedBox(width: 10),
-                            Text('Share list'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.delete_outline,
-                              color: Colors.red,
-                              size: 20,
+                // Card action zone: quick download sits beside the overflow menu
+                // so it never competes with the project name for width.
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Semantics(
+                      button: true,
+                      label: 'Download material list',
+                      hint: 'Save, print, or share ${project.projectName}',
+                      child: Tooltip(
+                        message: hasMaterials
+                            ? 'Download material list'
+                            : 'Add materials to download this list',
+                        child: Material(
+                          color: textDark.withValues(
+                            alpha: hasMaterials ? 0.08 : 0.04,
+                          ),
+                          borderRadius: BorderRadius.circular(11),
+                          child: InkWell(
+                            onTap: () => _handleShareProject(context),
+                            borderRadius: BorderRadius.circular(11),
+                            splashColor: textDark.withValues(alpha: 0.16),
+                            child: SizedBox(
+                              width: 34,
+                              height: 34,
+                              child: Icon(
+                                Icons.download_rounded,
+                                size: 20,
+                                color: textDark.withValues(
+                                  alpha: hasMaterials ? 0.9 : 0.35,
+                                ),
+                              ),
                             ),
-                            SizedBox(width: 10),
-                            Text('Delete', style: TextStyle(color: Colors.red)),
-                          ],
+                          ),
                         ),
                       ),
-                    ],
-                    onSelected: (value) {
-                      if (value == 'edit') {
-                        PlanningNav.openMaterialEstimator(
-                          context,
-                          projectName: project.projectName,
-                          existingProject: project,
-                        );
-                      } else if (value == 'post') {
-                        _handlePostProject(context);
-                      } else if (value == 'share') {
-                        _handleShareProject(context);
-                      } else if (value == 'delete') {
-                        _handleDeleteProject(context);
-                      }
-                    },
-                  ),
+                    ),
+                    const SizedBox(width: 2),
+                    // Three-dot Quick Actions Menu
+                    SizedBox(
+                      height: 34,
+                      width: 30,
+                      child: PopupMenuButton<String>(
+                        padding: EdgeInsets.zero,
+                        icon: const Icon(
+                          Icons.more_vert,
+                          color: textDark,
+                          size: 22,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit_outlined, size: 20),
+                                SizedBox(width: 10),
+                                Text('Edit'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'post',
+                            child: Row(
+                              children: [
+                                Icon(Icons.upload_outlined, size: 20),
+                                SizedBox(width: 10),
+                                Text('Post'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'share',
+                            child: Row(
+                              children: [
+                                Icon(Icons.ios_share_rounded, size: 20),
+                                SizedBox(width: 10),
+                                Text('Share list'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.red,
+                                  size: 20,
+                                ),
+                                SizedBox(width: 10),
+                                Text(
+                                  'Delete',
+                                  style: TextStyle(color: Colors.red),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        onSelected: (value) {
+                          if (value == 'edit') {
+                            PlanningNav.openMaterialEstimator(
+                              context,
+                              projectName: project.projectName,
+                              existingProject: project,
+                            );
+                          } else if (value == 'post') {
+                            _handlePostProject(context);
+                          } else if (value == 'share') {
+                            _handleShareProject(context);
+                          } else if (value == 'delete') {
+                            _handleDeleteProject(context);
+                          }
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -539,7 +907,7 @@ class ProjectCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    ProjectLifecycle.label(project.status).toUpperCase(),
+                    ProjectLifecycle.cardLabel(project.status).toUpperCase(),
                     style: TextStyle(
                       color: _getStatusTextColor(project.status),
                       fontSize: 10,
@@ -562,7 +930,7 @@ class ProjectCard extends StatelessWidget {
               ),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
 
             if (project.postId != null &&
                 ProjectLifecycle.stageIndex(project.status) >=
@@ -573,51 +941,82 @@ class ProjectCard extends StatelessWidget {
                     .doc(project.postId)
                     .snapshots(),
                 builder: (context, snapshot) {
-                  if (!snapshot.hasData || !snapshot.data!.exists) {
-                    return const SizedBox.shrink();
-                  }
+                  final data = snapshot.data?.data() as Map<String, dynamic>?;
+                  final rawCount = data?['quotationCount'];
+                  final int count =
+                      rawCount is num ? rawCount.toInt() : 0;
 
-                  final data = snapshot.data!.data() as Map<String, dynamic>;
-                  final int count = data['quotationCount'] ?? 0;
-
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: count > 0
-                          ? Colors.green.shade100
-                          : Colors.grey.shade200,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.local_offer_outlined,
-                          size: 16,
-                          color: count > 0
-                              ? Colors.green.shade700
-                              : Colors.grey.shade700,
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        ProjectLifecycle.nextAction(
+                          project.status,
+                          bidCount: count,
                         ),
-                        const SizedBox(width: 6),
-                        Text(
-                          '$count bid${count == 1 ? '' : 's'}',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
+                        style: TextStyle(
+                          color: textMuted.withValues(alpha: 0.95),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w500,
+                          height: 1.3,
+                        ),
+                      ),
+                      if (snapshot.hasData && snapshot.data!.exists) ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
                             color: count > 0
-                                ? Colors.green.shade700
-                                : Colors.grey.shade700,
+                                ? Colors.green.shade100
+                                : Colors.grey.shade200,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.local_offer_outlined,
+                                size: 16,
+                                color: count > 0
+                                    ? Colors.green.shade700
+                                    : Colors.grey.shade700,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                '$count bid${count == 1 ? '' : 's'}',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: count > 0
+                                      ? Colors.green.shade700
+                                      : Colors.grey.shade700,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
-                    ),
+                      const SizedBox(height: 6),
+                    ],
                   );
                 },
+              )
+            else ...[
+              Text(
+                ProjectLifecycle.nextAction(project.status),
+                style: TextStyle(
+                  color: textMuted.withValues(alpha: 0.95),
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w500,
+                  height: 1.3,
+                ),
               ),
+              const SizedBox(height: 12),
+            ],
 
             // 4. Key Project Summary
             Text(
@@ -666,6 +1065,29 @@ class ProjectCard extends StatelessWidget {
             ),
 
             const SizedBox(height: 16),
+
+            if (emphasizePost) ...[
+              SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: ElevatedButton.icon(
+                  onPressed: () => _handlePostProject(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: textDark,
+                    foregroundColor: cardBg,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  icon: const Icon(Icons.campaign_outlined, size: 18),
+                  label: const Text(
+                    'Request quotations',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
 
             // 6. Last Updated
             Row(

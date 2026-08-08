@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
+import 'package:iconstruct/core/widgets/app_image.dart';
 import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
 import 'package:iconstruct/core/widgets/offset_panel_shell.dart';
 import 'package:iconstruct/core/widgets/user_avatar.dart';
@@ -1100,8 +1101,11 @@ class _TemplatesDrawer extends StatelessWidget {
                                   height: 72,
                                   child: t.imageAsset != null &&
                                           t.imageAsset!.isNotEmpty
-                                      ? Image.asset(
+                                      ? AppImage.asset(
+                                          context,
                                           t.imageAsset!,
+                                          width: 72,
+                                          height: 72,
                                           fit: BoxFit.cover,
                                           errorBuilder: (_, _, _) =>
                                               _fallback(t),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:iconstruct/core/navigation/planning_nav.dart';
+import 'package:iconstruct/core/services/unread_notifications.dart';
 import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
 import 'package:iconstruct/features/auth/presentation/screens/profile_screen.dart';
 import 'package:iconstruct/features/auth/presentation/screens/top_shops_screen.dart';
@@ -8,6 +10,7 @@ import 'package:iconstruct/features/auth/presentation/models/ranked_shop.dart';
 import 'package:iconstruct/features/auth/presentation/services/shop_ranking_service.dart';
 import 'package:iconstruct/core/widgets/offset_pill_nav.dart';
 import 'package:iconstruct/core/widgets/user_avatar.dart';
+import 'package:iconstruct/features/notifications/screens/notifications_screen.dart';
 import 'package:iconstruct/features/project_creation/screens/project_tracking_screen.dart';
 
 class MainHomeScreen extends StatelessWidget {
@@ -81,9 +84,19 @@ class MainHomeScreen extends StatelessWidget {
                                   );
                                 },
                               ),
-                              _TopIconButton(
-                                icon: Icons.menu_rounded,
-                                onTap: () {},
+                              UnreadNotificationsBadge(
+                                child: _TopIconButton(
+                                  icon: Icons.notifications_none_rounded,
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const NotificationsScreen(),
+                                      ),
+                                    );
+                                  },
+                                ),
                               ),
                             ],
                           ),
@@ -137,6 +150,9 @@ class MainHomeScreen extends StatelessWidget {
                     backgroundColor: _darkBlue,
                     cream: _cream,
                     onSeeLocations: () {},
+                    onContinueLastEstimate: () {
+                      PlanningNav.continueLastEstimate(context);
+                    },
                     onStartNewRenovation: () {
                       Navigator.push(
                         context,
@@ -149,7 +165,9 @@ class MainHomeScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const SavedProjectsScreen(),
+                          builder: (context) => const SavedProjectsScreen(
+                            focus: SavedProjectsFocus.all,
+                          ),
                         ),
                       );
                     },
@@ -157,7 +175,9 @@ class MainHomeScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const SavedProjectsScreen(),
+                          builder: (context) => const SavedProjectsScreen(
+                            focus: SavedProjectsFocus.readyToPost,
+                          ),
                         ),
                       );
                     },
@@ -217,6 +237,7 @@ class _MainCard extends StatelessWidget {
   final Color backgroundColor;
   final Color cream;
   final VoidCallback onSeeLocations;
+  final VoidCallback onContinueLastEstimate;
   final VoidCallback onStartNewRenovation;
   final VoidCallback onSavedProjects;
   final VoidCallback onPostProject;
@@ -227,6 +248,7 @@ class _MainCard extends StatelessWidget {
     required this.backgroundColor,
     required this.cream,
     required this.onSeeLocations,
+    required this.onContinueLastEstimate,
     required this.onStartNewRenovation,
     required this.onSavedProjects,
     required this.onPostProject,
@@ -238,7 +260,6 @@ class _MainCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 330,
-      height: 643,
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(50),
@@ -250,64 +271,50 @@ class _MainCard extends StatelessWidget {
           ),
         ],
       ),
-      padding: const EdgeInsets.fromLTRB(26, 36, 26, 0),
+      padding: const EdgeInsets.fromLTRB(18, 28, 18, 28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _ActionTile(
-            icon: Icons.home_repair_service_outlined,
-            title: 'Start New Renovation',
+            icon: Icons.play_circle_outline_rounded,
+            title: 'Continue Last Estimate',
             subtitle:
-                'Begin a new renovation project: choose type, create details, plan materials with a template or AI, then request supplier quotations.',
+                'Resume your most recent unfinished material plan or open its quotations.',
+            onTap: onContinueLastEstimate,
+          ),
+          const SizedBox(height: 12),
+          _ActionTile(
+            icon: Icons.home_repair_service_outlined,
+            title: 'Start New Estimate',
+            subtitle:
+                'Name an estimate, plan materials with AI or a template, then get ready to canvass shops.',
             onTap: onStartNewRenovation,
           ),
-          const _ThinDivider(),
-
+          const SizedBox(height: 12),
           _ActionTile(
             icon: Icons.folder_open_outlined,
             title: 'My Projects',
             subtitle:
-                'Access and manage your previous material estimates and project drafts in one secure place.',
+                'Browse and edit all your saved material estimates, downloads, and drafts.',
             onTap: onSavedProjects,
           ),
-          const _ThinDivider(),
-
+          const SizedBox(height: 12),
           _ActionTile(
             icon: Icons.campaign_outlined,
             title: 'Post for Bidding',
             subtitle:
-                'Publish your project and receive quotations from nearby hardware shops based on your material requirements.',
+                'Choose an estimate that is ready and request private quotations from hardware shops.',
             onTap: onPostProject,
           ),
-          const _ThinDivider(),
-
+          const SizedBox(height: 12),
           _ActionTile(
             icon: Icons.timeline_outlined,
-            title: 'Project Tracking',
+            title: 'Canvass Tracking',
             subtitle:
-                'Monitor project progress from draft through quotations, supplier selection, and completion.',
+                'Follow each estimate from planning through bids received to supplier selected.',
             onTap: onViewQuotations,
           ),
-
-          const Spacer(),
-          const SizedBox(height: 24),
         ],
-      ),
-    );
-  }
-}
-
-class _ThinDivider extends StatelessWidget {
-  const _ThinDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      child: Container(
-        height: 1,
-        width: double.infinity,
-        color: Colors.white.withValues(alpha: 0.25),
       ),
     );
   }
@@ -328,41 +335,78 @@ class _ActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: const Color(0xFFEBE0CC), size: 32),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFFEBE0CC),
+    const cream = Color(0xFFEBE0CC);
+
+    return Semantics(
+      button: true,
+      label: title,
+      hint: 'Opens $title',
+      child: Material(
+        color: cream.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          splashColor: cream.withValues(alpha: 0.22),
+          highlightColor: cream.withValues(alpha: 0.12),
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: cream.withValues(alpha: 0.32)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 14, 8, 14),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: cream.withValues(alpha: 0.16),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(icon, color: cream, size: 24),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            height: 1.2,
+                            color: cream,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 12.5,
+                            height: 1.4,
+                            fontWeight: FontWeight.w400,
+                            color: cream.withValues(alpha: 0.78),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: cream.withValues(alpha: 0.9),
+                    size: 28,
+                  ),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            subtitle,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 14,
-              height: 1.45,
-              fontWeight: FontWeight.w400,
-              color: const Color(0xFFEBE0CC).withValues(alpha: 0.8),
             ),
           ),
-        ],
+        ),
       ),
     );
   }

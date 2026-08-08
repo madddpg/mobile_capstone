@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:iconstruct/core/firebase/firestore_error.dart';
 import 'package:iconstruct/features/project_creation/data/bom_export.dart';
 import 'package:iconstruct/features/project_creation/data/bom_export_service.dart';
 
@@ -39,7 +40,7 @@ class _BomShareSheet extends StatefulWidget {
 class _BomShareSheetState extends State<_BomShareSheet> {
   bool _busy = false;
 
-  Future<void> _run(Future<void> Function() action, String failureLabel) async {
+  Future<void> _run(Future<void> Function() action, String failureAction) async {
     if (_busy) return;
     setState(() => _busy = true);
 
@@ -52,7 +53,7 @@ class _BomShareSheetState extends State<_BomShareSheet> {
     } catch (e) {
       if (mounted) setState(() => _busy = false);
       messenger.showSnackBar(
-        SnackBar(content: Text('$failureLabel: $e')),
+        SnackBar(content: Text(firestoreUserMessage(e, action: failureAction))),
       );
     }
   }
@@ -111,7 +112,7 @@ class _BomShareSheetState extends State<_BomShareSheet> {
               enabled: !_busy,
               onTap: () => _run(
                 () => BomExportService.sharePdf(data),
-                'Could not share the PDF',
+                'share the PDF',
               ),
             ),
             const SizedBox(height: 10),
@@ -122,7 +123,7 @@ class _BomShareSheetState extends State<_BomShareSheet> {
               enabled: !_busy,
               onTap: () => _run(
                 () => BomExportService.shareImages(data),
-                'Could not share the image',
+                'share the image',
               ),
             ),
             const SizedBox(height: 10),
@@ -133,7 +134,7 @@ class _BomShareSheetState extends State<_BomShareSheet> {
               enabled: !_busy,
               onTap: () => _run(
                 () => BomExportService.printSheet(data),
-                'Could not open print preview',
+                'open print preview',
               ),
             ),
             if (_busy) ...[

@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'package:iconstruct/features/project_creation/screens/ai_consultation_screen.dart';
+import 'package:iconstruct/features/project_creation/screens/select_planning_method_screen.dart';
 import 'package:iconstruct/features/project_creation/widgets/glitched_flow_shell.dart';
 
-/// Names the material-planning estimate, then opens AI consultation.
-/// Templates are available beside the AI chat as references.
+/// Names the material-planning estimate, then opens planning-method choice.
 class CreateProjectScreen extends StatefulWidget {
   final String renovationType;
 
@@ -32,7 +31,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
 
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => AIConsultationScreen(
+        builder: (_) => SelectPlanningMethodScreen(
           projectName: widget.renovationType,
           customProjectName: _nameController.text.trim(),
           projectNotes: _notesController.text.trim().isEmpty
@@ -49,10 +48,10 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       title: 'Name Your\nEstimate',
       subtitle: widget.renovationType,
       instruction:
-          'Next you will describe your material ideas with AI.\nIf you need inspiration, ready-made templates are available beside the chat as references.',
+          'Next, choose how to plan materials — AI Planner or a renovation template.',
       trailingAction: GlitchedPillButton(
-        label: 'Continue to AI',
-        width: 150,
+        label: 'Continue',
+        width: 140,
         onPressed: _continue,
       ),
       body: Form(

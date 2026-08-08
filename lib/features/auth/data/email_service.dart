@@ -35,6 +35,26 @@ class EmailApiException implements Exception {
       : 'EmailApiException($statusCode): $message';
 }
 
+/// Thrown when credentials are correct but the email was never verified.
+///
+/// Carries the identifiers the UI needs to reopen the OTP step so the builder
+/// can verify immediately instead of being locked out.
+class EmailNotVerifiedException implements Exception {
+  final String email;
+  final String uid;
+  final String message;
+
+  const EmailNotVerifiedException({
+    required this.email,
+    required this.uid,
+    this.message =
+        'Please verify your email to continue. We sent you a new code.',
+  });
+
+  @override
+  String toString() => 'EmailNotVerifiedException: $message';
+}
+
 class EmailService {
   final FirebaseAuth _auth;
 
@@ -159,15 +179,9 @@ class EmailService {
       });
       final data = result.data as Map<String, dynamic>;
 
-      // Automatically update the user profile's verification status
-      if (uid != null) {
-        final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
-        await userRef.update({
-          'isVerified': true,
-          'verified_at': FieldValue.serverTimestamp(),
-        });
-        debugPrint('OTP success. Profile updated for UID $uid.');
-      }
+      // verifyEmailOtp marks the account verified server-side. The client is
+      // signed out at this point, so it cannot write users/{uid} itself.
+      debugPrint('OTP verified for ${uid ?? trimmedEmail}.');
 
       return EmailOtpVerificationResult(
         success: true,
@@ -271,15 +285,22 @@ class EmailService {
       try {
         userDoc = await userDocRef.get(const GetOptions(source: Source.server));
       } on FirebaseException catch (e) {
-        if (e.code == 'permission-denied') {
+        if (e.code == 'unavailable' || e.code == 'deadline-exceeded') {
+          // Prefer a cached profile when the device is offline so builders are
+          // not locked out of estimates they already have on this phone.
+          userDoc = await userDocRef.get(
+            const GetOptions(source: Source.cache),
+          );
+        } else if (e.code == 'permission-denied') {
           throw const EmailApiException(
             'Login blocked by Firestore permissions. '
             'In Firebase Console → App Check, set Cloud Firestore to Monitor '
             '(not Enforced) while developing, or install an App Check provider. '
             'Also confirm firestore.rules allow users/{uid} for signed-in owners.',
           );
+        } else {
+          rethrow;
         }
-        rethrow;
       }
 
       debugPrint('Fetched Firestore doc ID: ${userDocRef.id}');
@@ -301,6 +322,21 @@ class EmailService {
         }, SetOptions(merge: true));
       }
 
+      // 4. Refuse to hand out a session to an unverified account. A fresh code
+      // is sent so the caller can surface the OTP step right away.
+      final profileVerified = userDoc.data()?['isVerified'] == true;
+      final authVerified = credential.user?.emailVerified ?? false;
+      if (!profileVerified && !authVerified) {
+        debugPrint('Login blocked: email not verified for $uid');
+        await _auth.signOut();
+        try {
+          await sendOtp(email: trimmedEmail);
+        } catch (e) {
+          debugPrint('Could not resend verification OTP: $e');
+        }
+        throw EmailNotVerifiedException(email: trimmedEmail, uid: uid);
+      }
+
       // Initialize FCM and store the push notification token securely into users/{uid}.fcmTokens
       // Fire-and-forget or await depending on strictness. Using await to ensure token saves before proceeding.
       await FCMService().initFCM(uid);
@@ -319,7 +355,7 @@ class EmailService {
       }
       throw EmailApiException('Firebase Login failed: ${e.message}');
     } catch (e) {
-      if (e is EmailApiException) rethrow;
+      if (e is EmailApiException || e is EmailNotVerifiedException) rethrow;
       throw EmailApiException('Login failed. $e');
     }
   }

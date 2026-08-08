@@ -217,6 +217,23 @@ exports.verifyEmailOtp = onCall(async (request) => {
     { merge: true }
   );
 
+  // Mark the account verified server-side. The client is signed out during
+  // verification, so it cannot write users/{uid} itself under security rules.
+  try {
+    const userRecord = await auth.getUserByEmail(email);
+    await auth.updateUser(userRecord.uid, { emailVerified: true });
+    await db.collection("users").doc(userRecord.uid).set(
+      { isVerified: true, verified_at: verifiedAt },
+      { merge: true }
+    );
+    logger.info("Account marked verified", { uid: userRecord.uid });
+  } catch (error) {
+    // A reset-password OTP can run before an account exists; that is not fatal.
+    if (error.code !== "auth/user-not-found") {
+      logger.error("Failed to mark account verified", error);
+    }
+  }
+
   logger.info("OTP verified successfully", { email });
 
   return {
@@ -578,7 +595,7 @@ exports.onQuotationSubmitted = onDocumentCreated("projectPosts/{postId}/quotatio
   const snapshot = event.data;
   if (!snapshot) return;
 
-  const quotation = snapshot.data();
+  const quotation = snapshot.data() || {};
   const postId = event.params.postId;
   const shopId = event.params.shopId;
 
@@ -590,24 +607,38 @@ exports.onQuotationSubmitted = onDocumentCreated("projectPosts/{postId}/quotatio
     logger.error("Error syncing quotation state:", error);
   }
 
-  const userId = quotation.userId || (post && post.userId);
-  if (!userId) return null;
+  // Prefer the post owner — shop payloads sometimes put the shop uid in userId.
+  const userId = (post && post.userId) || quotation.userId;
+  if (!userId) {
+    logger.warn(`No builder userId for quotation on post ${postId}`);
+    return null;
+  }
 
   try {
     const userDoc = await db.collection("users").doc(userId).get();
-    if (!userDoc.exists) return null;
+    if (!userDoc.exists) {
+      logger.warn(`Builder profile missing for ${userId}; skipping FCM`);
+      return null;
+    }
 
-    const userData = userDoc.data();
-    const fcmTokens = userData.fcmTokens || []; // Assumes users store FCM tokens identically to shops
+    const userData = userDoc.data() || {};
+    const fcmTokens = Array.isArray(userData.fcmTokens)
+      ? userData.fcmTokens.filter((t) => typeof t === "string" && t.trim() !== "")
+      : [];
 
-    const title = "New Quotation Received";
-    const message = `${quotation.shopName} submitted a quotation loosely estimated at ₱${quotation.estimatedTotal} for your project.`;
+    const shopName = quotation.shopName || "A hardware shop";
+    const total = quotation.estimatedTotal != null
+      ? Number(quotation.estimatedTotal)
+      : null;
+    const totalLabel = Number.isFinite(total)
+      ? `₱${total.toLocaleString("en-PH")}`
+      : "a quoted total";
 
-    const batch = db.batch();
+    const title = "New quotation received";
+    const message = `${shopName} sent a quotation (${totalLabel}) for your material estimate.`;
 
-    // 1. Create In-App Notification
     const notificationRef = db.collection("notifications").doc();
-    batch.set(notificationRef, {
+    await notificationRef.set({
       type: "new_quotation",
       postId: postId,
       shopId: shopId,
@@ -618,26 +649,63 @@ exports.onQuotationSubmitted = onDocumentCreated("projectPosts/{postId}/quotatio
       createdAt: Timestamp.now(),
     });
 
-    await batch.commit();
-
-    // 2. Send Push Notification
-    if (Array.isArray(fcmTokens) && fcmTokens.length > 0) {
-      const payload = {
-        notification: { title, body: message },
-        data: {
-          postId: String(postId),
-          shopId: String(shopId),
-          notificationId: String(notificationRef.id),
-          type: "new_quotation",
-          click_action: "FLUTTER_NOTIFICATION_CLICK"
-        },
-        tokens: fcmTokens
-      };
-      
-      const messagingResponse = await admin.messaging().sendEachForMulticast(payload);
-      logger.info(`Quotation FCM Sent. Success: ${messagingResponse.successCount}`);
+    if (fcmTokens.length === 0) {
+      logger.info(`No FCM tokens for builder ${userId}; in-app notification only`);
+      return null;
     }
 
+    const payload = {
+      notification: { title, body: message },
+      data: {
+        postId: String(postId),
+        shopId: String(shopId),
+        notificationId: String(notificationRef.id),
+        type: "new_quotation",
+        click_action: "FLUTTER_NOTIFICATION_CLICK",
+      },
+      android: {
+        priority: "high",
+        notification: {
+          channelId: "iconstruct_bids",
+          priority: "high",
+          defaultSound: true,
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: "default",
+            badge: 1,
+          },
+        },
+      },
+      tokens: fcmTokens,
+    };
+
+    const messagingResponse = await admin.messaging().sendEachForMulticast(payload);
+    logger.info(
+      `Quotation FCM sent to ${userId}. success=${messagingResponse.successCount} failure=${messagingResponse.failureCount}`
+    );
+
+    // Drop invalid tokens so future pushes stay reliable.
+    const staleTokens = [];
+    messagingResponse.responses.forEach((resp, idx) => {
+      if (!resp.success) {
+        const code = resp.error && resp.error.code;
+        if (
+          code === "messaging/registration-token-not-registered" ||
+          code === "messaging/invalid-registration-token"
+        ) {
+          staleTokens.push(fcmTokens[idx]);
+        }
+      }
+    });
+    if (staleTokens.length > 0) {
+      await db.collection("users").doc(userId).set({
+        fcmTokens: admin.firestore.FieldValue.arrayRemove(...staleTokens),
+      }, { merge: true });
+      logger.info(`Removed ${staleTokens.length} stale FCM token(s) for ${userId}`);
+    }
   } catch (error) {
     logger.error("Error processing new quotation:", error);
   }

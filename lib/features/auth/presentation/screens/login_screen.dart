@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconstruct/features/auth/data/email_service.dart';
 import 'package:iconstruct/features/auth/presentation/screens/forgot_password_screen.dart';
 import 'package:iconstruct/features/auth/presentation/screens/main_home_screen.dart';
+import 'package:iconstruct/features/auth/presentation/widgets/otp_dialog.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -86,6 +87,18 @@ class _LoginScreenState extends State<LoginScreen> {
         context,
         MaterialPageRoute(builder: (_) => const MainHomeScreen()),
         (route) => route.isFirst,
+      );
+    } on EmailNotVerifiedException catch (e) {
+      if (!mounted) return;
+      // Credentials were right, so let them finish verification here instead of
+      // bouncing them back with an error they cannot act on.
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => OtpDialog(email: e.email, uid: e.uid),
       );
     } catch (e) {
       if (!mounted) return;

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import 'package:iconstruct/core/widgets/app_image.dart';
 import '../state/user_state/user_provider.dart';
 
 class UserAvatar extends StatelessWidget {
@@ -27,26 +29,27 @@ class UserAvatar extends StatelessWidget {
 
           Widget content;
           if (profileUrl != null && profileUrl.isNotEmpty) {
-            content = Image.network(
+            content = AppImage.network(
+              context,
               profileUrl,
-              fit: BoxFit.cover,
               width: size,
               height: size,
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return Center(
-                  child: SizedBox(
-                    width: size * 0.5,
-                    height: size * 0.5,
-                    child: const CircularProgressIndicator(
-                      color: creamBg,
-                      strokeWidth: 2,
-                    ),
+              fit: BoxFit.cover,
+              placeholder: Center(
+                child: SizedBox(
+                  width: size * 0.45,
+                  height: size * 0.45,
+                  child: const CircularProgressIndicator(
+                    color: creamBg,
+                    strokeWidth: 2,
                   ),
-                );
-              },
-              errorBuilder: (context, error, stackTrace) =>
-                  Icon(Icons.person_rounded, color: creamBg, size: size * 0.6),
+                ),
+              ),
+              error: Icon(
+                Icons.person_rounded,
+                color: creamBg,
+                size: size * 0.6,
+              ),
             );
           } else {
             content = Icon(

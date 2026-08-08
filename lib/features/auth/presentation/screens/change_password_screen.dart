@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:iconstruct/core/firebase/firestore_error.dart';
+import 'package:iconstruct/core/validation/password_policy.dart';
+import 'package:iconstruct/features/auth/presentation/screens/login_screen.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
   const ChangePasswordScreen({super.key});
@@ -42,12 +45,11 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       return;
     }
 
-    if (newPassword.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('New password must be at least 6 characters.'),
-        ),
-      );
+    final policyError = PasswordPolicy.validate(newPassword);
+    if (policyError != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$policyError.')));
       return;
     }
 
@@ -92,15 +94,18 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Password changed successfully.'),
+          content: Text('Password changed. Please sign in again.'),
           backgroundColor: Colors.green,
         ),
       );
 
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (!mounted) return;
-        Navigator.pop(context);
-      });
+      // Force a fresh session after a credential change.
+      await FirebaseAuth.instance.signOut();
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
     } on FirebaseAuthException catch (e) {
       String message = 'Failed to change password.';
 
@@ -128,7 +133,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: $e'),
+            content: Text(
+              firestoreUserMessage(e, action: 'change your password'),
+            ),
             backgroundColor: Colors.red.shade400,
           ),
         );
@@ -250,6 +257,15 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                     _obscureNew = !_obscureNew;
                   });
                 },
+              ),
+              const SizedBox(height: 8),
+              Text(
+                PasswordPolicy.hint,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  height: 1.4,
+                  color: const Color(0xFF5C6F84),
+                ),
               ),
               const SizedBox(height: 16),
               _buildPasswordField(

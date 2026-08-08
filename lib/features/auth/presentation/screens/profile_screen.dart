@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'package:iconstruct/core/firebase/firestore_error.dart';
 import 'package:iconstruct/features/auth/presentation/screens/login_screen.dart';
 import 'package:iconstruct/features/auth/presentation/screens/edit_profile_screen.dart';
 import 'package:iconstruct/features/auth/presentation/screens/change_password_screen.dart';
@@ -15,6 +16,7 @@ import 'package:iconstruct/core/materials/services/favorites_service.dart';
 import 'package:iconstruct/core/materials/models/favorite_model.dart';
 import 'package:iconstruct/features/auth/presentation/screens/home_screen.dart';
 import 'package:iconstruct/features/auth/presentation/screens/cost_estimation.dart';
+import 'package:iconstruct/core/widgets/app_image.dart';
 import 'package:iconstruct/core/widgets/user_avatar.dart';
 import 'package:provider/provider.dart';
 import 'package:iconstruct/core/state/user_state/user_provider.dart';
@@ -52,9 +54,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       final XFile? pickedFile = await _picker.pickImage(
         source: source,
-        maxWidth: 800,
-        maxHeight: 800,
-        imageQuality: 85,
+        // Avatars are shown at ~36–80 logical px; keep uploads small so
+        // every screen that shows UserAvatar stays snappy.
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 72,
       );
 
       if (pickedFile == null) return;
@@ -89,9 +93,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to upload image: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              firestoreUserMessage(e, action: 'update your profile photo'),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) {
@@ -670,12 +678,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: Container(
                             color: creamBg.withAlpha(50),
                             child: item.imageUrl.isNotEmpty
-                                ? Image.network(
+                                ? AppImage.network(
+                                    context,
                                     item.imageUrl,
+                                    width: 160,
+                                    height: 120,
                                     fit: BoxFit.cover,
-                                    errorBuilder:
-                                        (context, error, stackTrace) =>
-                                            _fallbackImagePlaceholder(),
+                                    error: _fallbackImagePlaceholder(),
                                   )
                                 : _fallbackImagePlaceholder(),
                           ),
@@ -781,11 +790,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       height: 80,
                       color: creamBg.withAlpha(50),
                       child: item.imageUrl.isNotEmpty
-                          ? Image.network(
+                          ? AppImage.network(
+                              context,
                               item.imageUrl,
+                              width: 80,
+                              height: 80,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) =>
-                                  _fallbackImagePlaceholder(),
+                              error: _fallbackImagePlaceholder(),
                             )
                           : _fallbackImagePlaceholder(),
                     ),

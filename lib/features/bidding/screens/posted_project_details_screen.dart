@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
 import 'package:iconstruct/core/widgets/offset_pill_nav.dart';
 import 'quotations_screen.dart';
 
@@ -113,8 +114,9 @@ class PostedProjectDetailsScreen extends StatelessWidget {
                     Positioned(
                       top: 90,
                       right: 0,
-                      left:
-                          60, // Keep space on left so it looks connected to right side
+                      // Shares the offset-panel gutter so this screen stays in
+                      // step with the shell-based screens.
+                      left: IConstructPanel.leftInsetOf(context),
                       child: Container(
                         padding: const EdgeInsets.fromLTRB(28, 36, 24, 30),
                         decoration: const BoxDecoration(

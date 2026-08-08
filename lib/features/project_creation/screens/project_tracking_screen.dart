@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:iconstruct/core/firebase/firestore_error.dart';
 import 'package:iconstruct/features/auth/presentation/screens/material_estimator.dart';
 import 'package:iconstruct/core/models/project_model.dart';
 import 'package:iconstruct/features/bidding/screens/project_bids_screen.dart';
@@ -408,7 +409,9 @@ class _TrackingCard extends StatelessWidget {
       );
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Could not update status: $e')),
+        SnackBar(
+          content: Text(firestoreUserMessage(e, action: 'update this estimate')),
+        ),
       );
     }
   }
@@ -429,7 +432,9 @@ class _TrackingCard extends StatelessWidget {
       );
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Could not update status: $e')),
+        SnackBar(
+          content: Text(firestoreUserMessage(e, action: 'reopen canvassing')),
+        ),
       );
     }
   }

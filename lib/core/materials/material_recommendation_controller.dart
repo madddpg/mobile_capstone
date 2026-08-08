@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:iconstruct/core/firebase/firestore_error.dart';
 import 'models/material_category.dart';
 import 'models/material_item.dart';
 import 'services/firestore_materials_service.dart';
@@ -99,7 +100,7 @@ class MaterialRecommendationController extends ChangeNotifier {
       _errorMessage = null;
     } catch (e) {
       _categories = const <MaterialCategory>[];
-      _errorMessage = e.toString();
+      _errorMessage = firestoreUserMessage(e, action: 'load material options');
     } finally {
       _isLoading = false;
       notifyListeners();

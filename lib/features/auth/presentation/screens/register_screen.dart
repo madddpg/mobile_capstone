@@ -1,6 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:iconstruct/core/validation/password_policy.dart';
 import 'package:iconstruct/features/auth/data/email_service.dart';
 import 'package:iconstruct/features/auth/presentation/widgets/otp_dialog.dart';
 
@@ -110,25 +111,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   void _validatePassword(String value) {
     setState(() {
-      if (value.isEmpty) {
-        _passwordError = 'Password is required';
-      } else if (value.length < 6) {
-        _passwordError = 'Password must be at least 6 characters';
-      } else {
-        _passwordError = null;
-      }
+      _passwordError = PasswordPolicy.validate(value);
     });
   }
 
   void _validateConfirmPassword(String value) {
     setState(() {
-      if (value.isEmpty) {
-        _confirmPasswordError = 'Confirm your password';
-      } else if (value != _passwordController.text) {
-        _confirmPasswordError = 'Passwords do not match';
-      } else {
-        _confirmPasswordError = null;
-      }
+      _confirmPasswordError = PasswordPolicy.validateConfirmation(
+        _passwordController.text,
+        value,
+      );
     });
   }
 
@@ -334,6 +326,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 () => _obscurePassword = !_obscurePassword,
                               );
                             },
+                          ),
+                        ),
+
+                        const SizedBox(height: 6),
+
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: Text(
+                            PasswordPolicy.hint,
+                            style: GoogleFonts.inter(
+                              color: const Color(0xFFE3D7C3),
+                              fontSize: 12,
+                              height: 1.4,
+                            ),
                           ),
                         ),
 

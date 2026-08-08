@@ -3,8 +3,12 @@ import { getFirestore, doc, runTransaction, serverTimestamp } from "firebase/fir
 
 /**
  * Submit or Update a Quotation by the hardware shop.
- * Automatically updates the quotationCount of the projectPost via a secure transaction.
- * 
+ *
+ * The shop only writes its own quotation document. quotationCount and the post
+ * status are maintained server-side by the onQuotationSubmitted Cloud Function,
+ * because security rules (correctly) forbid a shop from writing to a builder's
+ * post.
+ *
  * @param {Object} db - The initialized firestore database instance
  * @param {string} postId - The ID of the post the shop is bidding on
  * @param {Object} shopParams - Form data and shop details
@@ -19,8 +23,9 @@ export async function submitQuotation(db, postId, shopParams) {
     await runTransaction(db, async (transaction) => {
       const postDoc = await transaction.get(projectPostRef);
       if (!postDoc.exists()) throw new Error("Project does not exist!");
-      
-      const postStatus = postDoc.data().status;
+
+      const postData = postDoc.data();
+      const postStatus = postData.status;
       if (postStatus === "closed" || postStatus === "awarded" || postStatus === "cancelled") {
         throw new Error("You can no longer submit quotations to this project.");
       }
@@ -28,13 +33,16 @@ export async function submitQuotation(db, postId, shopParams) {
       const quotationDoc = await transaction.get(quotationRef);
       const isNewQuotation = !quotationDoc.exists();
 
+      // Always notify the builder who owns the post (not the shop account).
+      const builderUserId = postData.userId || userId;
+
       // Setup the Quotation Document
       const quotationData = {
         shopId,
         shopName,
         ownerName,
         postId,
-        userId,
+        userId: builderUserId,
         message,
         estimatedTotal: Number(estimatedTotal),
         deliveryFee: Number(deliveryFee),
@@ -49,15 +57,6 @@ export async function submitQuotation(db, postId, shopParams) {
       }
 
       transaction.set(quotationRef, quotationData, { merge: true });
-
-      // Only increment count and change status if it is a NEW quotation (not a shop updating their previous bid)
-      if (isNewQuotation) {
-        const newCount = (postDoc.data().quotationCount || 0) + 1;
-        transaction.update(projectPostRef, {
-          quotationCount: newCount,
-          status: "has_quotations"
-        });
-      }
     });
 
     console.log("Quotation successfully submitted!");

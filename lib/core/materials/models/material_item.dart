@@ -10,8 +10,8 @@ class MaterialItem {
   final String? type;
   final String imageUrl;
 
-  // Keep price because Firestore has it,
-  // but DO NOT display it in user-facing UI.
+  /// Catalog list prices are not part of the builder experience. Always `0`
+  /// in the client — shops quote privately during canvassing.
   final double price;
 
   final String unit;
@@ -101,12 +101,6 @@ class MaterialItem {
     return list.isEmpty ? null : list;
   }
 
-  static double _asDouble(dynamic value) {
-    if (value == null) return 0.0;
-    if (value is num) return value.toDouble();
-    return double.tryParse(value.toString()) ?? 0.0;
-  }
-
   static bool _asBool(dynamic value) {
     if (value is bool) return value;
     if (value is String) {
@@ -144,7 +138,8 @@ class MaterialItem {
           : (rawType ?? '').toString().trim(),
       imageUrl:
           json['imageUrl']?.toString() ?? json['image_url']?.toString() ?? '',
-      price: _asDouble(json['price']),
+      // Deliberately ignore any catalog price from Firestore / APIs.
+      price: 0,
       unit: json['unit']?.toString().trim().isNotEmpty == true
           ? json['unit'].toString().trim()
           : 'per piece',
@@ -171,11 +166,7 @@ class MaterialItem {
       if (type != null) 'type': type,
       'placement': type,
       'imageUrl': imageUrl,
-
-      // Keep this for backend/shop/admin data only.
-      // Do not display this in user screens.
-      'price': price,
-
+      // Never serialize catalog prices into estimates, posts, or favorites.
       'unit': unit,
       'projectType': projectType,
       'subType': subType,

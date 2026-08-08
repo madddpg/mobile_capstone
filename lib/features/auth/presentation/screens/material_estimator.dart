@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:iconstruct/features/auth/presentation/screens/cost_estimation.dart'
     show AddedTileSelection, AddedPlumbingSelection;
+import 'package:iconstruct/core/firebase/firestore_error.dart';
 import 'package:iconstruct/core/models/project_model.dart';
 import 'package:iconstruct/core/navigation/planning_nav.dart';
 import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
@@ -635,6 +636,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
     }
 
     try {
+      await user.getIdToken(true);
       final materialsList = _buildMaterialMaps();
 
       // Convert selectedBudget strings to expected costLevel logic
@@ -656,25 +658,25 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         'totalAreaSqm': _projectArea,
         'status': widget.existingProject?.status ?? ProjectLifecycle.draft,
         'updatedAt': FieldValue.serverTimestamp(),
+        if (widget.existingProject == null)
+          'createdAt': FieldValue.serverTimestamp(),
         if (_remarksController.text.trim().isNotEmpty)
           'projectNotes': _remarksController.text.trim(),
       };
 
-      if (widget.existingProject != null) {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('saved_projects')
-            .doc(widget.existingProject!.id)
-            .update(projectData);
-      } else {
-        projectData['createdAt'] = FieldValue.serverTimestamp();
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('saved_projects')
-            .add(projectData);
-      }
+      final savedRef = widget.existingProject != null
+          ? FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .collection('saved_projects')
+              .doc(widget.existingProject!.id)
+          : FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .collection('saved_projects')
+              .doc();
+
+      await savedRef.set(projectData, SetOptions(merge: true));
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -689,9 +691,12 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error saving project: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(firestoreUserMessage(e, action: 'save this draft')),
+            duration: const Duration(seconds: 6),
+          ),
+        );
       }
     }
   }
@@ -781,6 +786,9 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
     }
 
     try {
+      // Fresh ID token before security-rule checks on the batch write.
+      await user.getIdToken(true);
+
       String costLevel = 'medium';
       if (_selectedBudget != null) {
         if (_selectedBudget!.toLowerCase().contains('low')) {
@@ -842,18 +850,14 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         'postId': newPostRef.id,
         'postedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
+        if (widget.existingProject == null)
+          'createdAt': FieldValue.serverTimestamp(),
         if (_remarksController.text.trim().isNotEmpty)
           'projectNotes': _remarksController.text.trim(),
       };
 
-      if (widget.existingProject == null) {
-        savedProjectData['createdAt'] = FieldValue.serverTimestamp();
-        batch.set(savedProjectRef, savedProjectData);
-      } else {
-        batch.update(savedProjectRef, savedProjectData);
-      }
-
-      // Add to public projectPosts collection
+      // Merge-safe write so a missing draft doc cannot fail the whole batch.
+      batch.set(savedProjectRef, savedProjectData, SetOptions(merge: true));
       batch.set(newPostRef, projectPostData);
 
       await batch.commit();
@@ -876,9 +880,14 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error posting project: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              firestoreUserMessage(e, action: 'request supplier quotations'),
+            ),
+            duration: const Duration(seconds: 6),
+          ),
+        );
       }
     }
   }

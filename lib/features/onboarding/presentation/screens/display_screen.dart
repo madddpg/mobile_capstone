@@ -1,6 +1,11 @@
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:iconstruct/core/state/onboarding_preferences.dart';
+import 'package:iconstruct/core/widgets/app_image.dart';
+import 'package:iconstruct/features/auth/presentation/screens/main_home_screen.dart';
+import 'package:iconstruct/features/onboarding/presentation/screens/landing_screen.dart';
 import 'package:iconstruct/features/onboarding/presentation/screens/main_display.dart';
 
 class DisplayScreen extends StatefulWidget {
@@ -36,13 +41,26 @@ class _DisplayScreenState extends State<DisplayScreen>
 
     _controller.forward();
 
-    _navTimer = Timer(const Duration(milliseconds: 3000), () {
-      if (!mounted) return;
+    _navTimer = Timer(const Duration(milliseconds: 3000), _goToNextScreen);
+  }
 
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const MainDisplayScreen()),
-      );
-    });
+  /// Returning builders skip the intro: straight to home if their session is
+  /// still valid, otherwise to sign-in.
+  Future<void> _goToNextScreen() async {
+    final signedIn = FirebaseAuth.instance.currentUser != null;
+    final seenIntro = signedIn || await OnboardingPreferences.hasSeenIntro();
+
+    if (!mounted) return;
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) {
+          if (signedIn) return const MainHomeScreen();
+          if (seenIntro) return const LandingScreen();
+          return const MainDisplayScreen();
+        },
+      ),
+    );
   }
 
   @override
@@ -68,7 +86,8 @@ class _DisplayScreenState extends State<DisplayScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Image.asset(
+                      AppImage.asset(
+                        context,
                         'assets/images/logo.png',
                         width: 120,
                         height: 120,

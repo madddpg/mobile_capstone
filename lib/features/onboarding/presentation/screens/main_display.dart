@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:iconstruct/core/state/onboarding_preferences.dart';
+import 'package:iconstruct/core/widgets/app_image.dart';
 import 'package:iconstruct/features/onboarding/presentation/screens/landing_screen.dart';
 
 class MainDisplayScreen extends StatefulWidget {
@@ -22,19 +24,19 @@ class _MainDisplayScreenState extends State<MainDisplayScreen>
       imagePath: 'assets/images/display 1.jpg',
       title: 'Estimate\nMaterials',
       subtitle:
-          'Get quick, accurate material estimates based on your project details.',
+          'Describe the renovation you have in mind and get a material list that scales to your floor area.',
     ),
     _Slide(
       imagePath: 'assets/images/display 2.jpg',
-      title: 'Plan your\nProjects',
+      title: 'Canvass\nSuppliers',
       subtitle:
-          'Organize tasks, timelines, and resources in one place for a smoother project workflow.',
+          'Send your material list to hardware shops and collect their quotations in one place.',
     ),
     _Slide(
       imagePath: 'assets/images/display 3.jpg',
-      title: 'Plan Your\nConstruction Projects',
+      title: 'Compare\nand Choose',
       subtitle:
-          'Estimate quantity, cost, and materials before starting your work.',
+          'Compare offers side by side, then pick the supplier that fits your budget.',
     ),
   ];
 
@@ -88,6 +90,7 @@ class _MainDisplayScreenState extends State<MainDisplayScreen>
       // After last slide, proceed to Landing
       if (!mounted) return;
       await _textAnim.reverse();
+      await OnboardingPreferences.markIntroSeen();
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
@@ -197,7 +200,18 @@ class _SlideBackground extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        Image.asset(imagePath, fit: BoxFit.cover),
+        Builder(
+          builder: (context) {
+            final size = MediaQuery.sizeOf(context);
+            return AppImage.asset(
+              context,
+              imagePath,
+              width: size.width,
+              height: size.height,
+              fit: BoxFit.cover,
+            );
+          },
+        ),
         // dark gradient overlay for text legibility (prototype style)
         const _BottomFadeOverlay(),
       ],

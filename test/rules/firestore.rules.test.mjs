@@ -156,3 +156,52 @@ test('unrelated builder cannot read another builder post', async () => {
   const stranger = authed('builder-2');
   await assertFails(stranger.doc('projectPosts/post-1').get());
 });
+
+test('shop cannot submit a quotation after offer is accepted', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await db.doc('projectPosts/post-1').set({
+      userId: 'builder-1',
+      projectName: 'Bath',
+      materials: [],
+      status: 'offer_accepted',
+      quotationCount: 1,
+      selectedQuotationId: 'shop-a',
+    });
+    await db.doc('shops/shop-b').set({ status: 'approved', name: 'B' });
+  });
+
+  const shopB = authed('shop-b');
+  await assertFails(
+    shopB.doc('projectPosts/post-1/quotations/shop-b').set({
+      shopId: 'shop-b',
+      postId: 'post-1',
+      estimatedTotal: 900,
+      status: 'submitted',
+    }),
+  );
+});
+
+test('approved shop can still bid while post has_quotations', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await db.doc('projectPosts/post-1').set({
+      userId: 'builder-1',
+      projectName: 'Bath',
+      materials: [],
+      status: 'has_quotations',
+      quotationCount: 1,
+    });
+    await db.doc('shops/shop-b').set({ status: 'approved', name: 'B' });
+  });
+
+  const shopB = authed('shop-b');
+  await assertSucceeds(
+    shopB.doc('projectPosts/post-1/quotations/shop-b').set({
+      shopId: 'shop-b',
+      postId: 'post-1',
+      estimatedTotal: 1100,
+      status: 'submitted',
+    }),
+  );
+});

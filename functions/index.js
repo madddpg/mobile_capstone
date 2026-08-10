@@ -498,39 +498,21 @@ exports.onProjectPostCreated = onDocumentCreated("projectPosts/{postId}", async 
 });
 
 // Planning/canvassing lifecycle statuses stored on users/{uid}/saved_projects.
-const SAVED_PROJECT_STAGES = [
-  "draft",
-  "planning",
-  "waiting for quotations",
-  "receiving quotations",
-  "supplier selected",
-  "completed",
-];
+const {
+  SAVED_PROJECT_STAGES,
+  canAdvanceSavedProjectStage,
+} = require("./src/savedProjectStage");
 
 const STAGE_RECEIVING_QUOTATIONS = 3;
 const STAGE_SUPPLIER_SELECTED = 4;
 
-const LEGACY_STAGE_ALIASES = {
-  "": 0,
-  ready: 1,
-  posted: 2,
-  open: 2,
-  has_quotations: 3,
-  offer_accepted: 4,
-  awarded: 4,
-};
-
-function savedProjectStage(status) {
-  const value = String(status || "").toLowerCase().trim();
-  const index = SAVED_PROJECT_STAGES.indexOf(value);
-  if (index >= 0) return index;
-  const alias = LEGACY_STAGE_ALIASES[value];
-  return typeof alias === "number" ? alias : 0;
-}
-
 /**
  * Moves a builder's saved estimate forward, never backwards, and never past a
  * cycle the builder already marked complete.
+ *
+ * Uses a transaction so a concurrent "receiving quotations" write cannot
+ * overwrite "supplier selected" after the builder accepts an offer (classic
+ * read-check-write race between onQuotationSubmitted and the accept batch).
  */
 async function advanceSavedProject(userId, projectId, targetStage, extra = {}) {
   if (!userId || !projectId) return;
@@ -541,17 +523,19 @@ async function advanceSavedProject(userId, projectId, targetStage, extra = {}) {
     .collection("saved_projects")
     .doc(projectId);
 
-  const savedSnap = await savedRef.get();
-  if (!savedSnap.exists) return;
+  await db.runTransaction(async (transaction) => {
+    const savedSnap = await transaction.get(savedRef);
+    if (!savedSnap.exists) return;
 
-  const currentStage = savedProjectStage(savedSnap.data().status);
-  if (currentStage >= SAVED_PROJECT_STAGES.length - 1) return;
-  if (currentStage >= targetStage) return;
+    if (!canAdvanceSavedProjectStage(savedSnap.data().status, targetStage)) {
+      return;
+    }
 
-  await savedRef.update({
-    status: SAVED_PROJECT_STAGES[targetStage],
-    updatedAt: Timestamp.now(),
-    ...extra,
+    transaction.update(savedRef, {
+      status: SAVED_PROJECT_STAGES[targetStage],
+      updatedAt: Timestamp.now(),
+      ...extra,
+    });
   });
 }
 

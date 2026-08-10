@@ -22,6 +22,15 @@ service cloud.firestore {
         .data.userId;
     }
 
+    // Bids are only accepted while canvassing is open. Once a supplier is
+    // selected (or the post is closed), shops must not create new quotations.
+    function postAcceptsNewBids(postId) {
+      let post = get(/databases/$(database)/documents/projectPosts/$(postId)).data;
+      return (!post.keys().hasAny(['selectedQuotationId'])
+          || post.selectedQuotationId == null)
+        && post.status in ['open', 'has_quotations'];
+    }
+
     // OTP docs are Cloud Functions only
     match /email_otp/{email} {
       allow read, write: if false;
@@ -83,6 +92,7 @@ service cloud.firestore {
         // rival shop or a builder cannot forge or undercut someone's offer.
         allow create: if isOwner(shopId)
           && isApprovedShop()
+          && postAcceptsNewBids(postId)
           && request.resource.data.estimatedTotal is number
           && request.resource.data.estimatedTotal >= 0
           && request.resource.data.shopId == shopId

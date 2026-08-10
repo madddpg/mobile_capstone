@@ -31,7 +31,9 @@ class ProjectStatusService {
   /// Advances [projectId] when bids arrive or an offer is accepted.
   ///
   /// Never moves a project backwards, and never overrides a cycle the builder
-  /// already marked complete.
+  /// already marked complete. The stage check runs inside a transaction so a
+  /// concurrent Accept Offer write cannot be overwritten by a stale
+  /// "receiving quotations" update from this client path.
   Future<void> syncFromPost({
     required String userId,
     required String projectId,
@@ -48,9 +50,18 @@ class ProjectStatusService {
     if (!_applied.add(guard)) return;
 
     try {
-      await _savedProjectRef(userId, projectId).update({
-        'status': ProjectLifecycle.statusForStage(derived),
-        'updatedAt': FieldValue.serverTimestamp(),
+      final ref = _savedProjectRef(userId, projectId);
+      await _firestore.runTransaction((transaction) async {
+        final snap = await transaction.get(ref);
+        final liveStatus = (snap.data()?['status'] ?? storedStatus).toString();
+        final liveStage = ProjectLifecycle.stageIndex(liveStatus);
+        if (liveStage >= ProjectLifecycle.stageCompleted) return;
+        if (derived <= liveStage) return;
+
+        transaction.update(ref, {
+          'status': ProjectLifecycle.statusForStage(derived),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
       });
     } catch (_) {
       _applied.remove(guard);

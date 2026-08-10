@@ -656,7 +656,10 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         'materials': materialsList,
         'materialsCount': materialsList.length,
         'totalAreaSqm': _projectArea,
-        'status': widget.existingProject?.status ?? ProjectLifecycle.draft,
+        // Do not rewrite status on edit — a stale editor snapshot can regress
+        // "receiving quotations" / "supplier selected" back to an older stage
+        // while Cloud Functions or Accept Offer advance the same document.
+        if (widget.existingProject == null) 'status': ProjectLifecycle.draft,
         'updatedAt': FieldValue.serverTimestamp(),
         if (widget.existingProject == null)
           'createdAt': FieldValue.serverTimestamp(),

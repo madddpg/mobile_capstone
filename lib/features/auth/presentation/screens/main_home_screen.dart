@@ -517,14 +517,14 @@ class _TopShopsSectionState extends State<_TopShopsSection> {
 
               final shops = snapshot.data ?? [];
 
-              final displayShops = shops
-                  .where((shop) => shop.quotationCount > 0)
-                  .take(5)
-                  .toList();
+              // Show approved shops even before the first bid lands. Ranking
+              // uses denormalized quotationCount; requiring count > 0 used to
+              // hide the entire board whenever counts were unavailable.
+              final displayShops = shops.take(5).toList();
 
               if (displayShops.isEmpty) {
                 return Text(
-                  'No submitted quotations yet.',
+                  'No approved hardware shops yet.',
                   style: TextStyle(
                     fontFamily: 'Inter',
                     fontSize: 13,

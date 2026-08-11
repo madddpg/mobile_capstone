@@ -599,6 +599,24 @@ exports.onQuotationSubmitted = onDocumentCreated("projectPosts/{postId}/quotatio
   const postId = event.params.postId;
   const shopId = event.params.shopId;
 
+  // Denormalize bid volume onto the shop doc so builders can rank Top Shops
+  // without a collectionGroup scan of private quotations (rules forbid that).
+  try {
+    await db.collection("shops").doc(shopId).set(
+      {
+        quotationCount: admin.firestore.FieldValue.increment(1),
+        updatedAt: Timestamp.now(),
+      },
+      { merge: true }
+    );
+  } catch (error) {
+    logger.error("Error incrementing shop quotationCount:", {
+      shopId,
+      postId,
+      error,
+    });
+  }
+
   let post = null;
   try {
     // Auto-advance the builder's estimate to "Receiving Quotations".

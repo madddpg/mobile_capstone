@@ -12,6 +12,7 @@ import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
 import 'package:iconstruct/core/widgets/offset_panel_shell.dart';
 import 'package:iconstruct/features/bidding/screens/posted_project_details_screen.dart';
 import 'package:iconstruct/features/project_creation/data/bom_export.dart';
+import 'package:iconstruct/features/project_creation/data/bom_material_codec.dart';
 import 'package:iconstruct/features/project_creation/data/project_lifecycle.dart';
 import 'package:iconstruct/features/project_creation/widgets/bom_share_sheet.dart';
 
@@ -108,11 +109,9 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         _selectedBudget = 'Mid Budget';
       }
 
-      _localMaterials = List<String>.from(
-        widget.existingProject!.materials
-            .map((m) => m is Map ? (m['name'] ?? '').toString() : m.toString())
-            .where((s) => s.isNotEmpty),
-      );
+      // Restore structured BOM rows (qty/unit/size/category). Name-only
+      // extraction used to wipe quantities on the next Save / Request quotes.
+      _hydrateMaterials(widget.existingProject!.materials);
     } else {
       _projectType = widget.projectName;
       if (widget.customProjectName != null &&
@@ -701,37 +700,85 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
     }
   }
 
+  /// Restores Firestore BOM rows into the estimator buckets without dropping qty.
+  void _hydrateMaterials(List<dynamic> materials) {
+    // Rebuild from the persisted BOM so edit → save is lossless.
+    _localMaterials = [];
+    _localTiles = [];
+    _localPlumbing = [];
+
+    for (final raw in materials) {
+      if (raw is! Map) {
+        final name = raw.toString().trim();
+        if (name.isNotEmpty) _localMaterials.add(name);
+        continue;
+      }
+
+      final row = BomMaterialCodec.normalizeEntry(raw);
+      if (row == null) continue;
+      final name = (row['name'] ?? '').toString();
+      if (name.isEmpty) continue;
+
+      final category = (row['category'] ?? 'Material').toString();
+      final quantity = BomMaterialCodec.asQuantity(row['quantity']);
+      final unit = (row['unit'] ?? '').toString();
+      final size = row['size']?.toString();
+      final kind = (row['kind'] ?? '').toString();
+
+      if (BomMaterialCodec.isTilesCategory(category)) {
+        _localTiles.add(
+          AddedTileSelection(
+            tileTypeName: name,
+            tileSizeGroup: kind,
+            tileSizeName: size ?? '',
+            quantity: quantity,
+          ),
+        );
+        continue;
+      }
+
+      _localPlumbing.add(
+        AddedPlumbingSelection(
+          categoryTitle: category,
+          kind: kind,
+          materialName: name,
+          size: size,
+          length: row['length']?.toString(),
+          coverSize: row['coverSize']?.toString(),
+          unit: unit.isEmpty ? 'Qty.' : unit,
+          quantity: quantity,
+        ),
+      );
+    }
+  }
+
   /// Material rows shared by saving, posting, and the shareable canvass sheet.
   List<Map<String, dynamic>> _buildMaterialMaps() {
-    return [
-      ..._localMaterials.map(
-        (name) => {
-          'name': name,
-          'quantity': 0,
-          'unit': '',
-          'size': null,
-          'category': 'Material',
-        },
-      ),
-      ..._localTiles.map(
-        (t) => {
-          'name': t.tileTypeName,
-          'quantity': t.quantity,
-          'unit': 'Qty.',
-          'size': t.tileSizeName,
-          'category': 'Tiles',
-        },
-      ),
-      ..._localPlumbing.map(
-        (p) => {
-          'name': p.materialName,
-          'quantity': p.quantity,
-          'unit': p.unit,
-          'size': p.size,
-          'category': p.categoryTitle,
-        },
-      ),
-    ];
+    return BomMaterialCodec.serialize(
+      looseNames: _localMaterials,
+      tileRows: [
+        for (final t in _localTiles)
+          BomMaterialCodec.tileRow(
+            tileTypeName: t.tileTypeName,
+            tileSizeGroup: t.tileSizeGroup,
+            tileSizeName: t.tileSizeName,
+            quantity: t.quantity,
+          ),
+      ],
+      plumbingRows: [
+        for (final p in _localPlumbing)
+          BomMaterialCodec.plumbingRow(
+            categoryTitle: p.categoryTitle,
+            kind: p.kind,
+            materialName: p.materialName,
+            unit: p.unit,
+            quantity: p.quantity,
+            size: p.size,
+            length: p.length,
+            coverSize: p.coverSize,
+          ),
+      ],
+    );
   }
 
   Future<void> _shareMaterialList() async {
@@ -767,6 +814,33 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Please enter an Estimate Name')),
+        );
+      }
+      return;
+    }
+
+    final existingPostId = widget.existingProject?.postId?.trim();
+    final alreadyPosted = (existingPostId != null && existingPostId.isNotEmpty) ||
+        ProjectLifecycle.stageIndex(
+              widget.existingProject?.status ?? ProjectLifecycle.draft,
+            ) >=
+            ProjectLifecycle.stageWaiting;
+    if (alreadyPosted) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'This estimate is already posted for bidding. Open Project Bids to review offers.',
+          ),
+        ),
+      );
+      if (existingPostId != null && existingPostId.isNotEmpty) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                PostedProjectDetailsScreen(postId: existingPostId),
+          ),
         );
       }
       return;

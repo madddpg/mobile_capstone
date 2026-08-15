@@ -156,3 +156,104 @@ test('unrelated builder cannot read another builder post', async () => {
   const stranger = authed('builder-2');
   await assertFails(stranger.doc('projectPosts/post-1').get());
 });
+
+test('builder can accept an open post but cannot rewrite quotationCount', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    await context.firestore().doc('projectPosts/post-1').set({
+      userId: 'builder-1',
+      projectName: 'Bath',
+      materials: ['tiles'],
+      status: 'has_quotations',
+      quotationCount: 2,
+    });
+  });
+
+  const builder = authed('builder-1');
+  await assertSucceeds(
+    builder.doc('projectPosts/post-1').update({
+      selectedQuotationId: 'shop-a',
+      selectedShopId: 'shop-a',
+      selectedShopName: 'A',
+      status: 'offer_accepted',
+      acceptedAt: new Date(),
+    }),
+  );
+
+  await env.withSecurityRulesDisabled(async (context) => {
+    await context.firestore().doc('projectPosts/post-2').set({
+      userId: 'builder-1',
+      projectName: 'Kitchen',
+      materials: ['paint'],
+      status: 'has_quotations',
+      quotationCount: 1,
+    });
+  });
+
+  await assertFails(
+    builder.doc('projectPosts/post-2').update({
+      selectedQuotationId: 'shop-a',
+      selectedShopId: 'shop-a',
+      selectedShopName: 'A',
+      status: 'offer_accepted',
+      quotationCount: 99,
+    }),
+  );
+});
+
+test('builder cannot clear or reassign selectedQuotationId after accept', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    await context.firestore().doc('projectPosts/post-1').set({
+      userId: 'builder-1',
+      projectName: 'Bath',
+      materials: ['tiles'],
+      status: 'offer_accepted',
+      quotationCount: 2,
+      selectedQuotationId: 'shop-a',
+      selectedShopId: 'shop-a',
+      selectedShopName: 'A',
+    });
+  });
+
+  const builder = authed('builder-1');
+  await assertFails(
+    builder.doc('projectPosts/post-1').update({
+      selectedQuotationId: null,
+      status: 'open',
+    }),
+  );
+  await assertFails(
+    builder.doc('projectPosts/post-1').update({
+      selectedQuotationId: 'shop-b',
+      selectedShopId: 'shop-b',
+      selectedShopName: 'B',
+      status: 'offer_accepted',
+    }),
+  );
+});
+
+test('awarded shop can read acceptance contact; rival shop cannot', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await db.doc('projectPosts/post-1').set({
+      userId: 'builder-1',
+      projectName: 'Bath',
+      materials: [],
+      status: 'offer_accepted',
+      quotationCount: 1,
+      selectedQuotationId: 'shop-a',
+    });
+    await db.doc('projectPosts/post-1/acceptance/acc-1').set({
+      userId: 'builder-1',
+      shopId: 'shop-a',
+      fullName: 'Builder One',
+      contactNumber: '09171234567',
+    });
+  });
+
+  await assertSucceeds(
+    authed('shop-a').doc('projectPosts/post-1/acceptance/acc-1').get(),
+  );
+  await assertFails(
+    authed('shop-b').doc('projectPosts/post-1/acceptance/acc-1').get(),
+  );
+});

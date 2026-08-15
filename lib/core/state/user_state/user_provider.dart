@@ -21,6 +21,14 @@ class UserProvider extends ChangeNotifier {
   void _initListener() {
     _auth.authStateChanges().listen((User? user) async {
       if (user != null) {
+        // Unverified Auth sessions (failed/incomplete registration) must not
+        // bind this device's push token or load a builder profile.
+        if (!user.emailVerified) {
+          await _userSubscription?.cancel();
+          _currentUser = null;
+          notifyListeners();
+          return;
+        }
         _subscribeToUserData(user.uid);
         // Register / refresh device token on every signed-in session restore.
         await FCMService().initFCM(user.uid);

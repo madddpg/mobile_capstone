@@ -181,6 +181,41 @@ class FCMService {
     }
   }
 
+  /// Remove this device token from the signed-in user's profile and invalidate
+  /// it locally so the next account on the same phone does not receive the
+  /// previous builder's quotation pushes (shop name + totals in the body).
+  Future<void> clearBoundToken() async {
+    final uid = _boundUid;
+    _boundUid = null;
+
+    await _tokenRefreshSub?.cancel();
+    _tokenRefreshSub = null;
+
+    String? token;
+    try {
+      token = await _messaging.getToken();
+    } catch (e) {
+      debugPrint('FCM getToken during logout: $e');
+    }
+
+    if (uid != null && token != null && token.isNotEmpty) {
+      try {
+        await _firestore.collection('users').doc(uid).set({
+          'fcmTokens': FieldValue.arrayRemove([token]),
+        }, SetOptions(merge: true));
+        debugPrint('FCM token removed for users/$uid');
+      } catch (e) {
+        debugPrint('Error removing FCM token: $e');
+      }
+    }
+
+    try {
+      await _messaging.deleteToken();
+    } catch (e) {
+      debugPrint('FCM deleteToken during logout: $e');
+    }
+  }
+
   void handleNotificationNavigation(RemoteMessage message) {
     if (message.data.isEmpty) return;
 

@@ -71,6 +71,11 @@ class EmailService {
       throw const EmailApiException('All fields are required.');
     }
 
+    // createUserWithEmailAndPassword leaves a signed-in session. Any failure
+    // after that (Firestore write, OTP send, killed process mid-flow) must
+    // clear the session — otherwise splash treats currentUser as fully
+    // authenticated and skips email verification.
+    var authUserCreated = false;
     try {
       debugPrint('================ REGISTRATION FLOW ================');
       debugPrint('Attempting Firebase Registration for email: $trimmedEmail');
@@ -80,6 +85,7 @@ class EmailService {
         email: trimmedEmail,
         password: password,
       );
+      authUserCreated = true;
       final uid = userCredential.user!.uid;
 
       debugPrint('Registered successfully. Auth UID: $uid');
@@ -115,6 +121,9 @@ class EmailService {
       return uid;
     } on FirebaseAuthException catch (e) {
       debugPrint('Firebase Auth Error: ${e.code} - ${e.message}');
+      if (authUserCreated) {
+        await _safeSignOut();
+      }
       if (e.code == 'email-already-in-use') {
         throw EmailApiException(
           'The email address is already in use by another account.',
@@ -126,8 +135,19 @@ class EmailService {
       }
       throw EmailApiException('Registration failed: ${e.message}');
     } catch (e) {
+      if (authUserCreated) {
+        await _safeSignOut();
+      }
       if (e is EmailApiException) rethrow;
       throw EmailApiException('Registration failed. $e');
+    }
+  }
+
+  Future<void> _safeSignOut() async {
+    try {
+      await _auth.signOut();
+    } catch (e) {
+      debugPrint('signOut after failed registration: $e');
     }
   }
 
@@ -392,7 +412,10 @@ class EmailService {
     }
   }
 
-  Future<void> logout() => _auth.signOut();
+  Future<void> logout() async {
+    await FCMService().clearBoundToken();
+    await _auth.signOut();
+  }
 
   Future<void> reloadCurrentUser() async {
     await _auth.currentUser?.reload();

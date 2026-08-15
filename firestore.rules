@@ -66,11 +66,30 @@ service cloud.firestore {
              'price', 'unitPrice', 'catalogPrice', 'estimatedTotal', 'listPrice'
            ]);
 
-      // Only the owning builder may edit or withdraw a post, and ownership
-      // itself can never be reassigned.
+      // Clients create posts with open/0 bids. After that, quotationCount is
+      // Cloud Function–owned. The only client update allowed is Accept Offer
+      // (claim selectedQuotationId once). Owners cannot clear an accepted
+      // award, rewrite quotationCount, or inject catalog/list prices.
       allow update: if isSignedIn()
         && resource.data.userId == request.auth.uid
-        && request.resource.data.userId == resource.data.userId;
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.quotationCount == resource.data.quotationCount
+        && !('selectedQuotationId' in resource.data
+             && resource.data.selectedQuotationId != null)
+        && request.resource.data.selectedQuotationId is string
+        && request.resource.data.selectedQuotationId.size() > 0
+        && request.resource.data.status == 'offer_accepted'
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly([
+               'selectedQuotationId',
+               'selectedShopId',
+               'selectedShopName',
+               'status',
+               'acceptedAt'
+             ])
+        && !request.resource.data.keys().hasAny([
+             'price', 'unitPrice', 'catalogPrice', 'estimatedTotal', 'listPrice'
+           ]);
       allow delete: if isSignedIn()
         && resource.data.userId == request.auth.uid;
 
@@ -108,8 +127,11 @@ service cloud.firestore {
       }
 
       match /acceptance/{acceptanceId} {
+        // Builder who submitted contact details, or the awarded shop that
+        // needs them to coordinate after Accept Offer.
         allow read: if isSignedIn()
-          && postOwner(postId) == request.auth.uid;
+          && (postOwner(postId) == request.auth.uid
+              || resource.data.shopId == request.auth.uid);
         allow create: if isSignedIn()
           && postOwner(postId) == request.auth.uid
           && request.resource.data.userId == request.auth.uid;

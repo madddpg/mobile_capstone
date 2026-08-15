@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:iconstruct/core/firebase/firestore_error.dart';
 import 'package:iconstruct/core/validation/password_policy.dart';
+import 'package:iconstruct/features/auth/data/email_service.dart';
 import 'package:iconstruct/features/auth/presentation/screens/login_screen.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
@@ -100,7 +101,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       );
 
       // Force a fresh session after a credential change.
-      await FirebaseAuth.instance.signOut();
+      await EmailService().logout();
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginScreen()),

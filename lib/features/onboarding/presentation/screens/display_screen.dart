@@ -46,8 +46,18 @@ class _DisplayScreenState extends State<DisplayScreen>
 
   /// Returning builders skip the intro: straight to home if their session is
   /// still valid, otherwise to sign-in.
+  ///
+  /// Only email-verified sessions count. Registration can leave a signed-in
+  /// Auth user when OTP/profile setup fails; those must not bypass verification.
   Future<void> _goToNextScreen() async {
-    final signedIn = FirebaseAuth.instance.currentUser != null;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null && !user.emailVerified) {
+      try {
+        await FirebaseAuth.instance.signOut();
+      } catch (_) {}
+    }
+
+    final signedIn = FirebaseAuth.instance.currentUser?.emailVerified == true;
     final seenIntro = signedIn || await OnboardingPreferences.hasSeenIntro();
 
     if (!mounted) return;

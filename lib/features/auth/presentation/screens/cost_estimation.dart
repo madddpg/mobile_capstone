@@ -12,6 +12,7 @@ import 'package:iconstruct/core/widgets/offset_panel_shell.dart';
 import 'package:iconstruct/features/auth/presentation/screens/material_estimator.dart';
 import 'package:iconstruct/features/project_creation/data/bom_quantity_estimator.dart';
 import 'package:iconstruct/features/project_creation/data/renovation_templates.dart';
+import 'package:iconstruct/core/widgets/app_message.dart';
 
 IconData getFilterIcon(String filter) {
   switch (filter.trim()) {
@@ -60,6 +61,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
   late final MaterialRecommendationController _materials;
   final ScrollController _materialsScrollController = ScrollController();
   final PageController _categoryPageController = PageController();
+  int _categoryPageIndex = 0;
 
   final List<AddedPlumbingSelection> _selectedProducts =
       <AddedPlumbingSelection>[];
@@ -76,6 +78,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     final firestore = FirestoreMaterialsService();
     _materials = MaterialRecommendationController(firestore: firestore);
     _materials.addListener(_onMaterialsChanged);
+    _categoryPageController.addListener(_onCategoryPageChanged);
 
     if (_isTemplateMode) {
       _seedFromTemplate(widget.template!);
@@ -123,6 +126,14 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     });
   }
 
+  void _onCategoryPageChanged() {
+    if (!_categoryPageController.hasClients) return;
+    final page = _categoryPageController.page?.round() ?? 0;
+    if (page != _categoryPageIndex) {
+      setState(() => _categoryPageIndex = page);
+    }
+  }
+
   void _onMaterialsChanged() {
     if (!mounted) return;
     setState(() {});
@@ -155,6 +166,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
   @override
   void dispose() {
     _materials.removeListener(_onMaterialsChanged);
+    _categoryPageController.removeListener(_onCategoryPageChanged);
     _materialsScrollController.dispose();
     _categoryPageController.dispose();
     super.dispose();
@@ -191,7 +203,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
           const SizedBox(height: 10),
           Text(
             _isTemplateMode
-                ? 'Reference package — quantities scaled from area.\nEdit qty, remove items, or drag alternatives onto any material row to change type.'
+                ? 'Reference package — quantities scaled from area.\nEdit qty, remove items, or drag a type onto its matching material only.'
                 : 'Select products for your project.\nSizes will appear after clicking a product.',
             style: GoogleFonts.poppins(
               fontSize: 12,
@@ -225,6 +237,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     if (_categoryPageController.hasClients) {
       _categoryPageController.jumpToPage(0);
     }
+    setState(() => _categoryPageIndex = 0);
 
     if (!_materialsScrollController.hasClients) return;
 
@@ -271,7 +284,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
       children: [
         if (areaLabel != null) ...[
           Text(
-            'Quantities auto-estimated for $areaLabel. Drag an alternative onto a tile row to change type.',
+            'Quantities auto-estimated for $areaLabel. Drag a type onto its own material only.',
             style: GoogleFonts.poppins(
               fontSize: 11,
               color: const Color(0xFF8FB2D4),
@@ -289,27 +302,84 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
               final selected = _selectedProducts[index];
 
               return Padding(
-                padding: const EdgeInsets.only(bottom: 14),
+                padding: const EdgeInsets.only(bottom: 4),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    DragTarget<MaterialAlternative>(
+                    if (item.alternatives.isNotEmpty) ...[
+                      Text(
+                        'Available types',
+                        style: GoogleFonts.poppins(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFFE0D7C9),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      SizedBox(
+                        height: 36,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: item.alternatives.length,
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(width: 8),
+                          itemBuilder: (context, altIndex) {
+                            final alt = item.alternatives[altIndex];
+                            return Draggable<_SlotAlternative>(
+                              data: _SlotAlternative(
+                                slotIndex: index,
+                                alternative: alt,
+                              ),
+                              feedback: Material(
+                                color: Colors.transparent,
+                                child: _AltChip(
+                                  label: alt.name,
+                                  dragging: true,
+                                ),
+                              ),
+                              childWhenDragging: Opacity(
+                                opacity: 0.35,
+                                child: _AltChip(label: alt.name),
+                              ),
+                              child: GestureDetector(
+                                onTap: () => _swapTemplateItem(index, alt),
+                                child: _AltChip(
+                                  label: alt.name,
+                                  selected: alt.name == item.name,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                    DragTarget<_SlotAlternative>(
                       onWillAcceptWithDetails: (details) =>
-                          item.isSwappable || item.alternatives.isNotEmpty,
+                          details.data.slotIndex == index &&
+                          (item.isSwappable || item.alternatives.isNotEmpty),
                       onAcceptWithDetails: (details) {
-                        _swapTemplateItem(index, details.data);
+                        _swapTemplateItem(index, details.data.alternative);
                       },
                       builder: (context, candidate, rejected) {
                         final hovering = candidate.isNotEmpty;
                         return Container(
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(16),
+                              bottomLeft: Radius.circular(16),
+                            ),
                             border: hovering
                                 ? Border.all(
                                     color: const Color(0xFF6EE7B7),
                                     width: 2,
                                   )
-                                : null,
+                                : rejected.isNotEmpty
+                                    ? Border.all(
+                                        color: const Color(0xFFFF8A80),
+                                        width: 1.5,
+                                      )
+                                    : null,
                           ),
                           child: _AddedMaterialItem(
                             title: selected.materialName,
@@ -318,7 +388,6 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
                               if ((selected.size ?? '').trim().isNotEmpty)
                                 selected.size!.trim(),
                               selected.unit,
-                              'drag to swap',
                             ].where((s) => s.isNotEmpty).join(' • '),
                             unit: selected.unit,
                             qtyController: selected.qtyController,
@@ -341,47 +410,11 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
                         );
                       },
                     ),
-                    if (item.alternatives.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        'Drag onto row to change type:',
-                        style: GoogleFonts.poppins(
-                          fontSize: 10,
-                          color: const Color(0xFFE0D7C9),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      SizedBox(
-                        height: 36,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: item.alternatives.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(width: 8),
-                          itemBuilder: (context, altIndex) {
-                            final alt = item.alternatives[altIndex];
-                            return Draggable<MaterialAlternative>(
-                              data: alt,
-                              feedback: Material(
-                                color: Colors.transparent,
-                                child: _AltChip(label: alt.name, dragging: true),
-                              ),
-                              childWhenDragging: Opacity(
-                                opacity: 0.35,
-                                child: _AltChip(label: alt.name),
-                              ),
-                              child: GestureDetector(
-                                onTap: () => _swapTemplateItem(index, alt),
-                                child: _AltChip(
-                                  label: alt.name,
-                                  selected: alt.name == item.name,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
+                    const SizedBox(height: 12),
+                    const Divider(
+                      color: Color(0xFFEDE4D4),
+                      thickness: 1,
+                    ),
                   ],
                 ),
               );
@@ -475,6 +508,9 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
           child: PageView.builder(
             controller: _categoryPageController,
             itemCount: slides.length,
+            onPageChanged: (page) {
+              setState(() => _categoryPageIndex = page);
+            },
             itemBuilder: (context, index) {
               final category = slides[index];
               final items = _materials.getItemsByCategory(category.title);
@@ -537,36 +573,30 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
           ),
         ),
 
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
 
-        Align(
-          alignment: Alignment.centerRight,
-          child: SizedBox(
-            width: 100,
-            height: 40,
-            child: ElevatedButton(
-              onPressed: () => _showNextMaterialSlide(slides.length),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFEDE4D4),
-                foregroundColor: const Color(0xFF1E3042),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                elevation: 6,
-                shadowColor: Colors.black.withAlpha(100),
-              ),
-              child: Text(
-                'Next',
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
+        if (slides.length > 1) ...[
+          _CategoryPager(
+            pageCount: slides.length,
+            currentPage: _categoryPageIndex.clamp(0, slides.length - 1),
+            labels: slides.map((s) => s.title).toList(),
+            onDotTap: (page) {
+              _categoryPageController.animateToPage(
+                page,
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeOutCubic,
+              );
+            },
+            onPrev: () {
+              final current = _categoryPageIndex.clamp(0, slides.length - 1);
+              _showMaterialSlide(
+                current == 0 ? slides.length - 1 : current - 1,
+              );
+            },
+            onNext: () => _showNextMaterialSlide(slides.length),
           ),
-        ),
-
-        const SizedBox(height: 10),
+          const SizedBox(height: 14),
+        ],
 
         Align(
           alignment: Alignment.centerRight,
@@ -600,31 +630,30 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     );
   }
 
-  Future<void> _showNextMaterialSlide(int slideCount) async {
-    if (slideCount <= 0) return;
+  Future<void> _showMaterialSlide(int page) async {
     if (!_categoryPageController.hasClients) return;
-
-    final current = (_categoryPageController.page ?? 0).round();
-    final next = (current + 1) % slideCount;
-
     await _categoryPageController.animateToPage(
-      next,
-      duration: const Duration(milliseconds: 250),
+      page,
+      duration: const Duration(milliseconds: 320),
       curve: Curves.easeOutCubic,
     );
-
     if (!_materialsScrollController.hasClients) return;
-
     await _materialsScrollController.animateTo(
       0,
-      duration: const Duration(milliseconds: 250),
+      duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
     );
   }
 
+  Future<void> _showNextMaterialSlide(int slideCount) async {
+    if (slideCount <= 0) return;
+    final current = (_categoryPageController.page ?? 0).round();
+    await _showMaterialSlide((current + 1) % slideCount);
+  }
+
   void _goToEstimator() {
     if (_selectedProducts.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      showAppMessage(context, 
         const SnackBar(
           content: Text('Add or keep at least one material before estimating.'),
         ),
@@ -1039,7 +1068,7 @@ class _FavoriteButton extends StatelessWidget {
               if (isFavorite) {
                 await service.removeFavorite(item);
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  showAppMessage(context, 
                     SnackBar(
                       content: const Text('Removed from favorites'),
                       backgroundColor: Colors.red.shade400,
@@ -1050,18 +1079,20 @@ class _FavoriteButton extends StatelessWidget {
               } else {
                 await service.addFavorite(item);
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  showAppMessage(
+                    context,
                     SnackBar(
                       content: const Text('Added to favorites'),
                       backgroundColor: Colors.green.shade400,
                       duration: const Duration(seconds: 2),
                     ),
+                    kind: AppMessageKind.success,
                   );
                 }
               }
             } catch (_) {
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
+                showAppMessage(context, 
                   const SnackBar(content: Text('Failed to update favorites')),
                 );
               }
@@ -1120,6 +1151,127 @@ class _MaterialThumb extends StatelessWidget {
                     ),
                   ),
                 ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SlotAlternative {
+  final int slotIndex;
+  final MaterialAlternative alternative;
+
+  const _SlotAlternative({
+    required this.slotIndex,
+    required this.alternative,
+  });
+}
+
+class _CategoryPager extends StatelessWidget {
+  final int pageCount;
+  final int currentPage;
+  final List<String> labels;
+  final ValueChanged<int> onDotTap;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+
+  const _CategoryPager({
+    required this.pageCount,
+    required this.currentPage,
+    required this.labels,
+    required this.onDotTap,
+    required this.onPrev,
+    required this.onNext,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = currentPage >= 0 && currentPage < labels.length
+        ? labels[currentPage]
+        : '';
+
+    return Column(
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFFEDE4D4),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            _PagerArrow(icon: Icons.chevron_left_rounded, onTap: onPrev),
+            Expanded(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(pageCount, (i) {
+                  final active = i == currentPage;
+                  return GestureDetector(
+                    onTap: () => onDotTap(i),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      height: 8,
+                      width: active ? 22 : 8,
+                      decoration: BoxDecoration(
+                        color: active
+                            ? const Color(0xFFEDE4D4)
+                            : const Color(0xFFEDE4D4).withValues(alpha: 0.28),
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: active
+                            ? [
+                                BoxShadow(
+                                  color: const Color(0xFFEDE4D4)
+                                      .withValues(alpha: 0.45),
+                                  blurRadius: 8,
+                                ),
+                              ]
+                            : null,
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+            _PagerArrow(icon: Icons.chevron_right_rounded, onTap: onNext),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${currentPage + 1} / $pageCount',
+          style: GoogleFonts.poppins(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFFEDE4D4).withValues(alpha: 0.7),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PagerArrow extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _PagerArrow({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFEDE4D4).withValues(alpha: 0.14),
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: 36,
+          height: 36,
+          child: Icon(icon, color: const Color(0xFFEDE4D4), size: 22),
         ),
       ),
     );
@@ -1188,7 +1340,10 @@ class _AddedMaterialItem extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: const Color(0xFF1E3042),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(16),
+          bottomLeft: Radius.circular(16),
+        ),
         border: Border.all(
           color: const Color(0xFFEDE4D4).withAlpha(80),
           width: 1,

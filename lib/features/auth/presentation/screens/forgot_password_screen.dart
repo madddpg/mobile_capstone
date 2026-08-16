@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconstruct/features/auth/data/email_service.dart';
 import 'package:iconstruct/features/auth/presentation/screens/forgot_password_otp_screen.dart';
+import 'package:iconstruct/core/widgets/app_message.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -53,12 +54,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       );
     } on EmailApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
+      showAppMessage(context, SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      showAppMessage(context, 
         const SnackBar(content: Text('Failed to send code. Please try again.')),
       );
     } finally {
@@ -240,8 +239,7 @@ class _ForgotField extends StatelessWidget {
           fontSize: 13.5,
           fontWeight: FontWeight.w500,
         ),
-        errorText: errorText,
-        errorStyle: GoogleFonts.poppins(color: Colors.white, fontSize: 11),
+        error: warningFieldError(errorText),
         filled: true,
         fillColor: const Color(0xFFE9DECC),
         contentPadding: const EdgeInsets.symmetric(
@@ -260,14 +258,8 @@ class _ForgotField extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFF648DB6), width: 1.5),
         ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.redAccent, width: 1),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
-        ),
+        errorBorder: warningErrorBorder(),
+        focusedErrorBorder: warningErrorBorder(width: 1.5),
       ),
     );
   }

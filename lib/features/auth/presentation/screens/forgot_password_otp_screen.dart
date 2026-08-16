@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconstruct/features/auth/data/email_service.dart';
 import 'package:iconstruct/features/auth/presentation/screens/reset_password_screen.dart';
+import 'package:iconstruct/core/theme/app_theme.dart';
+import 'package:iconstruct/core/widgets/app_message.dart';
 
 class ForgotPasswordOtpScreen extends StatefulWidget {
   final String email;
@@ -68,17 +70,17 @@ class _ForgotPasswordOtpScreenState extends State<ForgotPasswordOtpScreen> {
         isPasswordReset: true,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(
+      showAppMessage(
         context,
-      ).showSnackBar(SnackBar(content: Text(result.message)));
+        SnackBar(content: Text(result.message)),
+        kind: AppMessageKind.success,
+      );
     } on EmailApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
+      showAppMessage(context, SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      showAppMessage(context, 
         const SnackBar(content: Text('Failed to resend the code.')),
       );
     } finally {
@@ -241,20 +243,32 @@ class _ForgotPasswordOtpScreenState extends State<ForgotPasswordOtpScreen> {
                                       vertical: 8,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFFFFEBEB),
+                                      color: const Color(0xFFFFF4D6),
                                       borderRadius: BorderRadius.circular(10),
                                       border: Border.all(
-                                        color: const Color(0xFFE8AEAE),
+                                        color: const Color(0xFFE0A84A),
                                       ),
                                     ),
-                                    child: Text(
-                                      _errorMessage!,
-                                      textAlign: TextAlign.center,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        color: const Color(0xFFB33A3A),
-                                      ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.warning_amber_rounded,
+                                          size: 16,
+                                          color: AppColors.warning,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            _errorMessage!,
+                                            textAlign: TextAlign.left,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.warning,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ],

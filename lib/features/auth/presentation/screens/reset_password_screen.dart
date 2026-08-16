@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconstruct/core/validation/password_policy.dart';
 import 'package:iconstruct/features/auth/data/email_service.dart';
 import 'package:iconstruct/features/auth/presentation/screens/login_screen.dart';
+import 'package:iconstruct/core/widgets/app_message.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   final String email;
@@ -66,10 +67,12 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         newPassword: password,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      showAppMessage(
+        context,
         const SnackBar(
           content: Text('Password reset successfully. Please log in.'),
         ),
+        kind: AppMessageKind.success,
       );
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -77,12 +80,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       );
     } on EmailApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
+      showAppMessage(context, SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      showAppMessage(context, 
         const SnackBar(
           content: Text('Failed to reset password. Please try again.'),
         ),
@@ -306,8 +307,7 @@ class _ResetField extends StatelessWidget {
           fontSize: 13.5,
           fontWeight: FontWeight.w500,
         ),
-        errorText: errorText,
-        errorStyle: GoogleFonts.poppins(color: Colors.white, fontSize: 11),
+        error: warningFieldError(errorText),
         filled: true,
         fillColor: const Color(0xFFE9DECC),
         suffixIcon: trailing,
@@ -327,14 +327,8 @@ class _ResetField extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFF648DB6), width: 1.5),
         ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.redAccent, width: 1),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
-        ),
+        errorBorder: warningErrorBorder(),
+        focusedErrorBorder: warningErrorBorder(width: 1.5),
       ),
     );
   }

@@ -69,13 +69,14 @@ class _TemplateAreaScreenState extends State<TemplateAreaScreen> {
           'Enter the total area (sqm). Essential materials will auto-estimate quantities from this size.\nTemplates are a reference only.',
       trailingAction: GlitchedPillButton(
         label: 'Estimate Qty',
-        width: 140,
+        width: 168,
         onPressed: _continue,
       ),
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.only(right: 4, bottom: 8),
+          padding: const EdgeInsets.only(right: 4, bottom: 24),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           children: [
             Text(
               'Total area (square meters) *',
@@ -94,6 +95,7 @@ class _TemplateAreaScreenState extends State<TemplateAreaScreen> {
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
               ),
+              scrollPadding: const EdgeInsets.only(bottom: 140),
               decoration: InputDecoration(
                 hintText: 'e.g. 18',
                 hintStyle: GoogleFonts.poppins(

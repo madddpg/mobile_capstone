@@ -8,12 +8,14 @@ import 'package:iconstruct/features/auth/presentation/screens/cost_estimation.da
 import 'package:iconstruct/core/firebase/firestore_error.dart';
 import 'package:iconstruct/core/models/project_model.dart';
 import 'package:iconstruct/core/navigation/planning_nav.dart';
+import 'package:iconstruct/core/state/active_project_state.dart';
 import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
 import 'package:iconstruct/core/widgets/offset_panel_shell.dart';
 import 'package:iconstruct/features/bidding/screens/posted_project_details_screen.dart';
 import 'package:iconstruct/features/project_creation/data/bom_export.dart';
 import 'package:iconstruct/features/project_creation/data/project_lifecycle.dart';
 import 'package:iconstruct/features/project_creation/widgets/bom_share_sheet.dart';
+import 'package:iconstruct/core/widgets/app_message.dart';
 
 class MaterialEstimatorScreen extends StatefulWidget {
   final String projectName;
@@ -68,6 +70,13 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
 
   int get _materialCount =>
       _localTiles.length + _localPlumbing.length + _localMaterials.length;
+
+  bool get _alreadyPosted =>
+      widget.existingProject != null &&
+      ProjectLifecycle.isPosted(
+        widget.existingProject!.status,
+        postId: widget.existingProject!.postId,
+      );
 
   @override
   void initState() {
@@ -443,29 +452,85 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
             ),
           ),
           const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _materialCount == 0 ? null : _postProjectForBidding,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFEDE4D4),
-                foregroundColor: const Color(0xFF2C3E50),
-                disabledBackgroundColor:
-                    const Color(0xFFEDE4D4).withValues(alpha: 0.4),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
+          if (_alreadyPosted) ...[
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  final postId = widget.existingProject?.postId;
+                  if (postId == null || postId.isEmpty) return;
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => PostedProjectDetailsScreen(
+                        postId: postId,
+                      ),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFEDE4D4),
+                  foregroundColor: const Color(0xFF2C3E50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-              child: Text(
-                'Request Supplier Quotations',
-                style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
+                child: Text(
+                  'View Quotations',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
                 ),
               ),
             ),
-          ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () => PlanningNav.startNewEstimate(context),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFEDE4D4),
+                  side: const BorderSide(color: Color(0xFFEDE4D4)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: Text(
+                  'Start New Estimate',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ),
+          ] else
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _materialCount == 0 ? null : _postProjectForBidding,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFEDE4D4),
+                  foregroundColor: const Color(0xFF2C3E50),
+                  disabledBackgroundColor:
+                      const Color(0xFFEDE4D4).withValues(alpha: 0.4),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: Text(
+                  'Request Supplier Quotations',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ),
           const SizedBox(height: 10),
           SizedBox(
             width: double.infinity,
@@ -619,7 +684,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(context, 
           const SnackBar(content: Text('Please log in to save projects')),
         );
       }
@@ -628,7 +693,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
 
     if (_projectName.trim().isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(context, 
           const SnackBar(content: Text('Please enter an Estimate Name')),
         );
       }
@@ -679,10 +744,12 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       await savedRef.set(projectData, SetOptions(merge: true));
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(
+          context,
           const SnackBar(
             content: Text('Draft saved. You can request quotations anytime.'),
           ),
+          kind: AppMessageKind.success,
         );
         // By using `push` instead of `pushReplacement`, the current screen
         // stays in the navigation stack, preserving values. When the user taps
@@ -691,7 +758,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(context, 
           SnackBar(
             content: Text(firestoreUserMessage(e, action: 'save this draft')),
             duration: const Duration(seconds: 6),
@@ -756,8 +823,21 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(context, 
           const SnackBar(content: Text('Please log in to post projects')),
+        );
+      }
+      return;
+    }
+
+    if (_alreadyPosted) {
+      if (mounted) {
+        showAppMessage(context, 
+          const SnackBar(
+            content: Text(
+              'This estimate is already posted. Start a new plan to canvass another project.',
+            ),
+          ),
         );
       }
       return;
@@ -765,7 +845,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
 
     if (_projectName.trim().isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(context, 
           const SnackBar(content: Text('Please enter an Estimate Name')),
         );
       }
@@ -776,7 +856,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
 
     if (materialsList.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(context, 
           const SnackBar(
             content: Text('Cannot post a project without materials'),
           ),
@@ -862,13 +942,17 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
 
       await batch.commit();
 
+      ActiveProjectState.instance.clear();
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(
+          context,
           const SnackBar(
             content: Text(
               'BOM sent to hardware shops. Waiting for supplier quotations.',
             ),
           ),
+          kind: AppMessageKind.success,
         );
         Navigator.pushReplacement(
           context,
@@ -880,7 +964,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(context, 
           SnackBar(
             content: Text(
               firestoreUserMessage(e, action: 'request supplier quotations'),

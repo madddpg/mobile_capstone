@@ -58,82 +58,108 @@ class OffsetPanelShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final showNav = activeNav != null;
-    final bottomClearance = showNav && extent == OffsetPanelExtent.pinnedWithNav
-        ? IConstructPanel.bottomInsetOf(context)
-        : MediaQuery.paddingOf(context).bottom;
+    return _KeyboardInsetBuilder(
+      builder: (context, keyboardInset) {
+        final showNav = activeNav != null;
+        final keyboardOpen = keyboardInset > 24;
+        final navOrSafe = showNav && extent == OffsetPanelExtent.pinnedWithNav
+            ? IConstructPanel.bottomInsetOf(context)
+            : MediaQuery.paddingOf(context).bottom;
+        // Scaffold already shrinks by MediaQuery viewInsets; only pad leftover
+        // height from the raw Flutter view (common on edge-to-edge Android).
+        final mediaInset = MediaQuery.viewInsetsOf(context).bottom;
+        final extraInset = (keyboardInset - mediaInset).clamp(0.0, 600.0);
+        final bottomClearance = keyboardOpen ? 0.0 : navOrSafe;
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
-        statusBarColor: IConstructPanel.cream,
-        statusBarIconBrightness: Brightness.dark,
-        statusBarBrightness: Brightness.light,
-      ),
-      child: Scaffold(
-        key: scaffoldKey,
-        // Cream fallback so any anti-alias seam never flashes blue/gray.
-        backgroundColor: IConstructPanel.cream,
-        endDrawer: endDrawer,
-        body: Container(
-          width: double.infinity,
-          height: double.infinity,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              stops: [0.0, 0.42, 1.0],
-              colors: [
-                IConstructPanel.cream,
-                IConstructPanel.darkBlue,
-                IConstructPanel.midBlue,
-              ],
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: const SystemUiOverlayStyle(
+            statusBarColor: IConstructPanel.cream,
+            statusBarIconBrightness: Brightness.dark,
+            statusBarBrightness: Brightness.light,
+          ),
+          child: Scaffold(
+            key: scaffoldKey,
+            backgroundColor: IConstructPanel.cream,
+            resizeToAvoidBottomInset: true,
+            endDrawer: endDrawer,
+            body: Container(
+              width: double.infinity,
+              height: double.infinity,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: [0.0, 0.42, 1.0],
+                  colors: [
+                    IConstructPanel.cream,
+                    IConstructPanel.darkBlue,
+                    IConstructPanel.midBlue,
+                  ],
+                ),
+              ),
+              child: OffsetSafeArea(
+                bottom: safeAreaBottom,
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: extraInset),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      const CreamBackdrop(),
+                      CreamHeaderBand(child: header),
+                      if (extent == OffsetPanelExtent.scrollBody)
+                        _buildScrollBody(
+                          context,
+                          showNav: showNav && !keyboardOpen,
+                          keyboardInset: 0,
+                        )
+                      else
+                        _buildOffsetPanel(context, bottom: bottomClearance),
+                      if (overlay != null) overlay!,
+                      if (showNav && !keyboardOpen)
+                        OffsetPillNav(activeTab: activeNav!),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
-          child: OffsetSafeArea(
-            bottom: safeAreaBottom,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const CreamBackdrop(),
-                CreamHeaderBand(child: header),
-                if (extent == OffsetPanelExtent.scrollBody)
-                  _buildScrollBody(context, showNav: showNav)
-                else
-                  _buildOffsetPanel(context, bottom: bottomClearance),
-                if (overlay != null) overlay!,
-                if (showNav) OffsetPillNav(activeTab: activeNav!),
-              ],
-            ),
-          ),
-        ),
-      ),
+        );
+      },
     );
   }
 
   Widget _buildOffsetPanel(BuildContext context, {required double bottom}) {
-    final radius = borderRadius ??
+    final rawRadius = borderRadius ??
         (extent == OffsetPanelExtent.fillBottom
             ? IConstructPanel.offsetTallRadiusOf(context)
             : IConstructPanel.offsetRadiusOf(context));
+    // Right and (for fill-bottom sheets) bottom stay square so the navy
+    // meets the screen edge instead of hanging over the gradient.
+    final radius = rawRadius.copyWith(
+      topRight: Radius.zero,
+      bottomRight: Radius.zero,
+      bottomLeft: extent == OffsetPanelExtent.fillBottom
+          ? Radius.zero
+          : rawRadius.bottomLeft,
+    );
     final padding =
         contentPadding ?? IConstructPanel.contentPaddingOf(context);
 
     Widget child = body;
     if (wrapPanel) {
-      child = Container(
-        decoration: BoxDecoration(
-          color: panelColor ?? IConstructPanel.navy,
-          borderRadius: radius,
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black26,
-              blurRadius: 15,
-              offset: Offset(-5, 10),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: radius,
+      child = SizedBox.expand(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: panelColor ?? IConstructPanel.navy,
+            borderRadius: radius,
+            boxShadow: const [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 12,
+                offset: Offset(-6, 8),
+              ),
+            ],
+          ),
           child: Padding(
             padding: padding,
             child: body,
@@ -151,14 +177,22 @@ class OffsetPanelShell extends StatelessWidget {
     );
   }
 
-  Widget _buildScrollBody(BuildContext context, {required bool showNav}) {
+  Widget _buildScrollBody(
+    BuildContext context, {
+    required bool showNav,
+    required double keyboardInset,
+  }) {
+    final bottomPad = keyboardInset > 0
+        ? keyboardInset + 16
+        : (showNav ? IConstructPanel.bottomInsetOf(context) + 8 : 24.0);
+
     return Positioned.fill(
       child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
           IConstructPanel.leftInsetOf(context),
           IConstructPanel.panelTopOf(context),
           0,
-          showNav ? IConstructPanel.bottomInsetOf(context) + 8 : 24,
+          bottomPad,
         ),
         child: body,
       ),
@@ -273,5 +307,48 @@ class _BackButton extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Rebuilds when the IME height changes, and reports the larger of
+/// [MediaQuery.viewInsets] and the raw Flutter [View] inset.
+class _KeyboardInsetBuilder extends StatefulWidget {
+  final Widget Function(BuildContext context, double keyboardInset) builder;
+
+  const _KeyboardInsetBuilder({required this.builder});
+
+  @override
+  State<_KeyboardInsetBuilder> createState() => _KeyboardInsetBuilderState();
+}
+
+class _KeyboardInsetBuilderState extends State<_KeyboardInsetBuilder>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    if (mounted) setState(() {});
+  }
+
+  static double _insetOf(BuildContext context) {
+    final fromMedia = MediaQuery.viewInsetsOf(context).bottom;
+    final view = View.of(context);
+    final fromView = view.viewInsets.bottom / view.devicePixelRatio;
+    return fromMedia > fromView ? fromMedia : fromView;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.builder(context, _insetOf(context));
   }
 }

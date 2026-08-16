@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 
 import 'package:iconstruct/core/models/project_model.dart';
 import 'package:iconstruct/core/state/active_project_state.dart';
+import 'package:iconstruct/features/auth/presentation/screens/home_screen.dart';
 import 'package:iconstruct/features/auth/presentation/screens/material_estimator.dart';
 import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
 import 'package:iconstruct/features/bidding/screens/quotations_screen.dart';
 import 'package:iconstruct/features/project_creation/data/project_lifecycle.dart';
+import 'package:iconstruct/core/widgets/app_message.dart';
 
 /// Cross-screen navigation for the planning / finalize flow.
 ///
@@ -20,6 +22,13 @@ class PlanningNav {
     return Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const SavedProjectsScreen()),
+    );
+  }
+
+  static Future<void> startNewEstimate(BuildContext context) {
+    return Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
     );
   }
 
@@ -59,7 +68,7 @@ class PlanningNav {
     );
 
     try {
-      ProjectModel? last = _unfinishedOrNull(
+      ProjectModel? last = _planningOrNull(
         ActiveProjectState.instance.activeProject,
       );
 
@@ -73,10 +82,22 @@ class PlanningNav {
             .get();
 
         for (final doc in snap.docs) {
-          final candidate = _unfinishedOrNull(ProjectModel.fromDocument(doc));
+          final candidate = _planningOrNull(ProjectModel.fromDocument(doc));
           if (candidate != null) {
             last = candidate;
             break;
+          }
+        }
+
+        // No draft in progress — resume the latest posted estimate's bids.
+        if (last == null) {
+          for (final doc in snap.docs) {
+            final candidate =
+                _unfinishedOrNull(ProjectModel.fromDocument(doc));
+            if (candidate != null) {
+              last = candidate;
+              break;
+            }
           }
         }
       }
@@ -125,6 +146,14 @@ class PlanningNav {
     }
   }
 
+  static ProjectModel? _planningOrNull(ProjectModel? project) {
+    if (project == null) return null;
+    if (ProjectLifecycle.isPosted(project.status, postId: project.postId)) {
+      return null;
+    }
+    return project;
+  }
+
   static ProjectModel? _unfinishedOrNull(ProjectModel? project) {
     if (project == null) return null;
     final stage = ProjectLifecycle.stageIndex(project.status);
@@ -133,7 +162,7 @@ class PlanningNav {
   }
 
   static void _toast(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    showAppMessage(context, 
       SnackBar(content: Text(message)),
     );
   }

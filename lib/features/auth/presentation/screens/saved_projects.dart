@@ -12,6 +12,7 @@ import 'package:iconstruct/core/widgets/offset_panel_shell.dart';
 import 'package:iconstruct/features/project_creation/data/bom_export.dart';
 import 'package:iconstruct/features/project_creation/data/project_lifecycle.dart';
 import 'package:iconstruct/features/project_creation/widgets/bom_share_sheet.dart';
+import 'package:iconstruct/core/widgets/app_message.dart';
 
 /// How [SavedProjectsScreen] focuses the list for different home entry points.
 enum SavedProjectsFocus {
@@ -466,7 +467,7 @@ class ProjectCard extends StatelessWidget {
     if (project.postId != null ||
         ProjectLifecycle.stageIndex(project.status) >=
             ProjectLifecycle.stageWaiting) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      showAppMessage(context, 
         const SnackBar(
           content: Text('This project is already posted for bidding.'),
         ),
@@ -524,18 +525,22 @@ class ProjectCard extends StatelessWidget {
 
       await batch.commit();
 
+      ActiveProjectState.instance.clear();
+
       if (context.mounted) {
         Navigator.pop(context); // Remove loading
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(
+          context,
           const SnackBar(
             content: Text('Project successfully posted for bidding!'),
           ),
+          kind: AppMessageKind.success,
         );
       }
     } catch (e) {
       if (context.mounted) {
         Navigator.pop(context); // Remove loading
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(context, 
           SnackBar(
             content: Text(
               firestoreUserMessage(e, action: 'post this estimate for bidding'),
@@ -646,10 +651,12 @@ class ProjectCard extends StatelessWidget {
                       .delete();
 
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    showAppMessage(
+                      context,
                       const SnackBar(
                         content: Text('Estimate deleted.'),
                       ),
+                      kind: AppMessageKind.success,
                     );
 
                     if (isActive) {
@@ -658,7 +665,7 @@ class ProjectCard extends StatelessWidget {
                   }
                 } catch (e) {
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    showAppMessage(context, 
                       SnackBar(
                         content: Text(
                           firestoreUserMessage(
@@ -708,7 +715,7 @@ class ProjectCard extends StatelessWidget {
     return GestureDetector(
       onTap: () {
         if (project.postId == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          showAppMessage(context, 
             const SnackBar(content: Text('This project is not posted yet.')),
           );
         } else {

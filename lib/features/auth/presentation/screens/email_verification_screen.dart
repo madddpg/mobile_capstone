@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconstruct/features/auth/data/email_service.dart';
 import 'package:iconstruct/features/auth/presentation/screens/login_screen.dart';
+import 'package:iconstruct/core/theme/app_theme.dart';
+import 'package:iconstruct/core/widgets/app_message.dart';
 
 class EmailVerificationScreen extends StatefulWidget {
   final String email;
@@ -91,13 +93,15 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
     try {
       final result = await _emailService.sendOtp(email: widget.email);
       if (!mounted) return;
-      ScaffoldMessenger.of(
+      showAppMessage(
         context,
-      ).showSnackBar(SnackBar(content: Text(result.message)));
+        SnackBar(content: Text(result.message)),
+        kind: AppMessageKind.success,
+      );
       _startCountdown();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      showAppMessage(context, 
         SnackBar(
           content: Text(e.toString().replaceAll('EmailApiException: ', '')),
         ),
@@ -128,10 +132,12 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
       if (!mounted) return;
 
       if (result.success) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(
+          context,
           const SnackBar(
             content: Text('Verification successful. Please login.'),
           ),
+          kind: AppMessageKind.success,
         );
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -296,8 +302,8 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                           Row(
                             children: [
                               const Icon(
-                                Icons.error_outline,
-                                color: Color(0xFFE57373),
+                                Icons.warning_amber_rounded,
+                                color: AppColors.warning,
                                 size: 16,
                               ),
                               const SizedBox(width: 8),
@@ -305,9 +311,9 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                                 child: Text(
                                   _errorMessage!,
                                   style: GoogleFonts.inter(
-                                    color: const Color(0xFFE57373),
+                                    color: AppColors.warning,
                                     fontSize: 12,
-                                    fontWeight: FontWeight.w500,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ),

@@ -9,6 +9,7 @@ import 'package:iconstruct/core/models/project_model.dart';
 import 'package:iconstruct/features/bidding/screens/project_bids_screen.dart';
 import 'package:iconstruct/features/project_creation/data/project_lifecycle.dart';
 import 'package:iconstruct/features/project_creation/data/project_status_service.dart';
+import 'package:iconstruct/core/widgets/app_message.dart';
 
 class ProjectTrackingScreen extends StatelessWidget {
   const ProjectTrackingScreen({super.key});
@@ -370,7 +371,6 @@ class _TrackingCard extends StatelessWidget {
   }
 
   Future<void> _confirmComplete(BuildContext context) async {
-    final messenger = ScaffoldMessenger.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -404,11 +404,15 @@ class _TrackingCard extends StatelessWidget {
         userId: userId,
         projectId: project.id,
       );
-      messenger.showSnackBar(
+      if (!context.mounted) return;
+      showAppMessage(
+        context,
         const SnackBar(content: Text('Planning cycle marked complete.')),
+        kind: AppMessageKind.success,
       );
     } catch (e) {
-      messenger.showSnackBar(
+      if (!context.mounted) return;
+      showAppMessage(context,
         SnackBar(
           content: Text(firestoreUserMessage(e, action: 'update this estimate')),
         ),
@@ -420,18 +424,21 @@ class _TrackingCard extends StatelessWidget {
     BuildContext context,
     Map<String, dynamic>? post,
   ) async {
-    final messenger = ScaffoldMessenger.of(context);
     try {
       await ProjectStatusService.instance.reopen(
         userId: userId,
         projectId: project.id,
         post: post,
       );
-      messenger.showSnackBar(
+      if (!context.mounted) return;
+      showAppMessage(
+        context,
         const SnackBar(content: Text('Canvassing reopened.')),
+        kind: AppMessageKind.success,
       );
     } catch (e) {
-      messenger.showSnackBar(
+      if (!context.mounted) return;
+      showAppMessage(context,
         SnackBar(
           content: Text(firestoreUserMessage(e, action: 'reopen canvassing')),
         ),

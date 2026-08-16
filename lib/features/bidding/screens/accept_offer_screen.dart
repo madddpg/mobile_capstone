@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:iconstruct/core/firebase/firestore_error.dart';
 import 'package:iconstruct/features/project_creation/data/project_lifecycle.dart';
+import 'package:iconstruct/core/widgets/app_message.dart';
 
 class AcceptOfferScreen extends StatefulWidget {
   final String postId;
@@ -68,7 +69,7 @@ class _AcceptOfferScreenState extends State<AcceptOfferScreen> {
       if (projectDoc.exists &&
           projectDoc.data()?['selectedQuotationId'] != null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          showAppMessage(context, 
             const SnackBar(
               content: Text('You already accepted an offer for this project.'),
               backgroundColor: Colors.orange,
@@ -143,19 +144,21 @@ class _AcceptOfferScreenState extends State<AcceptOfferScreen> {
       await batch.commit();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(
+          context,
           const SnackBar(
             content: Text(
               'Offer accepted. You can now coordinate with the selected hardware shop.',
             ),
             backgroundColor: Colors.green,
           ),
+          kind: AppMessageKind.success,
         );
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(context, 
           SnackBar(
             content: Text(
               firestoreUserMessage(e, action: 'accept this offer'),

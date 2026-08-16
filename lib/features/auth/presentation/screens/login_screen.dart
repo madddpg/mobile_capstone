@@ -1,9 +1,11 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconstruct/features/auth/data/email_service.dart';
+import 'package:iconstruct/features/auth/data/auth_login_error.dart';
 import 'package:iconstruct/features/auth/presentation/screens/forgot_password_screen.dart';
 import 'package:iconstruct/features/auth/presentation/screens/main_home_screen.dart';
 import 'package:iconstruct/features/auth/presentation/widgets/otp_dialog.dart';
+import 'package:iconstruct/core/widgets/app_message.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -75,7 +77,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (uid == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(context, 
           const SnackBar(content: Text('Failed to retrieve Firebase UID.')),
         );
         return;
@@ -92,9 +94,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       // Credentials were right, so let them finish verification here instead of
       // bouncing them back with an error they cannot act on.
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
+      showAppMessage(context, SnackBar(content: Text(e.message)));
       await showDialog<void>(
         context: context,
         barrierDismissible: false,
@@ -102,10 +102,10 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString().replaceAll('EmailApiException: ', '')),
-        ),
+      final message = stripAuthExceptionPrefix(e);
+      setState(() => _passwordError = message);
+      showAppMessage(context, 
+        SnackBar(content: Text(message)),
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -341,8 +341,7 @@ class _LoginField extends StatelessWidget {
           fontSize: 13.5,
           fontWeight: FontWeight.w500,
         ),
-        errorText: errorText,
-        errorStyle: GoogleFonts.poppins(color: Colors.white, fontSize: 11),
+        error: warningFieldError(errorText),
         filled: true,
         fillColor: const Color(0xFFE9DECC),
         contentPadding: const EdgeInsets.symmetric(
@@ -361,6 +360,8 @@ class _LoginField extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFF8DB3E0), width: 1.5),
         ),
+        errorBorder: warningErrorBorder(),
+        focusedErrorBorder: warningErrorBorder(width: 1.5),
         suffixIcon: trailing,
       ),
     );

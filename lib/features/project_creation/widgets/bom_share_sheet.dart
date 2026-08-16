@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconstruct/core/firebase/firestore_error.dart';
 import 'package:iconstruct/features/project_creation/data/bom_export.dart';
 import 'package:iconstruct/features/project_creation/data/bom_export_service.dart';
+import 'package:iconstruct/core/widgets/app_message.dart';
 
 const Color _cream = Color(0xFFEDE4D4);
 const Color _navy = Color(0xFF1E3042);
@@ -14,7 +15,7 @@ Future<void> showBomShareSheet(
   BomExportData data,
 ) async {
   if (data.materials.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    showAppMessage(context, 
       const SnackBar(content: Text('Add materials before sharing your list.')),
     );
     return;
@@ -44,15 +45,15 @@ class _BomShareSheetState extends State<_BomShareSheet> {
     if (_busy) return;
     setState(() => _busy = true);
 
-    final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
 
     try {
       await action();
       if (mounted) navigator.pop();
     } catch (e) {
-      if (mounted) setState(() => _busy = false);
-      messenger.showSnackBar(
+      if (!mounted) return;
+      setState(() => _busy = false);
+      showAppMessage(context,
         SnackBar(content: Text(firestoreUserMessage(e, action: failureAction))),
       );
     }

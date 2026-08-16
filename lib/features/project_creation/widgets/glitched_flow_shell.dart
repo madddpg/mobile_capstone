@@ -114,16 +114,14 @@ class GlitchedPillButton extends StatelessWidget {
           foregroundColor: GlitchedFlowShell.navyCard,
           disabledBackgroundColor:
               GlitchedFlowShell.cream.withValues(alpha: 0.4),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(30),
-          ),
+          shape: const StadiumBorder(),
           elevation: 6,
           shadowColor: Colors.black.withAlpha(100),
         ),
         child: Text(
           label,
           style: GoogleFonts.poppins(
-            fontSize: 14,
+            fontSize: 16,
             fontWeight: FontWeight.w700,
           ),
         ),

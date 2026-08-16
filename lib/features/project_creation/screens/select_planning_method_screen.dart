@@ -31,47 +31,50 @@ class SelectPlanningMethodScreen extends StatelessWidget {
       subtitle: displayName,
       instruction:
           'Template = pre-defined materials.\nAI Planner = custom material list.',
-      body: ListView(
-        padding: const EdgeInsets.only(right: 4, bottom: 8),
+      body: Column(
         children: [
-          _MethodTile(
-            title: 'Plan with AI Planner',
-            subtitle:
-                'Chat with the AI consultant to generate a custom Bill of Materials.',
-            icon: Icons.auto_awesome,
-            accent: const Color(0xFFC4B5FD),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => AIConsultationScreen(
-                    projectName: projectName,
-                    customProjectName: customProjectName,
-                    projectNotes: projectNotes,
+          Expanded(
+            child: _MethodTile(
+              title: 'Plan with AI Planner',
+              subtitle:
+                  'Chat with the AI consultant to generate a custom Bill of Materials.',
+              icon: Icons.auto_awesome,
+              accent: const Color(0xFFC4B5FD),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AIConsultationScreen(
+                      projectName: projectName,
+                      customProjectName: customProjectName,
+                      projectNotes: projectNotes,
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
           const SizedBox(height: 14),
-          _MethodTile(
-            title: 'Use Renovation Template',
-            subtitle:
-                'Pick a style template with pre-defined materials, then edit quantities or remove items.',
-            icon: Icons.grid_view_rounded,
-            accent: const Color(0xFF6EE7B7),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => SelectTemplateScreen(
-                    projectName: projectName,
-                    customProjectName: customProjectName,
-                    projectNotes: projectNotes,
+          Expanded(
+            child: _MethodTile(
+              title: 'Use Renovation Template',
+              subtitle:
+                  'Pick a style template with pre-defined materials, then edit quantities or remove items.',
+              icon: Icons.grid_view_rounded,
+              accent: const Color(0xFF6EE7B7),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SelectTemplateScreen(
+                      projectName: projectName,
+                      customProjectName: customProjectName,
+                      projectNotes: projectNotes,
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -101,8 +104,8 @@ class _MethodTile extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(22),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+        child: Ink(
+          width: double.infinity,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(22),
             border: Border.all(
@@ -110,43 +113,50 @@ class _MethodTile extends StatelessWidget {
               width: 1.2,
             ),
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 16, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(icon, color: accent, size: 28),
                 ),
-                child: Icon(icon, color: accent, size: 26),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: GoogleFonts.poppins(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      subtitle,
-                      style: GoogleFonts.poppins(
-                        fontSize: 11,
-                        color: const Color(0xFFE0D7C9),
-                        height: 1.35,
-                      ),
-                    ),
-                  ],
+                const Spacer(flex: 2),
+                Text(
+                  title,
+                  style: GoogleFonts.poppins(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    height: 1.2,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 8),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: const Color(0xFFE0D7C9),
+                    height: 1.4,
+                  ),
+                ),
+                const Spacer(),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Icon(
+                    Icons.arrow_forward_rounded,
+                    color: const Color(0xFFEDE4D4).withValues(alpha: 0.85),
+                    size: 22,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

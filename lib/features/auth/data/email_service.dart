@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import '../../../core/services/fcm_service.dart';
+import 'auth_login_error.dart';
 
 class EmailSendOtpResult {
   final bool success;
@@ -293,10 +294,7 @@ class EmailService {
           );
         } else if (e.code == 'permission-denied') {
           throw const EmailApiException(
-            'Login blocked by Firestore permissions. '
-            'In Firebase Console → App Check, set Cloud Firestore to Monitor '
-            '(not Enforced) while developing, or install an App Check provider. '
-            'Also confirm firestore.rules allow users/{uid} for signed-in owners.',
+            'Could not load your profile. Sign in again, or try in a moment.',
           );
         } else {
           rethrow;
@@ -345,15 +343,9 @@ class EmailService {
 
       return credential;
     } on FirebaseAuthException catch (e) {
-      // Catch specific Firebase Auth exceptions to handle "user not found" properly
-      if (e.code == 'user-not-found' ||
-          e.code == 'invalid-credential' ||
-          e.code == 'invalid-email') {
-        throw EmailApiException(
-          'Invalid email or password. User not found or incorrect credentials.',
-        );
-      }
-      throw EmailApiException('Firebase Login failed: ${e.message}');
+      throw EmailApiException(
+        authLoginErrorMessage(e.code, fallback: e.message),
+      );
     } catch (e) {
       if (e is EmailApiException || e is EmailNotVerifiedException) rethrow;
       throw EmailApiException('Login failed. $e');

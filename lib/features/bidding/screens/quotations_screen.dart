@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'package:iconstruct/features/bidding/data/bid_comparison.dart';
 import 'package:iconstruct/features/bidding/screens/project_bids_screen.dart';
+import 'package:iconstruct/core/widgets/app_message.dart';
 
 class QuotationsScreen extends StatefulWidget {
   final String postId;
@@ -61,7 +62,7 @@ class _QuotationsScreenState extends State<QuotationsScreen> {
         return;
       }
       if (_shortlistedIds.length >= _maxShortlist) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(context, 
           const SnackBar(
             content: Text('Shortlist up to 3 shops to compare.'),
           ),

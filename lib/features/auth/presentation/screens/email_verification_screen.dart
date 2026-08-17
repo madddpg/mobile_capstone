@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconstruct/features/auth/data/email_service.dart';
 import 'package:iconstruct/features/auth/presentation/screens/login_screen.dart';
+import 'package:iconstruct/features/auth/data/otp_send_policy.dart';
+import 'package:iconstruct/features/auth/data/auth_login_error.dart';
 import 'package:iconstruct/core/theme/app_theme.dart';
 import 'package:iconstruct/core/widgets/app_message.dart';
 
@@ -30,7 +32,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
   bool _resendingEmail = false;
   String? _errorMessage;
 
-  int _resendCountdown = 30;
+  int _resendCountdown = otpResendCooldownSeconds;
   bool _canResend = false;
   Timer? _timer;
 
@@ -44,7 +46,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
 
   void _startCountdown() {
     setState(() {
-      _resendCountdown = 30;
+      _resendCountdown = otpResendCooldownSeconds;
       _canResend = false;
     });
 
@@ -70,7 +72,10 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
     super.dispose();
   }
 
-  String get _enteredOtp => _otpControllers.map((c) => c.text).join();
+  String get _enteredOtp => _otpControllers.map((c) {
+        final digits = c.text.replaceAll(RegExp(r'\D'), '');
+        return digits.isEmpty ? '' : digits[digits.length - 1];
+      }).join();
 
   void _onOtpChanged(int index, String value) {
     if (value.isNotEmpty && index < 5) {
@@ -103,7 +108,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
       if (!mounted) return;
       showAppMessage(context, 
         SnackBar(
-          content: Text(e.toString().replaceAll('EmailApiException: ', '')),
+          content: Text(stripAuthExceptionPrefix(e)),
         ),
       );
     } finally {
@@ -147,7 +152,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = e.toString().replaceAll('EmailApiException: ', '');
+        _errorMessage = stripAuthExceptionPrefix(e);
       });
     } finally {
       if (mounted) setState(() => _checkingVerification = false);

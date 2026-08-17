@@ -18,24 +18,7 @@ Future<void> main() async {
   // Required so bid pushes still deliver when the app is backgrounded/killed.
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-  // App Check: release uses Play Integrity / DeviceCheck. Debug uses the
-  // debug provider so you can register the printed token in Firebase Console
-  // and later switch Firestore App Check from Monitor → Enforced.
-  await FirebaseAppCheck.instance.activate(
-    androidProvider: kReleaseMode
-        ? AndroidProvider.playIntegrity
-        : AndroidProvider.debug,
-    appleProvider: kReleaseMode
-        ? AppleProvider.deviceCheck
-        : AppleProvider.debug,
-  );
-  if (!kReleaseMode) {
-    debugPrint(
-      'App Check debug provider active. Copy the debug token from logcat '
-      '(or Xcode) into Firebase Console → App Check → Manage debug tokens, '
-      'then you can safely set Firestore App Check to Enforced.',
-    );
-  }
+  await _activateAppCheck();
 
   runApp(
     MultiProvider(
@@ -43,6 +26,42 @@ Future<void> main() async {
       child: const MyApp(),
     ),
   );
+}
+
+/// Debug uses the App Check debug provider so the native SDKs have a provider
+/// installed (otherwise Functions logs "No AppCheckProvider installed" and
+/// verify can fail with INVALID_ARGUMENT). Release uses Play Integrity /
+/// DeviceCheck. Copy the debug token from logcat into Firebase Console →
+/// App Check → Manage debug tokens. OTP callables do not enforce App Check.
+Future<void> _activateAppCheck() async {
+  try {
+    await FirebaseAppCheck.instance.activate(
+      androidProvider: kReleaseMode
+          ? AndroidProvider.playIntegrity
+          : AndroidProvider.debug,
+      appleProvider: kReleaseMode
+          ? AppleProvider.deviceCheck
+          : AppleProvider.debug,
+    );
+    if (!kReleaseMode) {
+      try {
+        await FirebaseAppCheck.instance.getToken(true);
+        debugPrint('App Check debug token was accepted by Firebase.');
+      } catch (e) {
+        debugPrint(
+          'App Check attestation failed: $e\n'
+          'Next steps:\n'
+          '1) In Logcat search: DebugAppCheckProvider\n'
+          '2) Copy the UUID debug secret\n'
+          '3) Firebase Console → App Check → ⋮ → Manage debug tokens → Add\n'
+          '4) App Check → APIs → Cloud Functions → Monitor (not Enforce)\n'
+          '5) Wait a minute, then full-restart the app',
+        );
+      }
+    }
+  } catch (e) {
+    debugPrint('App Check could not start: $e');
+  }
 }
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();

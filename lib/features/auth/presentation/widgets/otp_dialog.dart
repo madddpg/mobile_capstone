@@ -3,14 +3,32 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconstruct/features/auth/data/email_service.dart';
 import 'package:iconstruct/features/auth/presentation/screens/login_screen.dart';
+import 'package:iconstruct/features/auth/data/otp_send_policy.dart';
+import 'package:iconstruct/features/auth/data/auth_login_error.dart';
 import 'package:iconstruct/core/theme/app_theme.dart';
 import 'package:iconstruct/core/widgets/app_message.dart';
 
 class OtpDialog extends StatefulWidget {
   final String email;
-  final String uid;
+  final String? uid;
+  final String? firstName;
+  final String? lastName;
+  final String? password;
 
-  const OtpDialog({super.key, required this.email, required this.uid});
+  const OtpDialog({
+    super.key,
+    required this.email,
+    this.uid,
+    this.firstName,
+    this.lastName,
+    this.password,
+  });
+
+  bool get isPendingSignup =>
+      password != null &&
+      password!.isNotEmpty &&
+      firstName != null &&
+      firstName!.isNotEmpty;
 
   @override
   State<OtpDialog> createState() => _OtpDialogState();
@@ -25,7 +43,7 @@ class _OtpDialogState extends State<OtpDialog> {
   bool _resendingEmail = false;
   String? _errorMessage;
 
-  int _resendCountdown = 30;
+  int _resendCountdown = otpResendCooldownSeconds;
   bool _canResend = false;
   Timer? _timer;
 
@@ -39,7 +57,7 @@ class _OtpDialogState extends State<OtpDialog> {
 
   void _startCountdown() {
     setState(() {
-      _resendCountdown = 30;
+      _resendCountdown = otpResendCooldownSeconds;
       _canResend = false;
     });
 
@@ -65,7 +83,10 @@ class _OtpDialogState extends State<OtpDialog> {
     super.dispose();
   }
 
-  String get _enteredOtp => _otpControllers.map((c) => c.text).join();
+  String get _enteredOtp => _otpControllers.map((c) {
+        final digits = c.text.replaceAll(RegExp(r'\D'), '');
+        return digits.isEmpty ? '' : digits[digits.length - 1];
+      }).join();
 
   void _onOtpChanged(int index, String value) {
     if (value.isNotEmpty && index < 5) {
@@ -96,10 +117,9 @@ class _OtpDialogState extends State<OtpDialog> {
       _startCountdown();
     } catch (e) {
       if (!mounted) return;
-      showAppMessage(context, 
-        SnackBar(
-          content: Text(e.toString().replaceAll('EmailApiException: ', '')),
-        ),
+      showAppMessage(
+        context,
+        SnackBar(content: Text(stripAuthExceptionPrefix(e))),
       );
     } finally {
       if (mounted) setState(() => _resendingEmail = false);
@@ -126,24 +146,42 @@ class _OtpDialogState extends State<OtpDialog> {
 
       if (!mounted) return;
 
-      if (result.success) {
-        debugPrint('Navigation to Login initiated');
-        showAppMessage(
-          context,
-          const SnackBar(
-            content: Text('Verification successful. Please login.'),
-          ),
-          kind: AppMessageKind.success,
+      if (!result.success) return;
+
+      if (widget.isPendingSignup) {
+        final token = result.verificationToken;
+        if (token == null || token.isEmpty) {
+          setState(() {
+            _errorMessage =
+                'Could not finish registration. Request a new code.';
+          });
+          return;
+        }
+        await _emailService.completeVerifiedRegistration(
+          email: widget.email,
+          password: widget.password!,
+          firstName: widget.firstName!,
+          lastName: widget.lastName ?? '',
+          verificationToken: token,
         );
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-          (Route<dynamic> route) => false,
-        );
+        if (!mounted) return;
       }
+
+      showAppMessage(
+        context,
+        const SnackBar(
+          content: Text('Verification successful. Please login.'),
+        ),
+        kind: AppMessageKind.success,
+      );
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (Route<dynamic> route) => false,
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = e.toString().replaceAll('EmailApiException: ', '');
+        _errorMessage = stripAuthExceptionPrefix(e);
       });
     } finally {
       if (mounted) setState(() => _checkingVerification = false);
@@ -263,12 +301,16 @@ class _OtpDialogState extends State<OtpDialog> {
                           ),
                         )
                       : Text(
-                          'Resend',
+                          _canResend
+                              ? 'Resend'
+                              : 'Resend in ${_resendCountdown}s',
                           style: GoogleFonts.inter(
                             color: const Color(0xFF24384C),
                             fontWeight: FontWeight.w800,
                             fontSize: 11,
-                            decoration: TextDecoration.underline,
+                            decoration: _canResend
+                                ? TextDecoration.underline
+                                : TextDecoration.none,
                           ),
                         ),
                 ),

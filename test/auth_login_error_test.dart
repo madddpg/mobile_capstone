@@ -34,6 +34,46 @@ void main() {
       );
     });
 
+    test('maps INVALID_ARGUMENT style callable failures to a warning line', () {
+      expect(
+        callableUserMessage(
+          'INVALID_ARGUMENT',
+          message: 'INVALID_ARGUMENT',
+          action: 'verify the code',
+        ),
+        'That code did not work. Check it, or request a new one.',
+      );
+      expect(
+        callableUserMessage(
+          'invalid-argument',
+          message: 'Incorrect OTP code.',
+          action: 'verify the code',
+        ),
+        'Incorrect OTP code.',
+      );
+      expect(
+        callableUserMessage(
+          'permission-denied',
+          message: 'PERMISSION_DENIED',
+          action: 'verify the code',
+        ),
+        'Could not verify the code right now. Try again in a moment.',
+      );
+    });
+
+    test('reads userMessage from callable HTTP error details', () {
+      final parsed = parseCallableHttpError({
+        'code': 400,
+        'status': 'INVALID_ARGUMENT',
+        'message': 'INVALID_ARGUMENT',
+        'details': [
+          {'userMessage': 'Incorrect OTP code.'},
+        ],
+      });
+      expect(parsed.code, 'INVALID_ARGUMENT');
+      expect(parsed.message, 'Incorrect OTP code.');
+    });
+
     test('strips EmailApiException prefixes from SnackBar copy', () {
       expect(
         stripAuthExceptionPrefix(

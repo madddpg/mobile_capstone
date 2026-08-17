@@ -1,24 +1,26 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:iconstruct/features/auth/data/auth_login_error.dart';
 import 'package:iconstruct/features/project_creation/data/project_lifecycle.dart';
 
 void main() {
   group('authLoginErrorMessage', () {
-    test('maps wrong password and sibling credential codes to one clear line', () {
-      expect(
-        authLoginErrorMessage('wrong-password'),
-        'Incorrect email or password.',
-      );
-      expect(
-        authLoginErrorMessage('invalid-credential'),
-        'Incorrect email or password.',
-      );
-      expect(
-        authLoginErrorMessage('user-not-found'),
-        'Incorrect email or password.',
-      );
-    });
+    test(
+      'maps wrong password and sibling credential codes to one clear line',
+      () {
+        expect(
+          authLoginErrorMessage('wrong-password'),
+          'Incorrect email or password.',
+        );
+        expect(
+          authLoginErrorMessage('invalid-credential'),
+          'Incorrect email or password.',
+        );
+        expect(
+          authLoginErrorMessage('user-not-found'),
+          'Incorrect email or password.',
+        );
+      },
+    );
 
     test('maps lockout, disabled, and offline codes', () {
       expect(

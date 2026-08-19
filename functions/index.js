@@ -607,10 +607,14 @@ exports.onQuotationSubmitted = onDocumentCreated("projectPosts/{postId}/quotatio
     logger.error("Error syncing quotation state:", error);
   }
 
-  // Prefer the post owner — shop payloads sometimes put the shop uid in userId.
-  const userId = (post && post.userId) || quotation.userId;
+  // Only notify the real post owner. Never fall back to quotation.userId —
+  // that field is shop-controlled and could target any builder if a bid is
+  // written under a missing/forged parent post id.
+  const userId = post && post.userId;
   if (!userId) {
-    logger.warn(`No builder userId for quotation on post ${postId}`);
+    logger.warn(
+      `No builder userId for quotation on post ${postId}; skipping notify`
+    );
     return null;
   }
 

@@ -71,8 +71,15 @@ service cloud.firestore {
       allow update: if isSignedIn()
         && resource.data.userId == request.auth.uid
         && request.resource.data.userId == resource.data.userId;
+
+      // Once a supplier is selected, the post anchors acceptance contact
+      // details (postOwner() on acceptance/*). Deleting it would make those
+      // docs permanently unreadable for builder and shop.
       allow delete: if isSignedIn()
-        && resource.data.userId == request.auth.uid;
+        && resource.data.userId == request.auth.uid
+        && !('selectedQuotationId' in resource.data
+             && resource.data.selectedQuotationId != null)
+        && !(resource.data.status in ['offer_accepted', 'awarded']);
 
       match /quotations/{shopId} {
         allow get, list: if isSignedIn()

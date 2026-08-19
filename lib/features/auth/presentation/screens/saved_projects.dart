@@ -566,13 +566,18 @@ class ProjectCard extends StatelessWidget {
 
     final materialCount = project.materials.length;
     final isPosted = project.postId != null;
+    final supplierSelected =
+        ProjectLifecycle.stageIndex(project.status) >=
+        ProjectLifecycle.stageSupplierSelected;
     final lossLines = <String>[
       if (materialCount > 0)
         '$materialCount material${materialCount == 1 ? '' : 's'} in this estimate'
       else
         'This empty estimate draft',
-      if (isPosted)
-        'Your saved copy only — the open bidding post stays live until you withdraw it'
+      if (isPosted && !supplierSelected)
+        'The open supplier canvassing post will be withdrawn so shops stop bidding'
+      else if (isPosted && supplierSelected)
+        'Supplier selection and shop contact details stay on file — delete is blocked after accept'
       else
         'This estimate cannot be recovered after delete',
     ];
@@ -586,7 +591,9 @@ class ProjectCard extends StatelessWidget {
           ),
           backgroundColor: const Color(0xFFEDE4D4),
           title: Text(
-            'Delete "${project.projectName}"?',
+            supplierSelected
+                ? 'Cannot delete "${project.projectName}"'
+                : 'Delete "${project.projectName}"?',
             style: const TextStyle(
               color: Color(0xFF2A3E4E),
               fontWeight: FontWeight.bold,
@@ -596,89 +603,124 @@ class ProjectCard extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'You will lose:',
-                style: TextStyle(
+              Text(
+                supplierSelected
+                    ? 'This estimate already has a selected supplier. Keep it so you can still open the award and contact details.'
+                    : 'You will lose:',
+                style: const TextStyle(
                   color: Color(0xFF2A3E4E),
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 8),
-              ...lossLines.map(
-                (line) => Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('•  ', style: TextStyle(color: Color(0xFF5A6E7E))),
-                      Expanded(
-                        child: Text(
-                          line,
-                          style: const TextStyle(color: Color(0xFF5A6E7E)),
+              if (!supplierSelected) ...[
+                const SizedBox(height: 8),
+                ...lossLines.map(
+                  (line) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('•  ', style: TextStyle(color: Color(0xFF5A6E7E))),
+                        Expanded(
+                          child: Text(
+                            line,
+                            style: const TextStyle(color: Color(0xFF5A6E7E)),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'Keep estimate',
-                style: TextStyle(color: Color(0xFF5A6E7E)),
+              child: Text(
+                supplierSelected ? 'OK' : 'Keep estimate',
+                style: const TextStyle(color: Color(0xFF5A6E7E)),
               ),
             ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red.shade400,
-              ),
-              onPressed: () async {
-                Navigator.pop(context);
-                try {
-                  await FirebaseFirestore.instance
-                      .collection('users')
-                      .doc(uid)
-                      .collection('saved_projects')
-                      .doc(project.id)
-                      .delete();
+            if (!supplierSelected)
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red.shade400,
+                ),
+                onPressed: () async {
+                  Navigator.pop(context);
+                  try {
+                    final firestore = FirebaseFirestore.instance;
+                    final postId = project.postId;
 
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Estimate deleted.'),
-                      ),
-                    );
-
-                    if (isActive) {
-                      ActiveProjectState.instance.setActiveProject(null);
+                    // Withdraw the live RFQ first so shops cannot keep bidding
+                    // on an estimate the builder just discarded. Awarded posts
+                    // are blocked above and by security rules.
+                    if (postId != null && postId.isNotEmpty) {
+                      final postRef =
+                          firestore.collection('projectPosts').doc(postId);
+                      final postSnap = await postRef.get();
+                      if (postSnap.exists) {
+                        final post = postSnap.data() ?? {};
+                        final awarded = post['selectedQuotationId'] != null ||
+                            ProjectLifecycle.stageFromPost(post) >=
+                                ProjectLifecycle.stageSupplierSelected;
+                        if (awarded) {
+                          throw StateError(
+                            'A supplier was already selected for this estimate.',
+                          );
+                        }
+                        await postRef.delete();
+                      }
                     }
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          firestoreUserMessage(
-                            e,
-                            action: 'delete this estimate',
+
+                    await firestore
+                        .collection('users')
+                        .doc(uid)
+                        .collection('saved_projects')
+                        .doc(project.id)
+                        .delete();
+
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            isPosted
+                                ? 'Estimate deleted and canvassing post withdrawn.'
+                                : 'Estimate deleted.',
                           ),
                         ),
-                      ),
-                    );
+                      );
+
+                      if (isActive) {
+                        ActiveProjectState.instance.setActiveProject(null);
+                      }
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            e is StateError
+                                ? e.message
+                                : firestoreUserMessage(
+                                    e,
+                                    action: 'delete this estimate',
+                                  ),
+                          ),
+                        ),
+                      );
+                    }
                   }
-                }
-              },
-              child: const Text(
-                'Delete permanently',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
+                },
+                child: const Text(
+                  'Delete permanently',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-            ),
           ],
         );
       },

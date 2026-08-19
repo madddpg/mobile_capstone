@@ -156,3 +156,28 @@ test('unrelated builder cannot read another builder post', async () => {
   const stranger = authed('builder-2');
   await assertFails(stranger.doc('projectPosts/post-1').get());
 });
+
+test('builder can delete an open post but not an awarded one', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await db.doc('projectPosts/open-1').set({
+      userId: 'builder-1',
+      projectName: 'Bath',
+      materials: [],
+      status: 'open',
+      quotationCount: 0,
+    });
+    await db.doc('projectPosts/awarded-1').set({
+      userId: 'builder-1',
+      projectName: 'Kitchen',
+      materials: [],
+      status: 'offer_accepted',
+      quotationCount: 1,
+      selectedQuotationId: 'shop-a',
+    });
+  });
+
+  const builder = authed('builder-1');
+  await assertSucceeds(builder.doc('projectPosts/open-1').delete());
+  await assertFails(builder.doc('projectPosts/awarded-1').delete());
+});

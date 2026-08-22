@@ -2,6 +2,31 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+/// Milliseconds since epoch for a notification `createdAt` field.
+///
+/// Accepts Firestore [Timestamp], [DateTime], or int so list sorting works
+/// without a composite `recipientId`+`createdAt` index deploy.
+int notificationCreatedAtMs(dynamic value) {
+  if (value is Timestamp) return value.millisecondsSinceEpoch;
+  if (value is DateTime) return value.millisecondsSinceEpoch;
+  if (value is int) return value;
+  return 0;
+}
+
+/// Newest-first sort for in-app notification rows (client-side).
+List<T> sortNotificationsNewestFirst<T>(
+  List<T> items,
+  dynamic Function(T item) createdAtOf,
+) {
+  final sorted = List<T>.from(items);
+  sorted.sort((a, b) {
+    return notificationCreatedAtMs(createdAtOf(b)).compareTo(
+      notificationCreatedAtMs(createdAtOf(a)),
+    );
+  });
+  return sorted;
+}
+
 /// Live unread in-app notification count for the signed-in builder.
 Stream<int> unreadNotificationCountStream() {
   final uid = FirebaseAuth.instance.currentUser?.uid;

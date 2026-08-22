@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconstruct/core/firebase/firestore_error.dart';
+import 'package:iconstruct/core/services/unread_notifications.dart';
 import 'package:iconstruct/features/bidding/screens/posted_project_details_screen.dart';
 import 'package:iconstruct/features/bidding/screens/quotations_screen.dart';
 
@@ -92,11 +93,13 @@ class NotificationsScreen extends StatelessWidget {
   }
 
   Widget _buildNotificationsList(String uid) {
+    // Equality-only query (no orderBy) — same strategy as the unread badge —
+    // so the list works without a composite recipientId+createdAt index.
+    // Newest-first order is applied client-side below.
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('notifications')
           .where('recipientId', isEqualTo: uid)
-          .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -121,7 +124,10 @@ class NotificationsScreen extends StatelessWidget {
           );
         }
 
-        final docs = snapshot.data?.docs ?? [];
+        final docs = sortNotificationsNewestFirst(
+          snapshot.data?.docs ?? const [],
+          (doc) => (doc.data() as Map<String, dynamic>?)?['createdAt'],
+        );
 
         if (docs.isEmpty) {
           return _buildEmptyState();

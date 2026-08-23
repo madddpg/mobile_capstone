@@ -1,9 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:iconstruct/core/firebase/firestore_error.dart';
 import 'package:iconstruct/core/validation/password_policy.dart';
+import 'package:iconstruct/features/auth/data/email_service.dart';
 import 'package:iconstruct/features/auth/presentation/screens/login_screen.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
@@ -89,6 +91,14 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       await FirebaseFirestore.instance.collection('users').doc(user.uid).update(
         {'passwordUpdatedAt': FieldValue.serverTimestamp()},
       );
+
+      // Auth updatePassword does not revoke other devices — ask the backend
+      // to drop refresh tokens + FCM bindings before we sign out locally.
+      try {
+        await EmailService().revokeMySessions();
+      } catch (e) {
+        debugPrint('revokeMySessions after password change failed: $e');
+      }
 
       if (!mounted) return;
 

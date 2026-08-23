@@ -392,6 +392,30 @@ class EmailService {
     }
   }
 
+  /// Revokes Auth refresh tokens + clears FCM bindings for the signed-in user.
+  ///
+  /// Call after a client-side password change; Firebase does not sign other
+  /// devices out on `updatePassword` alone.
+  Future<void> revokeMySessions() async {
+    if (_auth.currentUser == null) {
+      throw const EmailApiException('No signed-in user found.');
+    }
+    try {
+      final httpsCallable = FirebaseFunctions.instance.httpsCallable(
+        'revokeMySessions',
+      );
+      await httpsCallable.call(<String, dynamic>{});
+    } on FirebaseFunctionsException catch (e) {
+      throw EmailApiException(
+        'Failed to sign out other devices: ${e.message}',
+        statusCode: e.code.hashCode,
+      );
+    } catch (e) {
+      if (e is EmailApiException) rethrow;
+      throw EmailApiException('Failed to sign out other devices. $e');
+    }
+  }
+
   Future<void> logout() => _auth.signOut();
 
   Future<void> reloadCurrentUser() async {

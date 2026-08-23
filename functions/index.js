@@ -26,6 +26,8 @@ const {
   runMaterialConsult,
 } = require("./src/services/iconstructAi");
 
+const { revokeUserSessions } = require("./src/revokeUserSessions");
+
 const { app: apiApp } = require("./api");
 
 // Deploy as an Express-wrapped Cloud Function
@@ -359,6 +361,15 @@ exports.resetPasswordWithToken = onCall(async (request) => {
   try {
     const userRecord = await auth.getUserByEmail(email);
     await auth.updateUser(userRecord.uid, { password: newPassword });
+    // Drop every existing Auth session + FCM binding so a compromised device
+    // cannot keep using the account after recovery.
+    await revokeUserSessions({
+      auth,
+      db,
+      uid: userRecord.uid,
+      FieldValue: admin.firestore.FieldValue,
+      Timestamp,
+    });
     await docRef.delete();
 
     try {
@@ -384,6 +395,36 @@ exports.resetPasswordWithToken = onCall(async (request) => {
     throw new HttpsError(
       "internal",
       "Failed to reset password. Please try again."
+    );
+  }
+});
+
+/**
+ * Client password-change path: Auth `updatePassword` does not revoke other
+ * devices. Call this immediately after a successful credential change so
+ * tablets/phones left signed in must sign in again with the new password.
+ */
+exports.revokeMySessions = onCall(async (request) => {
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "You must be signed in.");
+  }
+
+  const uid = request.auth.uid;
+  try {
+    await revokeUserSessions({
+      auth,
+      db,
+      uid,
+      FieldValue: admin.firestore.FieldValue,
+      Timestamp,
+    });
+    logger.info("Sessions revoked after credential change", { uid });
+    return { success: true, message: "Signed out of other devices." };
+  } catch (error) {
+    logger.error("Failed to revoke sessions", { uid, error });
+    throw new HttpsError(
+      "internal",
+      "Could not sign out other devices. Please try again."
     );
   }
 });

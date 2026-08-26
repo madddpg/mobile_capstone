@@ -4,6 +4,7 @@ enum HomeGuideTarget {
   startEstimate,
   postBidding,
   canvassTracking,
+  shopChat,
 }
 
 class HomeGuideStep {
@@ -40,9 +41,9 @@ List<HomeGuideStep> homeGuideSteps({String? firstName}) {
     ),
     const HomeGuideStep(
       target: HomeGuideTarget.startEstimate,
-      title: 'Start here',
+      title: 'Start an estimate',
       body:
-          'Name an estimate, then plan materials with AI or a template. Quantities scale to your floor area.',
+          'Name your estimate, then select your renovation scope (Full Reno or Extension). Material quantities scale automatically per DPWH standards.',
       nextLabel: 'Next',
     ),
     const HomeGuideStep(
@@ -57,6 +58,40 @@ List<HomeGuideStep> homeGuideSteps({String? firstName}) {
       title: 'Compare and choose',
       body:
           'Watch offers come in, compare them side by side, and pick a supplier.',
+      nextLabel: 'Next',
+    ),
+    const HomeGuideStep(
+      target: HomeGuideTarget.shopChat,
+      title: 'Then message the shop',
+      body:
+          'Selecting a quotation unlocks live chat. Use it to confirm materials, availability, and pickup. iConstruct does not collect phone numbers or process payment.',
+      nextLabel: 'Got it',
+    ),
+  ];
+}
+
+/// First-time overlay on shop chat (after a quotation is accepted).
+List<HomeGuideStep> chatGuideSteps() {
+  return const [
+    HomeGuideStep(
+      target: HomeGuideTarget.shopChat,
+      title: 'This is shop chat',
+      body:
+          'You and the hardware shop can message here after you select their quotation. Coordinate materials, quantities, and pickup — nothing is paid in the app.',
+      nextLabel: 'Next',
+    ),
+    HomeGuideStep(
+      target: HomeGuideTarget.shopChat,
+      title: 'What to send',
+      body:
+          'Ask about quoted items, substitutes, and when you can pick up. Do not share passwords or arrange payment inside iConstruct.',
+      nextLabel: 'Next',
+    ),
+    HomeGuideStep(
+      target: HomeGuideTarget.shopChat,
+      title: 'Find it later',
+      body:
+          'Open Shop messages from Profile, or Message shop on a posted estimate after a supplier is selected.',
       nextLabel: 'Got it',
     ),
   ];

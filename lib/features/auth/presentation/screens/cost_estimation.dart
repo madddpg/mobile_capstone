@@ -385,12 +385,64 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
                             title: selected.materialName,
                             subtitle: [
                               item.category,
-                              if ((selected.size ?? '').trim().isNotEmpty)
-                                selected.size!.trim(),
+                              if ((selected.size ?? item.size ?? '').trim().isNotEmpty)
+                                (selected.size ?? item.size!).trim(),
                               selected.unit,
                             ].where((s) => s.isNotEmpty).join(' • '),
                             unit: selected.unit,
                             qtyController: selected.qtyController,
+                            availableSizes: item.availableSizes,
+                            selectedSize: selected.size ?? item.size,
+                            formulaString: BomQuantityEstimator.getFormulaString(
+                              item: item,
+                              areaSqm: widget.projectAreaSqm ?? 1.0,
+                              currentQty: selected.quantity,
+                            ),
+                            onSizeChanged: item.availableSizes.isEmpty
+                                ? null
+                                : (newSize) {
+                                    if (newSize == null || newSize.isEmpty) return;
+                                    final area = widget.projectAreaSqm ?? 1.0;
+                                    final result = BomQuantityEstimator.recalculateForSize(
+                                      item: item,
+                                      newSize: newSize,
+                                      areaSqm: area,
+                                    );
+                                    setState(() {
+                                      selected.size = newSize;
+                                      selected.quantity = result.newQty;
+                                      selected.qtyController.text =
+                                          result.newQty.toInt() == result.newQty
+                                              ? result.newQty.toInt().toString()
+                                              : result.newQty.toStringAsFixed(1);
+                                      _templateItems[index] = item.copyWith(
+                                        size: newSize,
+                                        defaultQuantity: result.newQty,
+                                      );
+
+                                      // Also check and update linked items (e.g. tile grout)
+                                      for (var i = 0; i < _templateItems.length; i++) {
+                                        final linkedItem = _templateItems[i];
+                                        final linkedSel = _selectedProducts[i];
+                                        if (linkedItem.name.toLowerCase().contains('grout') ||
+                                            linkedItem.name.toLowerCase().contains('adhesive')) {
+                                          final linkedRes = BomQuantityEstimator.recalculateForSize(
+                                            item: linkedItem,
+                                            newSize: newSize,
+                                            areaSqm: area,
+                                          );
+                                          linkedSel.quantity = linkedRes.newQty;
+                                          linkedSel.qtyController.text =
+                                              linkedRes.newQty.toInt() == linkedRes.newQty
+                                                  ? linkedRes.newQty.toInt().toString()
+                                                  : linkedRes.newQty.toStringAsFixed(1);
+                                          _templateItems[i] = linkedItem.copyWith(
+                                            defaultQuantity: linkedRes.newQty,
+                                          );
+                                        }
+                                      }
+                                    });
+                                  },
                             onChanged: (val) {
                               selected.quantity =
                                   double.tryParse(val) ?? 0.0;
@@ -424,28 +476,30 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
         const SizedBox(height: 12),
         Align(
           alignment: Alignment.centerRight,
-          child: SizedBox(
-            width: 150,
-            height: 40,
-            child: ElevatedButton(
-              onPressed: _selectedProducts.isEmpty ? null : _goToEstimator,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFEDE4D4),
-                foregroundColor: const Color(0xFF1E3042),
-                disabledBackgroundColor:
-                    const Color(0xFFEDE4D4).withValues(alpha: 0.4),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                elevation: 6,
-                shadowColor: Colors.black.withAlpha(100),
+          child: ElevatedButton(
+            onPressed: _selectedProducts.isEmpty ? null : _goToEstimator,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEDE4D4),
+              foregroundColor: const Color(0xFF1E3042),
+              disabledBackgroundColor:
+                  const Color(0xFFEDE4D4).withValues(alpha: 0.4),
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+              minimumSize: const Size(0, 40),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(30),
               ),
-              child: Text(
-                'Estimate Now',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
+              elevation: 6,
+              shadowColor: Colors.black.withAlpha(100),
+            ),
+            child: Text(
+              'Estimate Now',
+              maxLines: 1,
+              softWrap: false,
+              style: GoogleFonts.poppins(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                height: 1.1,
               ),
             ),
           ),
@@ -600,26 +654,28 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
 
         Align(
           alignment: Alignment.centerRight,
-          child: SizedBox(
-            width: 150,
-            height: 40,
-            child: ElevatedButton(
-              onPressed: _goToEstimator,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFEDE4D4),
-                foregroundColor: const Color(0xFF1E3042),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                elevation: 6,
-                shadowColor: Colors.black.withAlpha(100),
+          child: ElevatedButton(
+            onPressed: _goToEstimator,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEDE4D4),
+              foregroundColor: const Color(0xFF1E3042),
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+              minimumSize: const Size(0, 40),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(30),
               ),
-              child: Text(
-                'Estimate Now',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
+              elevation: 6,
+              shadowColor: Colors.black.withAlpha(100),
+            ),
+            child: Text(
+              'Estimate Now',
+              maxLines: 1,
+              softWrap: false,
+              style: GoogleFonts.poppins(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                height: 1.1,
               ),
             ),
           ),
@@ -1316,13 +1372,17 @@ class _AltChip extends StatelessWidget {
   }
 }
 
-class _AddedMaterialItem extends StatelessWidget {
+class _AddedMaterialItem extends StatefulWidget {
   final String title;
   final String subtitle;
   final TextEditingController qtyController;
   final String unit;
   final ValueChanged<String> onChanged;
   final VoidCallback onRemove;
+  final List<String> availableSizes;
+  final String? selectedSize;
+  final ValueChanged<String?>? onSizeChanged;
+  final String? formulaString;
 
   const _AddedMaterialItem({
     required this.title,
@@ -1331,126 +1391,244 @@ class _AddedMaterialItem extends StatelessWidget {
     required this.unit,
     required this.onChanged,
     required this.onRemove,
+    this.availableSizes = const [],
+    this.selectedSize,
+    this.onSizeChanged,
+    this.formulaString,
   });
+
+  @override
+  State<_AddedMaterialItem> createState() => _AddedMaterialItemState();
+}
+
+class _AddedMaterialItemState extends State<_AddedMaterialItem> {
+  bool _showFormula = false;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: const Color(0xFF1E3042),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(16),
-          bottomLeft: Radius.circular(16),
-        ),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: const Color(0xFFEDE4D4).withAlpha(80),
           width: 1,
         ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                    height: 1.25,
-                  ),
-                ),
-                if (subtitle.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.poppins(
-                      fontSize: 11,
-                      color: const Color(0xFFE0D7C9),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-
-          const SizedBox(width: 10),
-
-          // Loose fit so the field gives way on narrow panels instead of
-          // overflowing the row.
-          Flexible(
-            child: Container(
-              width: 132,
-              height: 38,
-              decoration: BoxDecoration(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: const Color(0xFFEDE4D4).withAlpha(120),
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                    controller: qtyController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      onChanged: onChanged,
-                      textAlign: TextAlign.center,
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.poppins(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
+                        height: 1.25,
                       ),
-                      decoration: InputDecoration(
-                        hintText: 'Qty',
-                        hintStyle: GoogleFonts.poppins(
-                          color: Colors.white38,
-                          fontSize: 10,
+                    ),
+                    if (widget.subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        widget.subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: const Color(0xFFE0D7C9),
                         ),
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
-                        border: InputBorder.none,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              const SizedBox(width: 8),
+
+              Flexible(
+                child: Container(
+                  width: 120,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: const Color(0xFFEDE4D4).withAlpha(120),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: widget.qtyController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          onChanged: widget.onChanged,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                          decoration: const InputDecoration(
+                            hintText: 'Qty',
+                            hintStyle: TextStyle(
+                              color: Colors.white38,
+                              fontSize: 10,
+                            ),
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                            border: InputBorder.none,
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Text(
+                          widget.unit,
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: const Color(0xFFEDE4D4).withAlpha(180),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              IconButton(
+                onPressed: widget.onRemove,
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.only(left: 4),
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                icon: const Icon(
+                  Icons.close_rounded,
+                  color: Color(0xFFEDE4D4),
+                  size: 18,
+                ),
+              ),
+            ],
+          ),
+
+          if (widget.availableSizes.isNotEmpty && widget.onSizeChanged != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text(
+                  'Size / Spec:',
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF8FB2D4),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Container(
+                    height: 32,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2C3E50),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: const Color(0xFFEDE4D4).withAlpha(60),
+                      ),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: widget.availableSizes.contains(widget.selectedSize)
+                            ? widget.selectedSize
+                            : widget.availableSizes.first,
+                        isExpanded: true,
+                        dropdownColor: const Color(0xFF1E3042),
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFFEDE4D4),
+                        ),
+                        icon: const Icon(
+                          Icons.arrow_drop_down,
+                          color: Color(0xFFEDE4D4),
+                          size: 18,
+                        ),
+                        items: widget.availableSizes.map((size) {
+                          return DropdownMenuItem<String>(
+                            value: size,
+                            child: Text(
+                              size,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: widget.onSizeChanged,
                       ),
                     ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: Text(
-                      unit,
-                      style: GoogleFonts.poppins(
-                        fontSize: 11,
-                        color: const Color(0xFFEDE4D4).withAlpha(180),
-                      ),
+                ),
+              ],
+            ),
+          ],
+
+          if (widget.formulaString != null && widget.formulaString!.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            InkWell(
+              onTap: () => setState(() => _showFormula = !_showFormula),
+              child: Row(
+                children: [
+                  Icon(
+                    _showFormula ? Icons.info : Icons.info_outline,
+                    size: 13,
+                    color: const Color(0xFF8FB2D4),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    _showFormula ? 'Hide Formula' : 'View Formula',
+                    style: GoogleFonts.poppins(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF8FB2D4),
+                      decoration: TextDecoration.underline,
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-
-          IconButton(
-            onPressed: onRemove,
-            visualDensity: VisualDensity.compact,
-            padding: const EdgeInsets.only(left: 4),
-            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-            icon: const Icon(
-              Icons.close_rounded,
-              color: Color(0xFFEDE4D4),
-              size: 18,
-            ),
-          ),
+            if (_showFormula) ...[
+              const SizedBox(height: 6),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2C3E50),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: const Color(0xFF8FB2D4).withAlpha(40),
+                  ),
+                ),
+                child: Text(
+                  widget.formulaString!,
+                  style: GoogleFonts.poppins(
+                    fontSize: 10,
+                    color: const Color(0xFFE0D7C9),
+                    height: 1.35,
+                  ),
+                ),
+              ),
+            ],
+          ],
         ],
       ),
     );
@@ -1571,7 +1749,7 @@ class AddedPlumbingSelection {
   final String categoryTitle;
   final String kind;
   final String materialName;
-  final String? size;
+  String? size;
   final String? length;
   final String? coverSize;
   final String unit;

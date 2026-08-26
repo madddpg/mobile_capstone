@@ -24,6 +24,7 @@ class QuotationsScreen extends StatefulWidget {
 class _QuotationsScreenState extends State<QuotationsScreen> {
   static const int _maxShortlist = 3;
   final Set<String> _shortlistedIds = {};
+  bool _canvassByMaterial = false;
 
   Future<void> _openFullDetails(BuildContext context) async {
     var name = widget.projectName ?? '';
@@ -53,7 +54,7 @@ class _QuotationsScreenState extends State<QuotationsScreen> {
     );
   }
 
-  String _money(double amount) => '₱${amount.toStringAsFixed(0)}';
+  String _money(double amount) => formatBidMoney(amount);
 
   void _toggleShortlist(String quoteId) {
     setState(() {
@@ -210,6 +211,8 @@ class _QuotationsScreenState extends State<QuotationsScreen> {
                                 ),
                               ),
                               const SizedBox(height: 10),
+                              _QuoteLineItems(quote: quote),
+                              const SizedBox(height: 10),
                               Align(
                                 alignment: Alignment.centerRight,
                                 child: TextButton(
@@ -256,14 +259,24 @@ class _QuotationsScreenState extends State<QuotationsScreen> {
           ),
         ),
       ),
-      body: StreamBuilder<QuerySnapshot>(
+      body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
             .collection('projectPosts')
             .doc(widget.postId)
-            .collection('quotations')
-            .orderBy('estimatedTotal', descending: false)
             .snapshots(),
-        builder: (context, snapshot) {
+        builder: (context, postSnap) {
+          final postData =
+              postSnap.data?.data() as Map<String, dynamic>? ?? {};
+          final bom = parseQuotedLines(postData);
+
+          return StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('projectPosts')
+                .doc(widget.postId)
+                .collection('quotations')
+                .orderBy('estimatedTotal', descending: false)
+                .snapshots(),
+            builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(
               child: CircularProgressIndicator(
@@ -320,7 +333,12 @@ class _QuotationsScreenState extends State<QuotationsScreen> {
               )
               .toList();
           final comparison = BidComparison.fromQuotes(quotes);
-          final summary = comparison.summaryLines();
+          final advice = canvassAdvice(bom, quotes);
+          final summary = [
+            if (advice.headline.isNotEmpty) advice.headline,
+            if (advice.detail.isNotEmpty) advice.detail,
+            ...comparison.summaryLines().skip(quotes.length > 1 ? 1 : 0),
+          ];
           final canCompare = _shortlistedIds.length >= 2;
 
           return Column(
@@ -328,7 +346,9 @@ class _QuotationsScreenState extends State<QuotationsScreen> {
               Expanded(
                 child: ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  itemCount: docs.length + 1,
+                  itemCount: _canvassByMaterial
+                      ? 1 + (bom.isEmpty ? 1 : bom.length)
+                      : quotes.length + 1,
                   separatorBuilder: (context, index) =>
                       const SizedBox(height: 14),
                   itemBuilder: (context, index) {
@@ -340,7 +360,7 @@ class _QuotationsScreenState extends State<QuotationsScreen> {
                             lines: summary,
                             quoteCount: quotes.length,
                           ),
-                          if (quotes.length > 1) ...[
+                          if (quotes.length > 1 && !_canvassByMaterial) ...[
                             const SizedBox(height: 10),
                             Text(
                               'Pin up to 3 shops, then compare side by side.',
@@ -350,7 +370,42 @@ class _QuotationsScreenState extends State<QuotationsScreen> {
                               ),
                             ),
                           ],
+                          if (bom.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            _CanvassModeToggle(
+                              byMaterial: _canvassByMaterial,
+                              onChanged: (value) {
+                                setState(() => _canvassByMaterial = value);
+                              },
+                            ),
+                            if (_canvassByMaterial) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                'Compare each shop’s offered price for the same item.',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                            ],
+                          ],
                         ],
+                      );
+                    }
+
+                    if (_canvassByMaterial) {
+                      if (bom.isEmpty) {
+                        return Text(
+                          'This estimate has no material list to canvass yet.',
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            color: Colors.black54,
+                          ),
+                        );
+                      }
+                      return _MaterialCanvassCard(
+                        item: bom[index - 1],
+                        quotes: quotes,
                       );
                     }
 
@@ -502,6 +557,8 @@ class _QuotationsScreenState extends State<QuotationsScreen> {
                               '${quote.materialsCovered == 1 ? '' : 's'} listed',
                             ),
                           ],
+                          const SizedBox(height: 12),
+                          _QuoteLineItems(quote: quote),
                           const SizedBox(height: 14),
                           SizedBox(
                             width: double.infinity,
@@ -565,6 +622,8 @@ class _QuotationsScreenState extends State<QuotationsScreen> {
                 ),
             ],
           );
+            },
+          );
         },
       ),
     );
@@ -588,6 +647,318 @@ class _QuotationsScreenState extends State<QuotationsScreen> {
         ),
       ],
     );
+  }
+}
+
+class _CanvassModeToggle extends StatelessWidget {
+  final bool byMaterial;
+  final ValueChanged<bool> onChanged;
+
+  const _CanvassModeToggle({
+    required this.byMaterial,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _modeChip(
+            label: 'By shop',
+            selected: !byMaterial,
+            onTap: () => onChanged(false),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _modeChip(
+            label: 'By material',
+            selected: byMaterial,
+            onTap: () => onChanged(true),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _modeChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: selected ? QuotationsScreen.navyColor : Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Center(
+            child: Text(
+              label,
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: selected
+                    ? const Color(0xFFEDE4D4)
+                    : QuotationsScreen.navyColor,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QuoteLineItems extends StatelessWidget {
+  final BidQuote quote;
+
+  const _QuoteLineItems({required this.quote});
+
+  @override
+  Widget build(BuildContext context) {
+    if (quote.lines.isEmpty) {
+      return Text(
+        'This shop sent a lump total only — item prices were not listed.',
+        style: GoogleFonts.poppins(
+          fontSize: 12,
+          color: Colors.black54,
+          height: 1.35,
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Item prices',
+          style: GoogleFonts.poppins(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w700,
+            color: QuotationsScreen.navyColor,
+          ),
+        ),
+        const SizedBox(height: 8),
+        for (final line in quote.lines)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        line.name,
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: QuotationsScreen.navyColor,
+                        ),
+                      ),
+                      if (line.quantityLabel.isNotEmpty ||
+                          line.size.trim().isNotEmpty)
+                        Text(
+                          [
+                            if (line.quantityLabel.isNotEmpty) line.quantityLabel,
+                            if (line.size.trim().isNotEmpty)
+                              'Size: ${line.size}',
+                          ].join(' · '),
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: Colors.black54,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      line.hasPrice
+                          ? _unitPriceLabel(line)
+                          : 'No item price',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: line.hasPrice
+                            ? QuotationsScreen.navyColor
+                            : Colors.black45,
+                      ),
+                    ),
+                    if (line.hasPrice && line.lineTotal > 0)
+                      Text(
+                        formatBidMoney(line.lineTotal),
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF2E7D32),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _unitPriceLabel(QuotedLine line) {
+    if (line.unitPrice <= 0) return formatBidMoney(line.lineTotal);
+    final unit = line.unit.trim();
+    if (unit.isEmpty) return formatBidMoney(line.unitPrice);
+    return '${formatBidMoney(line.unitPrice)} / $unit';
+  }
+}
+
+class _MaterialCanvassCard extends StatelessWidget {
+  final QuotedLine item;
+  final List<BidQuote> quotes;
+
+  const _MaterialCanvassCard({
+    required this.item,
+    required this.quotes,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final lowest = lowestPricedShopFor(quotes, item.name);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            item.name,
+            style: GoogleFonts.poppins(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: QuotationsScreen.navyColor,
+            ),
+          ),
+          if (item.quantityLabel.isNotEmpty || item.size.trim().isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              [
+                if (item.quantityLabel.isNotEmpty) item.quantityLabel,
+                if (item.size.trim().isNotEmpty) 'Size: ${item.size}',
+              ].join(' · '),
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                color: Colors.black54,
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          for (final quote in quotes)
+            _shopOfferRow(
+              quote: quote,
+              line: findQuotedLine(quote.lines, item.name),
+              isLowest: lowest?.id == quote.id,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _shopOfferRow({
+    required BidQuote quote,
+    required QuotedLine? line,
+    required bool isLowest,
+  }) {
+    final hasPrice = line?.hasPrice == true;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  quote.shopName,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: QuotationsScreen.navyColor,
+                  ),
+                ),
+                if (isLowest && hasPrice)
+                  Text(
+                    'Lowest for this item',
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF2E7D32),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                hasPrice
+                    ? _unitPriceLabel(line!)
+                    : (line != null
+                          ? 'Listed, no price'
+                          : 'Not quoted'),
+                style: GoogleFonts.poppins(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: hasPrice
+                      ? (isLowest
+                            ? const Color(0xFF2E7D32)
+                            : QuotationsScreen.navyColor)
+                      : Colors.black45,
+                ),
+              ),
+              if (hasPrice && line!.lineTotal > 0)
+                Text(
+                  formatBidMoney(line.lineTotal),
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: isLowest
+                        ? const Color(0xFF2E7D32)
+                        : Colors.black54,
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _unitPriceLabel(QuotedLine line) {
+    if (line.unitPrice <= 0) return formatBidMoney(line.lineTotal);
+    final unit = line.unit.trim();
+    if (unit.isEmpty) return formatBidMoney(line.unitPrice);
+    return '${formatBidMoney(line.unitPrice)} / $unit';
   }
 }
 

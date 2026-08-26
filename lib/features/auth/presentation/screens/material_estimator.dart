@@ -78,6 +78,8 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         postId: widget.existingProject!.postId,
       );
 
+  bool get _detailsLocked => widget.lockEstimateDetails || _alreadyPosted;
+
   @override
   void initState() {
     super.initState();
@@ -188,7 +190,9 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Review Bill of\nMaterials',
+            _alreadyPosted
+                ? 'Review Bill of\nMaterials'
+                : 'Review Bill of\nMaterials',
             style: GoogleFonts.poppins(
               fontSize: 26,
               height: 1.15,
@@ -198,7 +202,9 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Finalize your material plan before requesting supplier quotations.',
+            _alreadyPosted
+                ? 'This estimate is posted for quotations. The material list is locked so shops quote the same BOM.'
+                : 'Finalize your material plan before requesting supplier quotations.',
             style: GoogleFonts.poppins(
               fontSize: 12,
               color: const Color(0xFFE0D7C9),
@@ -225,8 +231,8 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
           _buildTextField(
             'e.g., Modern Kitchen Materials',
             controller: _projectNameController,
-            readOnly: widget.lockEstimateDetails,
-            onChanged: widget.lockEstimateDetails
+            readOnly: _detailsLocked,
+            onChanged: _detailsLocked
                 ? null
                 : (val) {
                     setState(() {
@@ -239,8 +245,8 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
           _buildTextField(
             'e.g., Kitchen Renovation',
             controller: _projectTypeController,
-            readOnly: widget.lockEstimateDetails,
-            onChanged: widget.lockEstimateDetails
+            readOnly: _detailsLocked,
+            onChanged: _detailsLocked
                 ? null
                 : (val) {
                     setState(() {
@@ -250,15 +256,15 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
           ),
           const SizedBox(height: 14),
           _buildInputLabel(
-            widget.lockEstimateDetails
+            _detailsLocked
                 ? 'Project Area (sqm):'
                 : 'Project Area (sqm) — optional:',
           ),
           _buildTextField(
             '0.00',
             controller: _projectAreaController,
-            readOnly: widget.lockEstimateDetails,
-            onChanged: widget.lockEstimateDetails
+            readOnly: _detailsLocked,
+            onChanged: _detailsLocked
                 ? null
                 : (val) {
                     setState(() {
@@ -269,21 +275,28 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
           ),
           const SizedBox(height: 14),
           _buildInputLabel(
-            widget.lockEstimateDetails &&
-                    (widget.aiBudget?.trim().isNotEmpty ?? false)
+            _alreadyPosted ||
+                    (widget.lockEstimateDetails &&
+                        (widget.aiBudget?.trim().isNotEmpty ?? false))
                 ? 'Budget Preference:'
                 : 'Budget Preference — optional:',
           ),
           _buildDropdownField(
-            readOnly: widget.lockEstimateDetails &&
-                (widget.aiBudget?.trim().isNotEmpty ?? false),
+            readOnly: _alreadyPosted ||
+                (widget.lockEstimateDetails &&
+                    (widget.aiBudget?.trim().isNotEmpty ?? false)),
           ),
           const SizedBox(height: 14),
-          _buildInputLabel('Remarks for suppliers — optional:'),
+          _buildInputLabel(
+            _alreadyPosted
+                ? 'Remarks for suppliers:'
+                : 'Remarks for suppliers — optional:',
+          ),
           _buildTextField(
             'Brand preferences, delivery notes, or scope remarks',
             controller: _remarksController,
             maxLines: 3,
+            readOnly: _alreadyPosted,
           ),
           const SizedBox(height: 20),
           Row(
@@ -309,7 +322,9 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Confirm materials and quantities. Prices come from supplier quotations.',
+            _alreadyPosted
+                ? 'This list is locked. Shops are quoting these materials.'
+                : 'Confirm materials and quantities. Prices come from supplier quotations.',
             style: GoogleFonts.poppins(
               fontSize: 11,
               color: const Color(0xFFE0D7C9),
@@ -555,10 +570,11 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
             ),
           ),
           const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: _materialCount == 0 ? null : _saveProject,
+          if (!_alreadyPosted)
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: _materialCount == 0 ? null : _saveProject,
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFFEDE4D4),
                 side: const BorderSide(color: Color(0xFFEDE4D4)),
@@ -686,6 +702,20 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       if (mounted) {
         showAppMessage(context, 
           const SnackBar(content: Text('Please log in to save projects')),
+        );
+      }
+      return;
+    }
+
+    if (_alreadyPosted) {
+      if (mounted) {
+        showAppMessage(
+          context,
+          const SnackBar(
+            content: Text(
+              'This estimate is already posted. The material list cannot be changed.',
+            ),
+          ),
         );
       }
       return;
@@ -904,6 +934,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       final Map<String, dynamic> projectPostData = {
         'postId': newPostRef.id,
         'userId': uid,
+        'builderId': uid,
         'projectId': savedProjectRef.id,
         'projectName': _projectName,
         'projectType': _projectType,
@@ -1107,11 +1138,13 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       category: 'Material',
       quantity: 0,
       projectArea: _projectArea,
-      onRemove: () {
-        setState(() {
-          _localMaterials.remove(material);
-        });
-      },
+      onRemove: _alreadyPosted
+          ? null
+          : () {
+              setState(() {
+                _localMaterials.remove(material);
+              });
+            },
     );
   }
 
@@ -1123,11 +1156,13 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       size: tile.tileSizeName,
       quantity: tile.quantity,
       projectArea: _projectArea,
-      onRemove: () {
-        setState(() {
-          _localTiles.remove(tile);
-        });
-      },
+      onRemove: _alreadyPosted
+          ? null
+          : () {
+              setState(() {
+                _localTiles.remove(tile);
+              });
+            },
     );
   }
 
@@ -1140,11 +1175,13 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       length: plumbing.length,
       quantity: plumbing.quantity,
       projectArea: _projectArea,
-      onRemove: () {
-        setState(() {
-          _localPlumbing.remove(plumbing);
-        });
-      },
+      onRemove: _alreadyPosted
+          ? null
+          : () {
+              setState(() {
+                _localPlumbing.remove(plumbing);
+              });
+            },
     );
   }
 

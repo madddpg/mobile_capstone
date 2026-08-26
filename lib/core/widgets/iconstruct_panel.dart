@@ -64,6 +64,11 @@ class IConstructPanel {
     return BorderRadius.only(topLeft: r);
   }
 
+  /// Centered chat card: rounded on every corner.
+  static BorderRadius centeredRadiusOf(BuildContext context) {
+    return BorderRadius.circular(cornerRadiusOf(context));
+  }
+
   static EdgeInsets contentPaddingOf(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     // Extra left inset keeps titles (e.g. "Name Your Estimate") clear of the

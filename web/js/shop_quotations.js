@@ -13,8 +13,67 @@ import { getFirestore, doc, runTransaction, serverTimestamp } from "firebase/fir
  * @param {string} postId - The ID of the post the shop is bidding on
  * @param {Object} shopParams - Form data and shop details
  */
+function normalizeLineItems(raw) {
+  if (!Array.isArray(raw)) return [];
+
+  return raw
+    .map((item) => {
+      if (typeof item === "string") {
+        const name = item.trim();
+        return name ? { name } : null;
+      }
+      if (!item || typeof item !== "object") return null;
+
+      const name = String(
+        item.name ||
+          item.productName ||
+          item.materialName ||
+          item.itemName ||
+          item.product ||
+          item.material ||
+          ""
+      ).trim();
+      if (!name) return null;
+
+      const quantity = Number(item.quantity ?? item.qty ?? 0);
+      const unitPrice = Number(item.unitPrice ?? item.price ?? item.unit_price ?? 0);
+      const rawSubtotal = item.subtotal ?? item.amount ?? item.lineTotal;
+      const computed = Number.isFinite(unitPrice) && Number.isFinite(quantity)
+        ? unitPrice * quantity
+        : 0;
+      const subtotal = Number(rawSubtotal ?? computed);
+
+      return {
+        name,
+        quantity: Number.isFinite(quantity) ? quantity : 0,
+        unit: String(item.unit || ""),
+        size: item.size ?? null,
+        unitPrice: Number.isFinite(unitPrice) ? unitPrice : 0,
+        subtotal: Number.isFinite(subtotal) ? subtotal : 0,
+      };
+    })
+    .filter(Boolean);
+}
+
 export async function submitQuotation(db, postId, shopParams) {
-  const { shopId, shopName, ownerName, userId, message, estimatedTotal, deliveryFee, estimatedLeadTime, availableMaterials } = shopParams;
+  const {
+    shopId,
+    shopName,
+    ownerName,
+    userId,
+    message,
+    estimatedTotal,
+    deliveryFee,
+    estimatedLeadTime,
+    availableMaterials,
+    materials,
+    lineItems,
+  } = shopParams;
+
+  const pricedLines = normalizeLineItems(materials || lineItems || availableMaterials);
+  const materialNames = pricedLines.map((line) => line.name);
+  const lineTotal = pricedLines.reduce((sum, line) => sum + Number(line.subtotal || 0), 0);
+  const quoteTotal = Number(estimatedTotal) || lineTotal;
 
   const projectPostRef = doc(db, "projectPosts", postId);
   const quotationRef = doc(db, "projectPosts", postId, "quotations", shopId); // Upsert ID pattern (1 per shop)
@@ -44,10 +103,11 @@ export async function submitQuotation(db, postId, shopParams) {
         postId,
         userId: builderUserId,
         message,
-        estimatedTotal: Number(estimatedTotal),
+        estimatedTotal: quoteTotal,
         deliveryFee: Number(deliveryFee),
         estimatedLeadTime,
-        availableMaterials, // e.g., ["Cement", "Rebars"]
+        materials: pricedLines,
+        availableMaterials: materialNames,
         status: "submitted",
         updatedAt: serverTimestamp(),
       };

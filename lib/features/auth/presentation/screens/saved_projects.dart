@@ -6,6 +6,7 @@ import 'package:iconstruct/core/firebase/firestore_error.dart';
 import 'package:iconstruct/core/models/project_model.dart';
 import 'package:iconstruct/core/navigation/planning_nav.dart';
 import 'package:iconstruct/core/state/active_project_state.dart';
+import 'package:iconstruct/features/bidding/screens/posted_project_details_screen.dart';
 import 'package:iconstruct/features/bidding/screens/project_bids_screen.dart';
 import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
 import 'package:iconstruct/core/widgets/offset_panel_shell.dart';
@@ -91,6 +92,11 @@ class SavedProjectsScreen extends StatefulWidget {
 
 class _SavedProjectsScreenState extends State<SavedProjectsScreen> {
   SavedProjectsSort _sort = SavedProjectsSort.newestUpdated;
+  int _reloadNonce = 0;
+
+  void _retryLoad() {
+    setState(() => _reloadNonce++);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -192,6 +198,7 @@ class _SavedProjectsScreenState extends State<SavedProjectsScreen> {
                 }
 
                 return StreamBuilder<QuerySnapshot>(
+                  key: ValueKey('saved-projects-$_reloadNonce-${user.uid}'),
                   stream: FirebaseFirestore.instance
                       .collection('users')
                       .doc(user.uid)
@@ -209,17 +216,33 @@ class _SavedProjectsScreenState extends State<SavedProjectsScreen> {
                       return Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 28),
                         child: Center(
-                          child: Text(
-                            firestoreUserMessage(
-                              snapshot.error!,
-                              action: 'load saved projects',
-                            ),
-                            style: TextStyle(
-                              color: creamBg.withAlpha(180),
-                              fontSize: 14,
-                              height: 1.4,
-                            ),
-                            textAlign: TextAlign.center,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                firestoreUserMessage(
+                                  snapshot.error!,
+                                  action: 'load saved projects',
+                                ),
+                                style: TextStyle(
+                                  color: creamBg.withAlpha(180),
+                                  fontSize: 14,
+                                  height: 1.4,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 16),
+                              TextButton(
+                                onPressed: _retryLoad,
+                                child: const Text(
+                                  'Try again',
+                                  style: TextStyle(
+                                    color: creamBg,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       );
@@ -498,6 +521,7 @@ class ProjectCard extends StatelessWidget {
       final Map<String, dynamic> projectPostData = {
         'postId': newPostRef.id,
         'userId': uid,
+        'builderId': uid,
         'projectId': project.id,
         'projectName': project.projectName,
         'projectType': project.projectType,
@@ -816,61 +840,83 @@ class ProjectCard extends StatelessWidget {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: 'edit',
-                            child: Row(
-                              children: [
-                                Icon(Icons.edit_outlined, size: 20),
-                                SizedBox(width: 10),
-                                Text('Edit'),
-                              ],
+                        itemBuilder: (context) {
+                          final posted = ProjectLifecycle.isPosted(
+                            project.status,
+                            postId: project.postId,
+                          );
+                          return [
+                            PopupMenuItem(
+                              value: posted ? 'view' : 'edit',
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    posted
+                                        ? Icons.visibility_outlined
+                                        : Icons.edit_outlined,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(posted ? 'View display' : 'Edit'),
+                                ],
+                              ),
                             ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'post',
-                            child: Row(
-                              children: [
-                                Icon(Icons.upload_outlined, size: 20),
-                                SizedBox(width: 10),
-                                Text('Post'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'share',
-                            child: Row(
-                              children: [
-                                Icon(Icons.ios_share_rounded, size: 20),
-                                SizedBox(width: 10),
-                                Text('Share list'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.delete_outline,
-                                  color: Colors.red,
-                                  size: 20,
+                            if (!posted)
+                              const PopupMenuItem(
+                                value: 'post',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.upload_outlined, size: 20),
+                                    SizedBox(width: 10),
+                                    Text('Post'),
+                                  ],
                                 ),
-                                SizedBox(width: 10),
-                                Text(
-                                  'Delete',
-                                  style: TextStyle(color: Colors.red),
-                                ),
-                              ],
+                              ),
+                            const PopupMenuItem(
+                              value: 'share',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.ios_share_rounded, size: 20),
+                                  SizedBox(width: 10),
+                                  Text('Share list'),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                            const PopupMenuItem(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.delete_outline,
+                                    color: Colors.red,
+                                    size: 20,
+                                  ),
+                                  SizedBox(width: 10),
+                                  Text(
+                                    'Delete',
+                                    style: TextStyle(color: Colors.red),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ];
+                        },
                         onSelected: (value) {
                           if (value == 'edit') {
                             PlanningNav.openMaterialEstimator(
                               context,
                               projectName: project.projectName,
                               existingProject: project,
+                            );
+                          } else if (value == 'view') {
+                            final postId = project.postId;
+                            if (postId == null || postId.isEmpty) return;
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    PostedProjectDetailsScreen(postId: postId),
+                              ),
                             );
                           } else if (value == 'post') {
                             _handlePostProject(context);

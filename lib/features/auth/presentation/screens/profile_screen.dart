@@ -17,6 +17,7 @@ import 'package:iconstruct/features/auth/presentation/screens/edit_profile_scree
 import 'package:iconstruct/features/auth/presentation/screens/login_screen.dart';
 import 'package:iconstruct/features/auth/presentation/screens/main_home_screen.dart';
 import 'package:iconstruct/features/auth/presentation/screens/terms_conditions_screen.dart';
+import 'package:iconstruct/features/chat/screens/chat_inbox_screen.dart';
 import 'package:iconstruct/core/widgets/app_message.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -375,6 +376,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       _ProfileCard(
                         children: [
                           _ProfileAction(
+                            icon: Icons.chat_bubble_outline_rounded,
+                            title: 'Shop messages',
+                            subtitle:
+                                'Chat with a hardware shop after you select their quotation.',
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const ChatInboxScreen(),
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          _ProfileAction(
                             icon: Icons.lock_outline_rounded,
                             title: 'Change Password',
                             subtitle: 'Set a new password for this account.',
@@ -420,6 +436,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ),
                                 ),
                                 (route) => false,
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          _ProfileAction(
+                            icon: Icons.menu_book_outlined,
+                            title: 'Shop chat guide',
+                            subtitle:
+                                'Replay how live chat works after you select a supplier.',
+                            onTap: () async {
+                              final uid =
+                                  FirebaseAuth.instance.currentUser?.uid ?? '';
+                              await OnboardingPreferences.clearChatGuide(uid);
+                              if (!context.mounted) return;
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const ChatInboxScreen(
+                                    forceChatGuide: true,
+                                  ),
+                                ),
                               );
                             },
                           ),

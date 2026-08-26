@@ -14,6 +14,9 @@ enum OffsetPanelExtent {
   /// Floating card sitting just above the pill nav.
   pinnedWithNav,
 
+  /// Centered navy card above the pill nav (shop chat).
+  centeredWithNav,
+
   /// Panel stretches to the bottom (AI chat).
   fillBottom,
 
@@ -62,7 +65,9 @@ class OffsetPanelShell extends StatelessWidget {
       builder: (context, keyboardInset) {
         final showNav = activeNav != null;
         final keyboardOpen = keyboardInset > 24;
-        final navOrSafe = showNav && extent == OffsetPanelExtent.pinnedWithNav
+        final liftAboveNav = extent == OffsetPanelExtent.pinnedWithNav ||
+            extent == OffsetPanelExtent.centeredWithNav;
+        final navOrSafe = showNav && liftAboveNav
             ? IConstructPanel.bottomInsetOf(context)
             : MediaQuery.paddingOf(context).bottom;
         // Scaffold already shrinks by MediaQuery viewInsets; only pad leftover
@@ -129,19 +134,23 @@ class OffsetPanelShell extends StatelessWidget {
   }
 
   Widget _buildOffsetPanel(BuildContext context, {required double bottom}) {
+    final centered = extent == OffsetPanelExtent.centeredWithNav;
     final rawRadius = borderRadius ??
-        (extent == OffsetPanelExtent.fillBottom
+        (centered
+            ? IConstructPanel.centeredRadiusOf(context)
+            : extent == OffsetPanelExtent.fillBottom
             ? IConstructPanel.offsetTallRadiusOf(context)
             : IConstructPanel.offsetRadiusOf(context));
-    // Right and (for fill-bottom sheets) bottom stay square so the navy
-    // meets the screen edge instead of hanging over the gradient.
-    final radius = rawRadius.copyWith(
-      topRight: Radius.zero,
-      bottomRight: Radius.zero,
-      bottomLeft: extent == OffsetPanelExtent.fillBottom
-          ? Radius.zero
-          : rawRadius.bottomLeft,
-    );
+    // Offset sheets stay flush-right. Centered chat keeps all corners rounded.
+    final radius = centered
+        ? rawRadius
+        : rawRadius.copyWith(
+            topRight: Radius.zero,
+            bottomRight: Radius.zero,
+            bottomLeft: extent == OffsetPanelExtent.fillBottom
+                ? Radius.zero
+                : rawRadius.bottomLeft,
+          );
     final padding =
         contentPadding ?? IConstructPanel.contentPaddingOf(context);
 
@@ -168,10 +177,11 @@ class OffsetPanelShell extends StatelessWidget {
       );
     }
 
+    final side = IConstructPanel.leftInsetOf(context);
     return Positioned(
       top: IConstructPanel.panelTopOf(context),
-      left: IConstructPanel.leftInsetOf(context),
-      right: 0,
+      left: centered ? (side * 0.28).clamp(16.0, 28.0) : side,
+      right: centered ? (side * 0.28).clamp(16.0, 28.0) : 0,
       bottom: bottom,
       child: child,
     );

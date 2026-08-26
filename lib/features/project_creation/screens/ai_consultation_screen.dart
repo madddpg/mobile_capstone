@@ -478,8 +478,153 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
     await _addBotMessage(
       "Added ${picked.length} material(s) to your list "
       "(${_confirmedMaterials.length} total so far). "
-      "Share more ideas anytime, or Build my BOM when you're satisfied.",
+      "Tap the list icon anytime to see or remove what you chose. "
+      "Share more ideas, or Build my BOM when you're satisfied.",
     );
+  }
+
+  Future<void> _openConfirmedMaterialsSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            void removeAt(int index) {
+              setState(() => _confirmedMaterials.removeAt(index));
+              setModalState(() {});
+            }
+
+            return Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.72,
+              ),
+              decoration: const BoxDecoration(
+                color: Color(0xFF1E3042),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 10),
+                  Container(
+                    width: 42,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: _cream.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 18, 14, 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Your material list',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                  color: _cream,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _confirmedMaterials.isEmpty
+                                    ? 'Nothing here yet. Describe what you want, then pick from suggestions — I will not add materials for you.'
+                                    : 'These are the materials you chose. Remove anything you do not want on the estimate.',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  color: _cream.withValues(alpha: 0.75),
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          icon: Icon(
+                            Icons.close_rounded,
+                            color: _cream.withValues(alpha: 0.85),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(color: Color(0x33EDE4D4), height: 1),
+                  if (_confirmedMaterials.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(22, 28, 22, 32),
+                      child: Text(
+                        'Your list is empty.',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          color: _cream.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    )
+                  else
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.fromLTRB(12, 8, 8, 12),
+                        itemCount: _confirmedMaterials.length,
+                        separatorBuilder: (_, _) => const Divider(
+                          color: Color(0x22EDE4D4),
+                          height: 1,
+                        ),
+                        itemBuilder: (context, index) {
+                          final name = _confirmedMaterials[index];
+                          return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                            ),
+                            title: Text(
+                              name,
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: _cream,
+                              ),
+                            ),
+                            trailing: IconButton(
+                              tooltip: 'Remove from list',
+                              onPressed: () => removeAt(index),
+                              icon: Icon(
+                                Icons.close_rounded,
+                                color: _cream.withValues(alpha: 0.8),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: _ChoiceChipButton(
+                        label: _confirmedMaterials.isEmpty
+                            ? 'Close'
+                            : 'Done · ${_confirmedMaterials.length} selected',
+                        filled: true,
+                        onTap: () => Navigator.pop(ctx),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (mounted) setState(() {});
   }
 
   Future<void> _skipSuggestions() async {
@@ -671,14 +816,25 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'AI Material\nConsultant',
-                  style: GoogleFonts.poppins(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                    height: 1.15,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'AI Material\nConsultant',
+                        style: GoogleFonts.poppins(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          height: 1.15,
+                        ),
+                      ),
+                    ),
+                    _MaterialsListButton(
+                      count: _confirmedMaterials.length,
+                      onTap: _openConfirmedMaterialsSheet,
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -887,6 +1043,72 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _MaterialsListButton extends StatelessWidget {
+  final int count;
+  final VoidCallback onTap;
+
+  const _MaterialsListButton({required this.count, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: count == 0
+          ? 'Your material list, empty'
+          : 'Your material list, $count selected',
+      child: Material(
+        color: const Color(0xFFEDE4D4),
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: SizedBox(
+            width: 44,
+            height: 44,
+            child: Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(
+                  Icons.list_alt_rounded,
+                  color: Color(0xFF2C3E50),
+                  size: 22,
+                ),
+                if (count > 0)
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: Container(
+                      constraints: const BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 3),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF2C3E50),
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        count > 9 ? '9+' : '$count',
+                        style: GoogleFonts.poppins(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFFEDE4D4),
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

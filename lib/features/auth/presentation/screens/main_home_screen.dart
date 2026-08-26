@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 
 import 'package:iconstruct/core/navigation/planning_nav.dart';
-import 'package:iconstruct/core/services/unread_notifications.dart';
 import 'package:iconstruct/core/state/onboarding_preferences.dart';
 import 'package:iconstruct/core/state/user_state/user_provider.dart';
 import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
@@ -14,7 +13,6 @@ import 'package:iconstruct/features/auth/presentation/models/ranked_shop.dart';
 import 'package:iconstruct/features/auth/presentation/services/shop_ranking_service.dart';
 import 'package:iconstruct/core/widgets/offset_pill_nav.dart';
 import 'package:iconstruct/core/widgets/user_avatar.dart';
-import 'package:iconstruct/features/notifications/screens/notifications_screen.dart';
 import 'package:iconstruct/features/onboarding/data/home_guide_steps.dart';
 import 'package:iconstruct/features/onboarding/presentation/widgets/home_guide_overlay.dart';
 import 'package:iconstruct/features/project_creation/screens/project_tracking_screen.dart';
@@ -80,6 +78,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
       HomeGuideTarget.startEstimate => _startEstimateKey,
       HomeGuideTarget.postBidding => _postBiddingKey,
       HomeGuideTarget.canvassTracking => _canvassKey,
+      HomeGuideTarget.shopChat => null,
     };
     if (key?.currentContext != null) {
       await Scrollable.ensureVisible(
@@ -171,7 +170,6 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                             vertical: 15,
                           ),
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               UserAvatar(
                                 size: 38,
@@ -184,20 +182,6 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                                     ),
                                   );
                                 },
-                              ),
-                              UnreadNotificationsBadge(
-                                child: _TopIconButton(
-                                  icon: Icons.notifications_none_rounded,
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) =>
-                                            const NotificationsScreen(),
-                                      ),
-                                    );
-                                  },
-                                ),
                               ),
                             ],
                           ),
@@ -324,25 +308,6 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
               ),
             ),
         ],
-      ),
-    );
-  }
-}
-
-class _TopIconButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _TopIconButton({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkResponse(
-        onTap: onTap,
-        radius: 24,
-        child: Icon(icon, color: const Color(0xFF2C3E50), size: 34),
       ),
     );
   }

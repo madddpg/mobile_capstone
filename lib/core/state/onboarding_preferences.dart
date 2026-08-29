@@ -28,4 +28,72 @@ class OnboardingPreferences {
       debugPrint('Could not persist onboarding preference: $e');
     }
   }
+
+  static String _homeGuideKey(String uid) => 'home_guide_seen_v1_$uid';
+
+  /// First-login home tour. Empty uid is treated as already seen so the overlay
+  /// never traps an unsigned session.
+  static Future<bool> hasSeenHomeGuide(String uid) async {
+    if (uid.isEmpty) return true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_homeGuideKey(uid)) ?? false;
+    } catch (e) {
+      debugPrint('Could not read home guide preference: $e');
+      return false;
+    }
+  }
+
+  static Future<void> markHomeGuideSeen(String uid) async {
+    if (uid.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_homeGuideKey(uid), true);
+    } catch (e) {
+      debugPrint('Could not persist home guide preference: $e');
+    }
+  }
+
+  static Future<void> clearHomeGuide(String uid) async {
+    if (uid.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_homeGuideKey(uid));
+    } catch (e) {
+      debugPrint('Could not clear home guide preference: $e');
+    }
+  }
+
+  static String _chatGuideKey(String uid) => 'chat_guide_seen_v1_$uid';
+
+  static Future<bool> hasSeenChatGuide(String uid) async {
+    if (uid.isEmpty) return true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_chatGuideKey(uid)) ?? false;
+    } catch (e) {
+      debugPrint('Could not read chat guide preference: $e');
+      return false;
+    }
+  }
+
+  static Future<void> markChatGuideSeen(String uid) async {
+    if (uid.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_chatGuideKey(uid), true);
+    } catch (e) {
+      debugPrint('Could not persist chat guide preference: $e');
+    }
+  }
+
+  static Future<void> clearChatGuide(String uid) async {
+    if (uid.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_chatGuideKey(uid));
+    } catch (e) {
+      debugPrint('Could not clear chat guide preference: $e');
+    }
+  }
 }

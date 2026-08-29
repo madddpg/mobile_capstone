@@ -9,16 +9,71 @@ import 'package:iconstruct/features/project_creation/data/bom_export.dart';
 
 /// Renders a bill of materials as a canvass sheet a builder can hand to a
 /// hardware shop — as a PDF, as images for chat apps, or straight to a printer.
+class _ExportPalette {
+  const _ExportPalette({
+    required this.page,
+    required this.headerBg,
+    required this.headerFg,
+    required this.ink,
+    required this.muted,
+    required this.line,
+    required this.band,
+    required this.tableHeaderBg,
+    required this.tableHeaderFg,
+    required this.notesBg,
+    required this.filledHeader,
+  });
+
+  final PdfColor page;
+  final PdfColor headerBg;
+  final PdfColor headerFg;
+  final PdfColor ink;
+  final PdfColor muted;
+  final PdfColor line;
+  final PdfColor band;
+  final PdfColor tableHeaderBg;
+  final PdfColor tableHeaderFg;
+  final PdfColor notesBg;
+  final bool filledHeader;
+}
+
 class BomExportService {
   BomExportService._();
 
-  static const PdfColor _navy = PdfColor.fromInt(0xFF2C3E50);
-  static const PdfColor _cream = PdfColor.fromInt(0xFFEDE4D4);
-  static const PdfColor _ink = PdfColor.fromInt(0xFF1E3042);
-  static const PdfColor _muted = PdfColor.fromInt(0xFF5A6E7E);
-  static const PdfColor _line = PdfColor.fromInt(0xFFBFC8D2);
+  static const _appPalette = _ExportPalette(
+    page: PdfColor.fromInt(0xFFFFFFFF),
+    headerBg: PdfColor.fromInt(0xFF2C3E50),
+    headerFg: PdfColor.fromInt(0xFFEDE4D4),
+    ink: PdfColor.fromInt(0xFF1E3042),
+    muted: PdfColor.fromInt(0xFF5A6E7E),
+    line: PdfColor.fromInt(0xFFBFC8D2),
+    band: PdfColor.fromInt(0xFFEFEAE0),
+    tableHeaderBg: PdfColor.fromInt(0xFF2C3E50),
+    tableHeaderFg: PdfColor.fromInt(0xFFEDE4D4),
+    notesBg: PdfColor.fromInt(0xFFF6F1E7),
+    filledHeader: true,
+  );
 
-  static Future<Uint8List> buildPdf(BomExportData data) async {
+  /// High-contrast sheet for chat/image export: white page, black type.
+  static const _imagePalette = _ExportPalette(
+    page: PdfColors.white,
+    headerBg: PdfColors.white,
+    headerFg: PdfColors.black,
+    ink: PdfColors.black,
+    muted: PdfColor.fromInt(0xFF222222),
+    line: PdfColors.black,
+    band: PdfColors.white,
+    tableHeaderBg: PdfColors.white,
+    tableHeaderFg: PdfColors.black,
+    notesBg: PdfColors.white,
+    filledHeader: false,
+  );
+
+  static Future<Uint8List> buildPdf(
+    BomExportData data, {
+    bool forImage = false,
+  }) async {
+    final palette = forImage ? _imagePalette : _appPalette;
     final doc = pw.Document(
       title: '${data.estimateName} — Material Canvass Sheet',
       author: 'iConstruct',
@@ -26,17 +81,24 @@ class BomExportService {
 
     doc.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.fromLTRB(32, 28, 32, 28),
-        header: (context) =>
-            context.pageNumber == 1 ? _header(data) : _continuedHeader(data),
-        footer: _footer,
+        pageTheme: pw.PageTheme(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.fromLTRB(32, 28, 32, 28),
+          buildBackground: (context) => pw.FullPage(
+            ignoreMargins: true,
+            child: pw.Container(color: palette.page),
+          ),
+        ),
+        header: (context) => context.pageNumber == 1
+            ? _header(data, palette)
+            : _continuedHeader(data, palette),
+        footer: (context) => _footer(context, palette),
         build: (context) => [
-          _summary(data),
+          _summary(data, palette),
           pw.SizedBox(height: 16),
-          _materialsTable(data),
+          _materialsTable(data, palette),
           pw.SizedBox(height: 18),
-          _shopBlock(data),
+          _shopBlock(data, palette),
         ],
       ),
     );
@@ -65,7 +127,7 @@ class BomExportService {
 
   /// Shares the sheet as PNG pages, which chat apps preview inline.
   static Future<void> shareImages(BomExportData data) async {
-    final bytes = await buildPdf(data);
+    final bytes = await buildPdf(data, forImage: true);
 
     final files = <XFile>[];
     final names = <String>[];
@@ -115,7 +177,7 @@ class BomExportService {
         'please fill in the blank columns.';
   }
 
-  static pw.Widget _header(BomExportData data) {
+  static pw.Widget _header(BomExportData data, _ExportPalette p) {
     return pw.Container(
       margin: const pw.EdgeInsets.only(bottom: 14),
       child: pw.Column(
@@ -123,7 +185,12 @@ class BomExportService {
         children: [
           pw.Container(
             padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: const pw.BoxDecoration(color: _navy),
+            decoration: pw.BoxDecoration(
+              color: p.headerBg,
+              border: p.filledHeader
+                  ? null
+                  : pw.Border(bottom: pw.BorderSide(color: p.line, width: 1)),
+            ),
             width: double.infinity,
             child: pw.Row(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -135,7 +202,7 @@ class BomExportService {
                     pw.Text(
                       'iConstruct',
                       style: pw.TextStyle(
-                        color: _cream,
+                        color: p.headerFg,
                         fontSize: 18,
                         fontWeight: pw.FontWeight.bold,
                         letterSpacing: 0.4,
@@ -144,7 +211,7 @@ class BomExportService {
                     pw.SizedBox(height: 2),
                     pw.Text(
                       'Material Canvass Sheet',
-                      style: const pw.TextStyle(color: _cream, fontSize: 10),
+                      style: pw.TextStyle(color: p.headerFg, fontSize: 10),
                     ),
                   ],
                 ),
@@ -153,12 +220,12 @@ class BomExportService {
                   children: [
                     pw.Text(
                       'Prepared',
-                      style: const pw.TextStyle(color: _cream, fontSize: 8),
+                      style: pw.TextStyle(color: p.headerFg, fontSize: 8),
                     ),
                     pw.Text(
                       _formatDate(data.generatedAt),
                       style: pw.TextStyle(
-                        color: _cream,
+                        color: p.headerFg,
                         fontSize: 10,
                         fontWeight: pw.FontWeight.bold,
                       ),
@@ -174,7 +241,7 @@ class BomExportService {
             style: pw.TextStyle(
               fontSize: 20,
               fontWeight: pw.FontWeight.bold,
-              color: _ink,
+              color: p.ink,
             ),
           ),
         ],
@@ -182,12 +249,12 @@ class BomExportService {
     );
   }
 
-  static pw.Widget _continuedHeader(BomExportData data) {
+  static pw.Widget _continuedHeader(BomExportData data, _ExportPalette p) {
     return pw.Container(
       margin: const pw.EdgeInsets.only(bottom: 10),
       padding: const pw.EdgeInsets.only(bottom: 6),
-      decoration: const pw.BoxDecoration(
-        border: pw.Border(bottom: pw.BorderSide(color: _line)),
+      decoration: pw.BoxDecoration(
+        border: pw.Border(bottom: pw.BorderSide(color: p.line)),
       ),
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -197,24 +264,24 @@ class BomExportService {
             style: pw.TextStyle(
               fontSize: 11,
               fontWeight: pw.FontWeight.bold,
-              color: _ink,
+              color: p.ink,
             ),
           ),
           pw.Text(
             'Material Canvass Sheet · continued',
-            style: const pw.TextStyle(fontSize: 9, color: _muted),
+            style: pw.TextStyle(fontSize: 9, color: p.muted),
           ),
         ],
       ),
     );
   }
 
-  static pw.Widget _footer(pw.Context context) {
+  static pw.Widget _footer(pw.Context context, _ExportPalette p) {
     return pw.Container(
       margin: const pw.EdgeInsets.only(top: 10),
       padding: const pw.EdgeInsets.only(top: 6),
-      decoration: const pw.BoxDecoration(
-        border: pw.Border(top: pw.BorderSide(color: _line)),
+      decoration: pw.BoxDecoration(
+        border: pw.Border(top: pw.BorderSide(color: p.line)),
       ),
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -223,19 +290,18 @@ class BomExportService {
             child: pw.Text(
               'Generated by iConstruct. Prices are set by the hardware shop; '
               'no payment is processed in the app.',
-              style: const pw.TextStyle(fontSize: 7.5, color: _muted),
+              style: pw.TextStyle(fontSize: 7.5, color: p.muted),
             ),
           ),
           pw.Text(
             'Page ${context.pageNumber} of ${context.pagesCount}',
-            style: const pw.TextStyle(fontSize: 7.5, color: _muted),
+            style: pw.TextStyle(fontSize: 7.5, color: p.muted),
           ),
         ],
       ),
     );
   }
-
-  static pw.Widget _summary(BomExportData data) {
+  static pw.Widget _summary(BomExportData data, _ExportPalette p) {
     final entries = <List<String>>[
       ['Renovation type', data.renovationType.isEmpty ? '-' : data.renovationType],
       [
@@ -263,7 +329,7 @@ class BomExportService {
                   children: [
                     pw.Text(
                       entry[0].toUpperCase(),
-                      style: const pw.TextStyle(fontSize: 7, color: _muted),
+                      style: pw.TextStyle(fontSize: 7, color: p.muted),
                     ),
                     pw.SizedBox(height: 2),
                     pw.Text(
@@ -271,7 +337,7 @@ class BomExportService {
                       style: pw.TextStyle(
                         fontSize: 10,
                         fontWeight: pw.FontWeight.bold,
-                        color: _ink,
+                        color: p.ink,
                       ),
                     ),
                   ],
@@ -285,12 +351,15 @@ class BomExportService {
             width: double.infinity,
             padding: const pw.EdgeInsets.all(8),
             decoration: pw.BoxDecoration(
-              color: const PdfColor.fromInt(0xFFF6F1E7),
+              color: p.notesBg,
               borderRadius: pw.BorderRadius.circular(4),
+              border: p.filledHeader
+                  ? null
+                  : pw.Border.all(color: p.line, width: 0.5),
             ),
             child: pw.Text(
               pdfSafe('Notes: ${data.notes!.trim()}'),
-              style: const pw.TextStyle(fontSize: 9, color: _ink),
+              style: pw.TextStyle(fontSize: 9, color: p.ink),
             ),
           ),
         ],
@@ -298,7 +367,7 @@ class BomExportService {
     );
   }
 
-  static pw.Widget _materialsTable(BomExportData data) {
+  static pw.Widget _materialsTable(BomExportData data, _ExportPalette p) {
     const headers = [
       '#',
       'Material',
@@ -312,13 +381,14 @@ class BomExportService {
     final rows = <pw.TableRow>[
       pw.TableRow(
         repeat: true,
-        decoration: const pw.BoxDecoration(color: _navy),
+        decoration: pw.BoxDecoration(color: p.tableHeaderBg),
         children: [
           for (var i = 0; i < headers.length; i++)
             _cell(
               headers[i],
+              palette: p,
               bold: true,
-              color: _cream,
+              color: p.tableHeaderFg,
               align: i >= 3 ? pw.TextAlign.center : pw.TextAlign.left,
             ),
         ],
@@ -329,17 +399,15 @@ class BomExportService {
     data.byCategory.forEach((category, items) {
       rows.add(
         pw.TableRow(
-          decoration: const pw.BoxDecoration(
-            color: PdfColor.fromInt(0xFFEFEAE0),
-          ),
+          decoration: pw.BoxDecoration(color: p.band),
           children: [
-            _cell(''),
-            _cell(category.toUpperCase(), bold: true, size: 8),
-            _cell(''),
-            _cell(''),
-            _cell(''),
-            _cell(''),
-            _cell(''),
+            _cell('', palette: p),
+            _cell(category.toUpperCase(), palette: p, bold: true, size: 8),
+            _cell('', palette: p),
+            _cell('', palette: p),
+            _cell('', palette: p),
+            _cell('', palette: p),
+            _cell('', palette: p),
           ],
         ),
       );
@@ -348,21 +416,23 @@ class BomExportService {
         rows.add(
           pw.TableRow(
             children: [
-              _cell('${index++}', align: pw.TextAlign.center, size: 8.5),
+              _cell('${index++}', palette: p, align: pw.TextAlign.center, size: 8.5),
               _cell(
                 item.name,
+                palette: p,
                 bold: true,
                 secondary: item.notes,
               ),
-              _cell(item.size ?? '-', size: 8.5),
-              _cell(item.quantityLabel, align: pw.TextAlign.center),
+              _cell(item.size ?? '-', palette: p, size: 8.5),
+              _cell(item.quantityLabel, palette: p, align: pw.TextAlign.center),
               _cell(
                 item.unit.isEmpty ? '-' : item.unit,
+                palette: p,
                 align: pw.TextAlign.center,
                 size: 8.5,
               ),
-              _cell(''),
-              _cell(''),
+              _cell('', palette: p),
+              _cell('', palette: p),
             ],
           ),
         );
@@ -372,19 +442,19 @@ class BomExportService {
     rows.add(
       pw.TableRow(
         children: [
-          _cell(''),
-          _cell('GRAND TOTAL', bold: true),
-          _cell(''),
-          _cell(''),
-          _cell(''),
-          _cell(''),
-          _cell(''),
+          _cell('', palette: p),
+          _cell('GRAND TOTAL', palette: p, bold: true),
+          _cell('', palette: p),
+          _cell('', palette: p),
+          _cell('', palette: p),
+          _cell('', palette: p),
+          _cell('', palette: p),
         ],
       ),
     );
 
     return pw.Table(
-      border: pw.TableBorder.all(color: _line, width: 0.5),
+      border: pw.TableBorder.all(color: p.line, width: 0.5),
       columnWidths: const {
         0: pw.FixedColumnWidth(22),
         1: pw.FlexColumnWidth(3.2),
@@ -400,12 +470,14 @@ class BomExportService {
 
   static pw.Widget _cell(
     String text, {
+    required _ExportPalette palette,
     bool bold = false,
     double size = 9.5,
-    PdfColor color = _ink,
+    PdfColor? color,
     pw.TextAlign align = pw.TextAlign.left,
     String? secondary,
   }) {
+    final ink = color ?? palette.ink;
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
       child: pw.Column(
@@ -418,7 +490,7 @@ class BomExportService {
             textAlign: align,
             style: pw.TextStyle(
               fontSize: size,
-              color: color,
+              color: ink,
               fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
             ),
           ),
@@ -426,7 +498,7 @@ class BomExportService {
             pw.SizedBox(height: 1.5),
             pw.Text(
               pdfSafe(secondary.trim()),
-              style: const pw.TextStyle(fontSize: 7.5, color: _muted),
+              style: pw.TextStyle(fontSize: 7.5, color: palette.muted),
             ),
           ],
         ],
@@ -434,11 +506,11 @@ class BomExportService {
     );
   }
 
-  static pw.Widget _shopBlock(BomExportData data) {
+  static pw.Widget _shopBlock(BomExportData data, _ExportPalette p) {
     return pw.Container(
       padding: const pw.EdgeInsets.all(12),
       decoration: pw.BoxDecoration(
-        border: pw.Border.all(color: _line, width: 0.5),
+        border: pw.Border.all(color: p.line, width: 0.5),
         borderRadius: pw.BorderRadius.circular(4),
       ),
       child: pw.Column(
@@ -449,35 +521,35 @@ class BomExportService {
             style: pw.TextStyle(
               fontSize: 10,
               fontWeight: pw.FontWeight.bold,
-              color: _ink,
+              color: p.ink,
             ),
           ),
           pw.SizedBox(height: 10),
           pw.Row(
             children: [
-              _blankField('Shop name'),
-              _blankField('Contact number'),
+              _blankField('Shop name', p),
+              _blankField('Contact number', p),
             ],
           ),
           pw.SizedBox(height: 12),
           pw.Row(
             children: [
-              _blankField('Quotation valid until'),
-              _blankField('Estimated delivery / lead time'),
+              _blankField('Quotation valid until', p),
+              _blankField('Estimated delivery / lead time', p),
             ],
           ),
           pw.SizedBox(height: 12),
           pw.Text(
             'You can also submit this quotation digitally through iConstruct so '
             'the builder can compare it with other shops.',
-            style: const pw.TextStyle(fontSize: 8, color: _muted),
+            style: pw.TextStyle(fontSize: 8, color: p.muted),
           ),
         ],
       ),
     );
   }
 
-  static pw.Widget _blankField(String label) {
+  static pw.Widget _blankField(String label, _ExportPalette p) {
     return pw.Expanded(
       child: pw.Padding(
         padding: const pw.EdgeInsets.only(right: 14),
@@ -486,13 +558,13 @@ class BomExportService {
           children: [
             pw.Text(
               label.toUpperCase(),
-              style: const pw.TextStyle(fontSize: 7, color: _muted),
+              style: pw.TextStyle(fontSize: 7, color: p.muted),
             ),
             pw.SizedBox(height: 12),
             pw.Container(
               height: 0.6,
               width: double.infinity,
-              color: _line,
+              color: p.line,
             ),
           ],
         ),

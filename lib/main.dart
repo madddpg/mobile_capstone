@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:provider/provider.dart';
+import 'package:iconstruct/core/firebase/app_check_gate.dart';
 import 'package:iconstruct/core/services/fcm_service.dart';
 import 'package:iconstruct/core/state/user_state/user_provider.dart';
 import 'firebase_options.dart';
@@ -18,24 +17,7 @@ Future<void> main() async {
   // Required so bid pushes still deliver when the app is backgrounded/killed.
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-  // App Check: release uses Play Integrity / DeviceCheck. Debug uses the
-  // debug provider so you can register the printed token in Firebase Console
-  // and later switch Firestore App Check from Monitor → Enforced.
-  await FirebaseAppCheck.instance.activate(
-    androidProvider: kReleaseMode
-        ? AndroidProvider.playIntegrity
-        : AndroidProvider.debug,
-    appleProvider: kReleaseMode
-        ? AppleProvider.deviceCheck
-        : AppleProvider.debug,
-  );
-  if (!kReleaseMode) {
-    debugPrint(
-      'App Check debug provider active. Copy the debug token from logcat '
-      '(or Xcode) into Firebase Console → App Check → Manage debug tokens, '
-      'then you can safely set Firestore App Check to Enforced.',
-    );
-  }
+  await AppCheckGate.activate();
 
   runApp(
     MultiProvider(

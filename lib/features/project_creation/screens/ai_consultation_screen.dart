@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
-import 'package:iconstruct/core/widgets/app_image.dart';
 import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
 import 'package:iconstruct/core/widgets/offset_panel_shell.dart';
 import 'package:iconstruct/core/widgets/user_avatar.dart';
@@ -10,9 +9,7 @@ import 'package:iconstruct/features/auth/presentation/screens/cost_estimation.da
 import 'package:iconstruct/features/auth/presentation/screens/profile_screen.dart';
 import 'package:iconstruct/features/project_creation/data/ai_material_consultant_service.dart';
 import 'package:iconstruct/features/project_creation/data/bom_quantity_estimator.dart';
-import 'package:iconstruct/features/project_creation/data/renovation_template_service.dart';
 import 'package:iconstruct/features/project_creation/data/renovation_templates.dart';
-import 'package:iconstruct/features/project_creation/screens/template_area_screen.dart';
 
 class ChatMessage {
   final String text;
@@ -20,7 +17,7 @@ class ChatMessage {
   const ChatMessage({required this.text, required this.isUser});
 }
 
-/// AI-first material consultation. Templates sit beside the chat as references.
+/// AI-first material consultation. Template packages are a separate planning path.
 class AIConsultationScreen extends StatefulWidget {
   final String projectName;
   final String? customProjectName;
@@ -41,8 +38,6 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
   final List<ChatMessage> _messages = [];
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  final _templateService = RenovationTemplateService();
   final _aiService = AiMaterialConsultantService();
 
   bool _isTyping = false;
@@ -52,7 +47,6 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
   String _budget = '';
   final List<String> _ideaLog = [];
   final List<String> _confirmedMaterials = [];
-  List<RenovationTemplate> _templates = [];
 
   /// Free chat after area; optional suggestion chips; then budget → BOM.
   static const int _stepArea = 0;
@@ -71,14 +65,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
   @override
   void initState() {
     super.initState();
-    _loadTemplates();
     _startConversation();
-  }
-
-  Future<void> _loadTemplates() async {
-    final list = await _templateService.fetchTemplatesForType(widget.projectName);
-    if (!mounted) return;
-    setState(() => _templates = list);
   }
 
   void _startConversation() async {
@@ -89,8 +76,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
     await _addBotMessage(
       "I use an AI API (not a custom-trained model) and I'm limited to iConstruct only: "
       "material planning and estimate help for canvassing — not general chat or construction site management.\n\n"
-      "You lead: describe your ideas freely. I only suggest options; you decide what to keep.\n"
-      "Want a ready package? Open Templates on the side.",
+      "You lead: describe your ideas freely. I only suggest options; you decide what to keep.",
     );
     await Future.delayed(const Duration(milliseconds: 350));
     await _addBotMessage(
@@ -134,7 +120,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
     if (_confirmedMaterials.isEmpty) {
       await _addBotMessage(
         "You haven't added any materials to your list yet. "
-        "Describe what you want and pick optional suggestions, or open Templates for a ready package. "
+        "Describe what you want and pick optional suggestions. "
         "I won't decide the BOM for you.",
       );
       setState(() {
@@ -265,7 +251,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
       await _addBotMessage(
         "iConstruct AI is temporarily unavailable"
         "${result.errorMessage != null ? ' (${result.errorMessage})' : ''}. "
-        "You can keep notes here, or open Templates for a ready material package.",
+        "You can keep describing materials here, then build your BOM from what you choose.",
       );
       return;
     }
@@ -492,8 +478,153 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
     await _addBotMessage(
       "Added ${picked.length} material(s) to your list "
       "(${_confirmedMaterials.length} total so far). "
-      "Share more ideas anytime, or Build my BOM when you're satisfied.",
+      "Tap the list icon anytime to see or remove what you chose. "
+      "Share more ideas, or Build my BOM when you're satisfied.",
     );
+  }
+
+  Future<void> _openConfirmedMaterialsSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            void removeAt(int index) {
+              setState(() => _confirmedMaterials.removeAt(index));
+              setModalState(() {});
+            }
+
+            return Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.72,
+              ),
+              decoration: const BoxDecoration(
+                color: Color(0xFF1E3042),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 10),
+                  Container(
+                    width: 42,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: _cream.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 18, 14, 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Your material list',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                  color: _cream,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _confirmedMaterials.isEmpty
+                                    ? 'Nothing here yet. Describe what you want, then pick from suggestions — I will not add materials for you.'
+                                    : 'These are the materials you chose. Remove anything you do not want on the estimate.',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  color: _cream.withValues(alpha: 0.75),
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          icon: Icon(
+                            Icons.close_rounded,
+                            color: _cream.withValues(alpha: 0.85),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(color: Color(0x33EDE4D4), height: 1),
+                  if (_confirmedMaterials.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(22, 28, 22, 32),
+                      child: Text(
+                        'Your list is empty.',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          color: _cream.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    )
+                  else
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.fromLTRB(12, 8, 8, 12),
+                        itemCount: _confirmedMaterials.length,
+                        separatorBuilder: (_, _) => const Divider(
+                          color: Color(0x22EDE4D4),
+                          height: 1,
+                        ),
+                        itemBuilder: (context, index) {
+                          final name = _confirmedMaterials[index];
+                          return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                            ),
+                            title: Text(
+                              name,
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: _cream,
+                              ),
+                            ),
+                            trailing: IconButton(
+                              tooltip: 'Remove from list',
+                              onPressed: () => removeAt(index),
+                              icon: Icon(
+                                Icons.close_rounded,
+                                color: _cream.withValues(alpha: 0.8),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: _ChoiceChipButton(
+                        label: _confirmedMaterials.isEmpty
+                            ? 'Close'
+                            : 'Done · ${_confirmedMaterials.length} selected',
+                        filled: true,
+                        onTap: () => Navigator.pop(ctx),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (mounted) setState(() {});
   }
 
   Future<void> _skipSuggestions() async {
@@ -617,7 +748,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
         _isTyping = false;
       });
       _addBotMessage(
-        "I couldn't draft a BOM without your picks. Add materials from suggestions, or use a Template.",
+        "I couldn't draft a BOM without your picks. Add materials from suggestions first.",
       );
       return;
     }
@@ -648,21 +779,6 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
     );
   }
 
-  void _useTemplateReference(RenovationTemplate template) {
-    Navigator.pop(context); // close drawer
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => TemplateAreaScreen(
-          template: template,
-          projectName: widget.projectName,
-          customProjectName: widget.customProjectName,
-          projectNotes: widget.projectNotes,
-        ),
-      ),
-    );
-  }
-
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -684,36 +800,41 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final pad = IConstructPanel.contentPaddingOf(context);
+
     return OffsetPanelShell(
-      scaffoldKey: _scaffoldKey,
       extent: OffsetPanelExtent.fillBottom,
       panelColor: IConstructPanel.navy,
-      borderRadius: IConstructPanel.topRadiusOf(context),
+      borderRadius: IConstructPanel.offsetTallRadiusOf(context),
       contentPadding: EdgeInsets.zero,
-      endDrawer: _TemplatesDrawer(
-        renovationType: widget.projectName,
-        templates: _templates.isEmpty
-            ? RenovationTemplatesCatalog.threeForType(widget.projectName)
-            : _templates,
-        onSelect: _useTemplateReference,
-      ),
       header: _buildTopBar(),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(18, 22, 14, 0),
+            padding: EdgeInsets.fromLTRB(pad.left, pad.top, pad.right, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'AI Material\nConsultant',
-                  style: GoogleFonts.poppins(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                    height: 1.15,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'AI Material\nConsultant',
+                        style: GoogleFonts.poppins(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          height: 1.15,
+                        ),
+                      ),
+                    ),
+                    _MaterialsListButton(
+                      count: _confirmedMaterials.length,
+                      onTap: _openConfirmedMaterialsSheet,
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -742,7 +863,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
-              padding: const EdgeInsets.fromLTRB(16, 12, 14, 12),
+              padding: EdgeInsets.fromLTRB(pad.left, 12, pad.right, 12),
               itemCount: _messages.length + (_isTyping ? 1 : 0),
               itemBuilder: (context, index) {
                 if (index == _messages.length) {
@@ -760,7 +881,7 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
 
   Widget _buildTopBar() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
         children: [
           Material(
@@ -777,37 +898,6 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
             ),
           ),
           const Spacer(),
-          Material(
-            color: _darkBlue,
-            borderRadius: BorderRadius.circular(20),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(20),
-              onTap: () => _scaffoldKey.currentState?.openEndDrawer(),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.grid_view_rounded,
-                      color: _cream,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Templates',
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: _cream,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
           UserAvatar(
             size: 34,
             onTap: () {
@@ -874,84 +964,150 @@ class _AIConsultationScreenState extends State<AIConsultationScreen> {
   Widget _buildMessageInput() {
     final canSend = _step < _stepDone;
 
-    return SafeArea(
-      top: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
-        decoration: BoxDecoration(
-          color: _darkBlue.withValues(alpha: 0.55),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_pendingRecommendations.isNotEmpty) ...[
-              SizedBox(
-                width: double.infinity,
-                child: _ChoiceChipButton(
-                  label: 'Review suggestions (${_pendingRecommendations.length})',
-                  onTap: _openSuggestionsModal,
+    final pad = IConstructPanel.contentPaddingOf(context);
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(pad.left, 10, pad.right, 12),
+      decoration: BoxDecoration(
+        color: _darkBlue.withValues(alpha: 0.55),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_pendingRecommendations.isNotEmpty) ...[
+            SizedBox(
+              width: double.infinity,
+              child: _ChoiceChipButton(
+                label: 'Review suggestions (${_pendingRecommendations.length})',
+                onTap: _openSuggestionsModal,
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+          if (_showBomChip && _step == _stepChat) ...[
+            SizedBox(
+              width: double.infinity,
+              child: _ChoiceChipButton(
+                label: _confirmedMaterials.isEmpty
+                    ? 'Build my BOM'
+                    : 'Build my BOM (${_confirmedMaterials.length})',
+                filled: true,
+                onTap: _onChipReady,
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _textController,
+                  style: const TextStyle(color: Colors.white),
+                  scrollPadding: const EdgeInsets.only(bottom: 80),
+                  decoration: InputDecoration(
+                    hintText: _step == _stepArea
+                        ? 'Area in sqm, or start describing…'
+                        : 'Describe your project ideas freely…',
+                    hintStyle: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.55),
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: _navy,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 10,
+                    ),
+                  ),
+                  onSubmitted: canSend ? _handleSubmitted : null,
                 ),
               ),
-              const SizedBox(height: 10),
-            ],
-            if (_showBomChip && _step == _stepChat) ...[
-              SizedBox(
-                width: double.infinity,
-                child: _ChoiceChipButton(
-                  label: _confirmedMaterials.isEmpty
-                      ? 'Build my BOM'
-                      : 'Build my BOM (${_confirmedMaterials.length})',
-                  filled: true,
-                  onTap: _onChipReady,
+              const SizedBox(width: 10),
+              CircleAvatar(
+                backgroundColor: _cream,
+                child: IconButton(
+                  icon: const Icon(
+                    Icons.send_rounded,
+                    color: _darkBlue,
+                    size: 20,
+                  ),
+                  onPressed: canSend
+                      ? () => _handleSubmitted(_textController.text)
+                      : null,
                 ),
               ),
-              const SizedBox(height: 10),
             ],
-            Row(
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MaterialsListButton extends StatelessWidget {
+  final int count;
+  final VoidCallback onTap;
+
+  const _MaterialsListButton({required this.count, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: count == 0
+          ? 'Your material list, empty'
+          : 'Your material list, $count selected',
+      child: Material(
+        color: const Color(0xFFEDE4D4),
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: SizedBox(
+            width: 44,
+            height: 44,
+            child: Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _textController,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: _step == _stepArea
-                          ? 'Area in sqm, or start describing…'
-                          : 'Describe your project ideas freely…',
-                      hintStyle: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.55),
+                const Icon(
+                  Icons.list_alt_rounded,
+                  color: Color(0xFF2C3E50),
+                  size: 22,
+                ),
+                if (count > 0)
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: Container(
+                      constraints: const BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
                       ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
+                      padding: const EdgeInsets.symmetric(horizontal: 3),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF2C3E50),
+                        shape: BoxShape.circle,
                       ),
-                      filled: true,
-                      fillColor: _navy,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 10,
+                      alignment: Alignment.center,
+                      child: Text(
+                        count > 9 ? '9+' : '$count',
+                        style: GoogleFonts.poppins(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFFEDE4D4),
+                          height: 1,
+                        ),
                       ),
                     ),
-                    onSubmitted: canSend ? _handleSubmitted : null,
                   ),
-                ),
-                const SizedBox(width: 10),
-                CircleAvatar(
-                  backgroundColor: _cream,
-                  child: IconButton(
-                    icon: const Icon(
-                      Icons.send_rounded,
-                      color: _darkBlue,
-                      size: 20,
-                    ),
-                    onPressed: canSend
-                        ? () => _handleSubmitted(_textController.text)
-                        : null,
-                  ),
-                ),
               ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -994,180 +1150,6 @@ class _ChoiceChipButton extends StatelessWidget {
                   : const Color(0xFFEDE4D4),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TemplatesDrawer extends StatelessWidget {
-  final String renovationType;
-  final List<RenovationTemplate> templates;
-  final ValueChanged<RenovationTemplate> onSelect;
-
-  const _TemplatesDrawer({
-    required this.renovationType,
-    required this.templates,
-    required this.onSelect,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
-    final drawerWidth =
-        (media.size.width * 0.86).clamp(280.0, 380.0).toDouble();
-
-    return Drawer(
-      width: drawerWidth,
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      child: Padding(
-        padding: EdgeInsets.only(
-          top: media.padding.top + 12,
-          bottom: media.padding.bottom + 8,
-        ),
-        child: Material(
-          color: const Color(0xFFEDE4D4),
-          elevation: 8,
-          shadowColor: Colors.black26,
-          borderRadius: const BorderRadius.horizontal(
-            left: Radius.circular(24),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 12, 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Template References',
-                            style: GoogleFonts.poppins(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: const Color(0xFF2C3E50),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Ready packages for $renovationType — structured essentials. '
-                                'Select one, enter area, then adjust quantities / material types. '
-                                'Use Templates when you want a fixed sequence; chat stays free-form.',
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              color: const Color(0xFF4F6B8A),
-                              height: 1.35,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Close',
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close_rounded),
-                      color: const Color(0xFF2C3E50),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                  itemCount: templates.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final t = templates[index];
-                    return Material(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(18),
-                        onTap: () => onSelect(t),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Row(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: SizedBox(
-                                  width: 72,
-                                  height: 72,
-                                  child: t.imageAsset != null &&
-                                          t.imageAsset!.isNotEmpty
-                                      ? AppImage.asset(
-                                          context,
-                                          t.imageAsset!,
-                                          width: 72,
-                                          height: 72,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, _, _) =>
-                                              _fallback(t),
-                                        )
-                                      : _fallback(t),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      t.name,
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w700,
-                                        color: const Color(0xFF2C3E50),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '${t.items.length} essential materials',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 12,
-                                        color: const Color(0xFF2E7D4F),
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const Icon(
-                                Icons.chevron_right_rounded,
-                                color: Color(0xFF4F6B8A),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _fallback(RenovationTemplate t) {
-    final letter = t.name.isNotEmpty ? t.name[0].toUpperCase() : '?';
-    return Container(
-      color: const Color(0xFFD7D0C4),
-      alignment: Alignment.center,
-      child: Text(
-        letter,
-        style: GoogleFonts.poppins(
-          fontSize: 28,
-          fontWeight: FontWeight.w800,
-          color: const Color(0xFF2C3E50),
         ),
       ),
     );

@@ -1,7 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconstruct/features/auth/data/email_service.dart';
+import 'package:iconstruct/features/auth/data/otp_send_policy.dart';
 import 'package:iconstruct/features/auth/presentation/screens/reset_password_screen.dart';
+import 'package:iconstruct/core/theme/app_theme.dart';
+import 'package:iconstruct/core/widgets/app_message.dart';
 
 class ForgotPasswordOtpScreen extends StatefulWidget {
   final String email;
@@ -21,16 +25,37 @@ class _ForgotPasswordOtpScreenState extends State<ForgotPasswordOtpScreen> {
   bool _verifying = false;
   bool _resending = false;
   String? _errorMessage;
+  int _resendCountdown = otpResendCooldownSeconds;
+  bool _canResend = false;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
     _otpControllers = List.generate(6, (_) => TextEditingController());
     _otpFocusNodes = List.generate(6, (_) => FocusNode());
+    _startCountdown();
+  }
+
+  void _startCountdown() {
+    _timer?.cancel();
+    setState(() {
+      _resendCountdown = otpResendCooldownSeconds;
+      _canResend = false;
+    });
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_resendCountdown == 0) {
+        if (mounted) setState(() => _canResend = true);
+        timer.cancel();
+      } else {
+        if (mounted) setState(() => _resendCountdown--);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _timer?.cancel();
     for (final c in _otpControllers) {
       c.dispose();
     }
@@ -40,7 +65,10 @@ class _ForgotPasswordOtpScreenState extends State<ForgotPasswordOtpScreen> {
     super.dispose();
   }
 
-  String get _enteredOtp => _otpControllers.map((c) => c.text).join();
+  String get _enteredOtp => _otpControllers.map((c) {
+        final digits = c.text.replaceAll(RegExp(r'\D'), '');
+        return digits.isEmpty ? '' : digits[digits.length - 1];
+      }).join();
 
   void _onOtpChanged(int index, String value) {
     final sanitized = value.replaceAll(RegExp(r'\D'), '');
@@ -60,6 +88,7 @@ class _ForgotPasswordOtpScreenState extends State<ForgotPasswordOtpScreen> {
   }
 
   Future<void> _resend() async {
+    if (!_canResend || _resending) return;
     FocusScope.of(context).unfocus();
     setState(() => _resending = true);
     try {
@@ -68,17 +97,18 @@ class _ForgotPasswordOtpScreenState extends State<ForgotPasswordOtpScreen> {
         isPasswordReset: true,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(
+      _startCountdown();
+      showAppMessage(
         context,
-      ).showSnackBar(SnackBar(content: Text(result.message)));
+        SnackBar(content: Text(result.message)),
+        kind: AppMessageKind.success,
+      );
     } on EmailApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
+      showAppMessage(context, SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      showAppMessage(context, 
         const SnackBar(content: Text('Failed to resend the code.')),
       );
     } finally {
@@ -241,20 +271,32 @@ class _ForgotPasswordOtpScreenState extends State<ForgotPasswordOtpScreen> {
                                       vertical: 8,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFFFFEBEB),
+                                      color: const Color(0xFFFFF4D6),
                                       borderRadius: BorderRadius.circular(10),
                                       border: Border.all(
-                                        color: const Color(0xFFE8AEAE),
+                                        color: const Color(0xFFE0A84A),
                                       ),
                                     ),
-                                    child: Text(
-                                      _errorMessage!,
-                                      textAlign: TextAlign.center,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        color: const Color(0xFFB33A3A),
-                                      ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.warning_amber_rounded,
+                                          size: 16,
+                                          color: AppColors.warning,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            _errorMessage!,
+                                            textAlign: TextAlign.left,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.warning,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ],
@@ -272,7 +314,9 @@ class _ForgotPasswordOtpScreenState extends State<ForgotPasswordOtpScreen> {
                                       ),
                                     ),
                                     TextButton(
-                                      onPressed: _resending ? null : _resend,
+                                      onPressed: _canResend && !_resending
+                                          ? _resend
+                                          : null,
                                       style: TextButton.styleFrom(
                                         padding: EdgeInsets.zero,
                                         minimumSize: Size.zero,
@@ -292,7 +336,9 @@ class _ForgotPasswordOtpScreenState extends State<ForgotPasswordOtpScreen> {
                                               ),
                                             )
                                           : Text(
-                                              'Resend',
+                                              _canResend
+                                                  ? 'Resend'
+                                                  : 'Resend in ${_resendCountdown}s',
                                               style: GoogleFonts.inter(
                                                 fontSize: 10,
                                                 fontWeight: FontWeight.w700,

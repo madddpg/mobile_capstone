@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:iconstruct/features/auth/data/email_service.dart';
+import 'package:iconstruct/core/widgets/app_message.dart';
 
 class OtpDemoScreen extends StatefulWidget {
   const OtpDemoScreen({super.key});
@@ -25,19 +26,17 @@ class _OtpDemoScreenState extends State<OtpDemoScreen> {
       final result = await _emailService.sendCurrentUserOtp();
 
       if (!mounted) return;
-      ScaffoldMessenger.of(
+      showAppMessage(
         context,
-      ).showSnackBar(SnackBar(content: Text(result.message)));
+        SnackBar(content: Text(result.message)),
+        kind: AppMessageKind.success,
+      );
     } on EmailApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
+      showAppMessage(context, SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Something went wrong.')));
+      showAppMessage(context, const SnackBar(content: Text('Something went wrong.')));
     } finally {
       if (mounted) setState(() => _loading = false);
     }

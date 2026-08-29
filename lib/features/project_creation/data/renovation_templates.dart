@@ -42,6 +42,7 @@ class RenovationTemplateItem {
   final double? qtyPerSqm;
 
   final String? size;
+  final List<String> availableSizes;
   final String? notes;
   final bool isSwappable;
   final List<MaterialAlternative> alternatives;
@@ -53,6 +54,7 @@ class RenovationTemplateItem {
     required this.defaultQuantity,
     this.qtyPerSqm,
     this.size,
+    this.availableSizes = const [],
     this.notes,
     this.isSwappable = false,
     this.alternatives = const [],
@@ -71,6 +73,14 @@ class RenovationTemplateItem {
       }
     }
 
+    final rawSizes = data['availableSizes'];
+    final sizes = <String>[];
+    if (rawSizes is List) {
+      for (final s in rawSizes) {
+        if (s != null && s.toString().isNotEmpty) sizes.add(s.toString());
+      }
+    }
+
     return RenovationTemplateItem(
       name: (data['name'] ?? '').toString(),
       category: (data['category'] ?? 'General').toString(),
@@ -82,6 +92,7 @@ class RenovationTemplateItem {
           ? (data['qtyPerSqm'] as num).toDouble()
           : double.tryParse('${data['qtyPerSqm']}'),
       size: data['size']?.toString(),
+      availableSizes: sizes,
       notes: data['notes']?.toString(),
       isSwappable: data['isSwappable'] == true || alts.isNotEmpty,
       alternatives: alts,
@@ -95,6 +106,7 @@ class RenovationTemplateItem {
         'defaultQuantity': defaultQuantity,
         if (qtyPerSqm != null) 'qtyPerSqm': qtyPerSqm,
         if (size != null && size!.isNotEmpty) 'size': size,
+        if (availableSizes.isNotEmpty) 'availableSizes': availableSizes,
         if (notes != null && notes!.isNotEmpty) 'notes': notes,
         'isSwappable': isSwappable,
         if (alternatives.isNotEmpty)
@@ -108,6 +120,7 @@ class RenovationTemplateItem {
     double? defaultQuantity,
     double? qtyPerSqm,
     String? size,
+    List<String>? availableSizes,
     String? notes,
     bool? isSwappable,
     List<MaterialAlternative>? alternatives,
@@ -119,6 +132,7 @@ class RenovationTemplateItem {
       defaultQuantity: defaultQuantity ?? this.defaultQuantity,
       qtyPerSqm: qtyPerSqm ?? this.qtyPerSqm,
       size: size ?? this.size,
+      availableSizes: availableSizes ?? this.availableSizes,
       notes: notes ?? this.notes,
       isSwappable: isSwappable ?? this.isSwappable,
       alternatives: alternatives ?? this.alternatives,

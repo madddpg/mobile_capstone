@@ -156,3 +156,133 @@ test('unrelated builder cannot read another builder post', async () => {
   const stranger = authed('builder-2');
   await assertFails(stranger.doc('projectPosts/post-1').get());
 });
+
+test('builder can accept a quote with only status and acceptedAt', async () {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await db.doc('projectPosts/post-1').set({
+      userId: 'builder-1',
+      projectName: 'Roof',
+      materials: [],
+      status: 'open',
+      quotationCount: 1,
+    });
+    await db.doc('projectPosts/post-1/quotations/shop-a').set({
+      shopId: 'shop-a',
+      postId: 'post-1',
+      userId: 'builder-1',
+      estimatedTotal: 100,
+      status: 'submitted',
+    });
+  });
+
+  const builder = authed('builder-1');
+  await assertSucceeds(
+    builder.doc('projectPosts/post-1/quotations/shop-a').update({
+      status: 'accepted',
+      acceptedAt: new Date(),
+    }),
+  );
+});
+
+test('builder cannot accept a quote with extra keys', async () {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await db.doc('projectPosts/post-1').set({
+      userId: 'builder-1',
+      projectName: 'Roof',
+      materials: [],
+      status: 'open',
+      quotationCount: 1,
+    });
+    await db.doc('projectPosts/post-1/quotations/shop-a').set({
+      shopId: 'shop-a',
+      postId: 'post-1',
+      userId: 'builder-1',
+      estimatedTotal: 100,
+      status: 'submitted',
+    });
+  });
+
+  const builder = authed('builder-1');
+  await assertFails(
+    builder.doc('projectPosts/post-1/quotations/shop-a').update({
+      status: 'accepted',
+      acceptedAt: new Date(),
+      acceptedBy: 'builder-1',
+      updatedAt: new Date(),
+    }),
+  );
+});
+
+test('builder can accept a quote when the post stores uid on builderId', async () {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await db.doc('projectPosts/post-1').set({
+      builderId: 'builder-1',
+      projectName: 'Roof',
+      materials: [],
+      status: 'open',
+      quotationCount: 1,
+    });
+    await db.doc('projectPosts/post-1/quotations/shop-a').set({
+      shopId: 'shop-a',
+      postId: 'post-1',
+      estimatedTotal: 100,
+      status: 'submitted',
+    });
+  });
+
+  const builder = authed('builder-1');
+  await assertSucceeds(
+    builder.doc('projectPosts/post-1/quotations/shop-a').update({
+      status: 'accepted',
+      acceptedAt: new Date(),
+    }),
+  );
+});
+
+test('builder can create a conversation after accepting a quote', async () {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await db.doc('projectPosts/post-1').set({
+      userId: 'builder-1',
+      projectName: 'Roof',
+      materials: [],
+      status: 'offer_accepted',
+      quotationCount: 1,
+    });
+    await db.doc('projectPosts/post-1/quotations/shop-a').set({
+      shopId: 'shop-a',
+      postId: 'post-1',
+      userId: 'builder-1',
+      estimatedTotal: 100,
+      status: 'accepted',
+    });
+  });
+
+  const builder = authed('builder-1');
+  await assertSucceeds(
+    builder.doc('conversations/post-1_shop-a').set({
+      projectId: 'post-1',
+      quotationId: 'shop-a',
+      shopId: 'shop-a',
+      shopName: 'GIShop',
+      builderId: 'builder-1',
+      userId: 'builder-1',
+      builderName: 'Builder',
+      projectTitle: 'Roof',
+      status: 'open',
+      lastMessage: 'Quote accepted',
+    }),
+  );
+  await assertSucceeds(
+    builder.doc('conversations/post-1_shop-a/messages/m1').set({
+      senderId: 'builder-1',
+      senderRole: 'builder',
+      text: 'Hello',
+      createdAt: new Date(),
+    }),
+  );
+});
+

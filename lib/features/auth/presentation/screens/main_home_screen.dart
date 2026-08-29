@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 
 import 'package:iconstruct/core/navigation/planning_nav.dart';
-import 'package:iconstruct/core/services/unread_notifications.dart';
+import 'package:iconstruct/core/state/onboarding_preferences.dart';
+import 'package:iconstruct/core/state/user_state/user_provider.dart';
 import 'package:iconstruct/features/auth/presentation/screens/saved_projects.dart';
 import 'package:iconstruct/features/auth/presentation/screens/profile_screen.dart';
 import 'package:iconstruct/features/auth/presentation/screens/top_shops_screen.dart';
@@ -10,15 +13,111 @@ import 'package:iconstruct/features/auth/presentation/models/ranked_shop.dart';
 import 'package:iconstruct/features/auth/presentation/services/shop_ranking_service.dart';
 import 'package:iconstruct/core/widgets/offset_pill_nav.dart';
 import 'package:iconstruct/core/widgets/user_avatar.dart';
-import 'package:iconstruct/features/notifications/screens/notifications_screen.dart';
+import 'package:iconstruct/features/onboarding/data/home_guide_steps.dart';
+import 'package:iconstruct/features/onboarding/presentation/widgets/home_guide_overlay.dart';
 import 'package:iconstruct/features/project_creation/screens/project_tracking_screen.dart';
 
-class MainHomeScreen extends StatelessWidget {
-  const MainHomeScreen({super.key});
+class MainHomeScreen extends StatefulWidget {
+  const MainHomeScreen({super.key, this.forceHomeGuide = false});
 
+  /// Replay the first-login tour even if it was already finished.
+  final bool forceHomeGuide;
+
+  @override
+  State<MainHomeScreen> createState() => _MainHomeScreenState();
+}
+
+class _MainHomeScreenState extends State<MainHomeScreen> {
   static const Color _cream = Color(0xFFEBE0CC);
   static const Color _darkBlue = Color(0xFF2C3E50);
   static const Color _midBlue = Color(0xFF648DB6);
+
+  final GlobalKey _startEstimateKey = GlobalKey();
+  final GlobalKey _postBiddingKey = GlobalKey();
+  final GlobalKey _canvassKey = GlobalKey();
+  final ScrollController _scrollController = ScrollController();
+
+  bool _guideVisible = false;
+  int _guideStep = 0;
+  Rect? _guideHighlight;
+  List<HomeGuideStep> _guideSteps = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeStartGuide());
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _maybeStartGuide() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    if (!widget.forceHomeGuide &&
+        await OnboardingPreferences.hasSeenHomeGuide(uid)) {
+      return;
+    }
+    if (!mounted) return;
+    final firstName = context.read<UserProvider>().currentUser?.firstName;
+    setState(() {
+      _guideSteps = homeGuideSteps(firstName: firstName);
+      _guideVisible = true;
+      _guideStep = 0;
+    });
+    await _syncGuideHighlight();
+  }
+
+  Future<void> _syncGuideHighlight() async {
+    if (!_guideVisible || _guideSteps.isEmpty) return;
+    final target = _guideSteps[_guideStep].target;
+    final key = switch (target) {
+      HomeGuideTarget.welcome => null,
+      HomeGuideTarget.startEstimate => _startEstimateKey,
+      HomeGuideTarget.postBidding => _postBiddingKey,
+      HomeGuideTarget.canvassTracking => _canvassKey,
+      HomeGuideTarget.shopChat => null,
+    };
+    if (key?.currentContext != null) {
+      await Scrollable.ensureVisible(
+        key!.currentContext!,
+        alignment: 0.28,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOut,
+      );
+    }
+    if (!mounted) return;
+    setState(() => _guideHighlight = _rectFor(key));
+  }
+
+  Rect? _rectFor(GlobalKey? key) {
+    final ctx = key?.currentContext;
+    if (ctx == null) return null;
+    final box = ctx.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return null;
+    return box.localToGlobal(Offset.zero) & box.size;
+  }
+
+  Future<void> _finishGuide() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    await OnboardingPreferences.markHomeGuideSeen(uid);
+    if (!mounted) return;
+    setState(() {
+      _guideVisible = false;
+      _guideHighlight = null;
+    });
+  }
+
+  Future<void> _nextGuideStep() async {
+    if (_guideStep >= _guideSteps.length - 1) {
+      await _finishGuide();
+      return;
+    }
+    setState(() => _guideStep += 1);
+    await _syncGuideHighlight();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,6 +156,7 @@ class MainHomeScreen extends StatelessWidget {
 
           Positioned.fill(
             child: SingleChildScrollView(
+              controller: _scrollController,
               padding: const EdgeInsets.only(bottom: 120),
               child: Column(
                 children: [
@@ -70,7 +170,6 @@ class MainHomeScreen extends StatelessWidget {
                             vertical: 15,
                           ),
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               UserAvatar(
                                 size: 38,
@@ -83,20 +182,6 @@ class MainHomeScreen extends StatelessWidget {
                                     ),
                                   );
                                 },
-                              ),
-                              UnreadNotificationsBadge(
-                                child: _TopIconButton(
-                                  icon: Icons.notifications_none_rounded,
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) =>
-                                            const NotificationsScreen(),
-                                      ),
-                                    );
-                                  },
-                                ),
                               ),
                             ],
                           ),
@@ -149,6 +234,9 @@ class MainHomeScreen extends StatelessWidget {
                   _MainCard(
                     backgroundColor: _darkBlue,
                     cream: _cream,
+                    startEstimateKey: _startEstimateKey,
+                    postBiddingKey: _postBiddingKey,
+                    canvassKey: _canvassKey,
                     onSeeLocations: () {},
                     onContinueLastEstimate: () {
                       PlanningNav.continueLastEstimate(context);
@@ -208,26 +296,18 @@ class MainHomeScreen extends StatelessWidget {
           ),
 
           const OffsetPillNav(activeTab: OffsetNavTab.home),
+
+          if (_guideVisible && _guideSteps.isNotEmpty)
+            Positioned.fill(
+              child: HomeGuideOverlay(
+                steps: _guideSteps,
+                stepIndex: _guideStep,
+                highlight: _guideHighlight,
+                onNext: _nextGuideStep,
+                onSkip: _finishGuide,
+              ),
+            ),
         ],
-      ),
-    );
-  }
-}
-
-class _TopIconButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _TopIconButton({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkResponse(
-        onTap: onTap,
-        radius: 24,
-        child: Icon(icon, color: const Color(0xFF2C3E50), size: 34),
       ),
     );
   }
@@ -236,6 +316,9 @@ class _TopIconButton extends StatelessWidget {
 class _MainCard extends StatelessWidget {
   final Color backgroundColor;
   final Color cream;
+  final Key? startEstimateKey;
+  final Key? postBiddingKey;
+  final Key? canvassKey;
   final VoidCallback onSeeLocations;
   final VoidCallback onContinueLastEstimate;
   final VoidCallback onStartNewRenovation;
@@ -247,6 +330,9 @@ class _MainCard extends StatelessWidget {
   const _MainCard({
     required this.backgroundColor,
     required this.cream,
+    this.startEstimateKey,
+    this.postBiddingKey,
+    this.canvassKey,
     required this.onSeeLocations,
     required this.onContinueLastEstimate,
     required this.onStartNewRenovation,
@@ -289,6 +375,7 @@ class _MainCard extends StatelessWidget {
             subtitle:
                 'Name an estimate, plan materials with AI or a template, then get ready to canvass shops.',
             onTap: onStartNewRenovation,
+            key: startEstimateKey,
           ),
           const SizedBox(height: 12),
           _ActionTile(
@@ -305,6 +392,7 @@ class _MainCard extends StatelessWidget {
             subtitle:
                 'Choose an estimate that is ready and request private quotations from hardware shops.',
             onTap: onPostProject,
+            key: postBiddingKey,
           ),
           const SizedBox(height: 12),
           _ActionTile(
@@ -313,6 +401,7 @@ class _MainCard extends StatelessWidget {
             subtitle:
                 'Follow each estimate from planning through bids received to supplier selected.',
             onTap: onViewQuotations,
+            key: canvassKey,
           ),
         ],
       ),
@@ -327,6 +416,7 @@ class _ActionTile extends StatelessWidget {
   final VoidCallback onTap;
 
   const _ActionTile({
+    super.key,
     required this.icon,
     required this.title,
     required this.subtitle,

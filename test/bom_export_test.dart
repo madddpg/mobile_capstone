@@ -68,6 +68,12 @@ void main() {
     await out.writeAsBytes(bytes);
   });
 
+  test('image export PDF builds with the high-contrast option', () async {
+    final bytes = await BomExportService.buildPdf(_sample(), forImage: true);
+    expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
+    expect(bytes.length, greaterThan(1000));
+  });
+
   test('legacy string materials keep their name', () {
     final data = _sample();
     expect(data.materials.length, 4);

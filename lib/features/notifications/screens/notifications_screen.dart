@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconstruct/core/firebase/firestore_error.dart';
 import 'package:iconstruct/features/bidding/screens/posted_project_details_screen.dart';
 import 'package:iconstruct/features/bidding/screens/quotations_screen.dart';
+import 'package:iconstruct/features/chat/screens/chat_thread_screen.dart';
 
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
@@ -265,6 +266,16 @@ class NotificationCard extends StatelessWidget {
         context,
         MaterialPageRoute(
           builder: (context) => QuotationsScreen(postId: postId),
+        ),
+      );
+    } else if ((type == 'chat_unlocked' || type == 'chat_message') &&
+        (data['conversationId'] ?? '').toString().isNotEmpty) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ChatThreadScreen(
+            conversationId: data['conversationId'].toString(),
+          ),
         ),
       );
     }

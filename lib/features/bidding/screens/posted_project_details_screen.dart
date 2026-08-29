@@ -3,6 +3,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
 import 'package:iconstruct/core/widgets/offset_pill_nav.dart';
+import 'package:iconstruct/core/navigation/planning_nav.dart';
+import 'package:iconstruct/features/chat/data/chat_service.dart';
+import 'package:iconstruct/features/chat/screens/chat_inbox_screen.dart';
+import 'package:iconstruct/features/chat/screens/chat_thread_screen.dart';
 import 'quotations_screen.dart';
 
 class PostedProjectDetailsScreen extends StatelessWidget {
@@ -52,6 +56,11 @@ class PostedProjectDetailsScreen extends StatelessWidget {
           final num totalArea = data['totalAreaSqm'] ?? 0;
           final String budget = data['budget'] ?? 'N/A';
           final int quoteCount = data['quotationCount'] ?? 0;
+          final selectedShopId = (data['selectedShopId'] ?? '').toString();
+          final selectedShopName = (data['selectedShopName'] ?? '').toString();
+          final selectedQuotationId =
+              (data['selectedQuotationId'] ?? '').toString();
+          final hasSelectedShop = selectedShopId.isNotEmpty;
 
           return Stack(
             children: [
@@ -233,6 +242,95 @@ class PostedProjectDetailsScreen extends StatelessWidget {
                                   style: GoogleFonts.poppins(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            if (hasSelectedShop) ...[
+                              const SizedBox(height: 10),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: creamBg,
+                                    foregroundColor: navyCard,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 20,
+                                      vertical: 10,
+                                    ),
+                                  ),
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ChatThreadScreen(
+                                          conversationId:
+                                              ChatService.conversationId(
+                                            postId,
+                                            selectedShopId,
+                                          ),
+                                          shopName: selectedShopName.isEmpty
+                                              ? null
+                                              : selectedShopName,
+                                          postId: postId,
+                                          shopId: selectedShopId,
+                                          quotationId:
+                                              selectedQuotationId.isEmpty
+                                              ? selectedShopId
+                                              : selectedQuotationId,
+                                          projectTitle: projectName,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  child: Text(
+                                    'Message shop',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 10),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const ChatInboxScreen(),
+                                    ),
+                                  );
+                                },
+                                child: Text(
+                                  'Shop messages',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: creamBg,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: () =>
+                                    PlanningNav.startNewEstimate(context),
+                                child: Text(
+                                  'Start a new estimate',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: creamBg,
                                   ),
                                 ),
                               ),

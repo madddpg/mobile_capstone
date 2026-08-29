@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:iconstruct/core/validation/password_policy.dart';
 import 'package:iconstruct/features/auth/data/email_service.dart';
 import 'package:iconstruct/features/auth/presentation/widgets/otp_dialog.dart';
+import 'package:iconstruct/features/auth/data/auth_login_error.dart';
+import 'package:iconstruct/core/widgets/app_message.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -148,9 +150,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         email.isEmpty ||
         password.isEmpty ||
         confirmPassword.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('All fields are required.')));
+      showAppMessage(context, const SnackBar(content: Text('All fields are required.')));
       return;
     }
 
@@ -165,7 +165,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     if (!_acceptedTerms) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      showAppMessage(context, 
         const SnackBar(
           content: Text('Please read and accept the Terms and Conditions.'),
         ),
@@ -178,7 +178,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     try {
       debugPrint('Registration started');
 
-      final uid = await _emailService.register(
+      await _emailService.register(
         firstName: firstName,
         lastName: lastName,
         email: email,
@@ -187,23 +187,32 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      showAppMessage(
+        context,
         const SnackBar(
-          content: Text('Registration successful. OTP sent to email.'),
+          content: Text(
+            'We sent a verification code. Your account is created after you enter it.',
+          ),
         ),
+        kind: AppMessageKind.success,
       );
 
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (_) => OtpDialog(email: email, uid: uid),
+        builder: (_) => OtpDialog(
+          email: email,
+          firstName: firstName,
+          lastName: lastName,
+          password: password,
+        ),
       );
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      showAppMessage(context, 
         SnackBar(
-          content: Text(e.toString().replaceAll('EmailApiException: ', '')),
+          content: Text(stripAuthExceptionPrefix(e)),
         ),
       );
     } finally {
@@ -667,12 +676,9 @@ class _RegisterField extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFF8DB3E0), width: 1.5),
         ),
-        errorText: errorText,
-        errorStyle: GoogleFonts.inter(
-          color: const Color(0xFFFFD5D8),
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
+        error: warningFieldError(errorText),
+        errorBorder: warningErrorBorder(),
+        focusedErrorBorder: warningErrorBorder(width: 1.5),
       ),
     );
   }

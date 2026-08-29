@@ -135,6 +135,17 @@ class ProjectLifecycle {
     return stageWaiting;
   }
 
+  /// Whether the estimate is still in material planning (not yet canvassing).
+  static bool isPlanning(String status) {
+    return stageIndex(status) < stageWaiting;
+  }
+
+  /// Whether quotations have already been requested for this estimate.
+  static bool isPosted(String status, {String? postId}) {
+    if (postId != null && postId.isNotEmpty) return true;
+    return stageIndex(status) >= stageWaiting;
+  }
+
   /// Whether a builder may mark the planning cycle complete.
   static bool canMarkComplete(String status) {
     final stage = stageIndex(status);

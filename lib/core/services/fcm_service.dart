@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'package:iconstruct/features/bidding/screens/quotations_screen.dart';
+import 'package:iconstruct/features/chat/screens/chat_thread_screen.dart';
 import 'package:iconstruct/firebase_options.dart';
 import 'package:iconstruct/main.dart' show navigatorKey;
 
@@ -141,11 +142,11 @@ class FCMService {
     final notification = message.notification;
     final title = notification?.title ??
         message.data['title'] ??
-        'New quotation received';
+        _foregroundTitle(message.data['type']);
     final body = notification?.body ??
         message.data['message'] ??
         message.data['body'] ??
-        'A hardware shop submitted a quotation for your estimate.';
+        _foregroundBody(message.data['type']);
 
     await _localNotifications.show(
       id: message.hashCode,
@@ -186,6 +187,7 @@ class FCMService {
 
     final type = message.data['type'];
     final postId = message.data['postId'];
+    final conversationId = message.data['conversationId'];
     final notificationId = message.data['notificationId'];
 
     if (notificationId != null && notificationId.toString().isNotEmpty) {
@@ -198,19 +200,55 @@ class FCMService {
           );
     }
 
+    final nav = navigatorKey.currentState;
+    if (nav == null) {
+      debugPrint('navigatorKey unavailable; cannot open notification target');
+      return;
+    }
+
+    if ((type == 'chat_unlocked' || type == 'chat_message') &&
+        conversationId != null &&
+        conversationId.toString().isNotEmpty) {
+      nav.push(
+        MaterialPageRoute(
+          builder: (_) => ChatThreadScreen(
+            conversationId: conversationId.toString(),
+          ),
+        ),
+      );
+      return;
+    }
+
     if (type == 'new_quotation' &&
         postId != null &&
         postId.toString().isNotEmpty) {
-      final nav = navigatorKey.currentState;
-      if (nav == null) {
-        debugPrint('navigatorKey unavailable; cannot open quotations');
-        return;
-      }
       nav.push(
         MaterialPageRoute(
           builder: (_) => QuotationsScreen(postId: postId.toString()),
         ),
       );
+    }
+  }
+
+  String _foregroundTitle(dynamic type) {
+    switch (type) {
+      case 'chat_unlocked':
+        return 'Chat unlocked';
+      case 'chat_message':
+        return 'New shop message';
+      default:
+        return 'New quotation received';
+    }
+  }
+
+  String _foregroundBody(dynamic type) {
+    switch (type) {
+      case 'chat_unlocked':
+        return 'You can now message the selected hardware shop.';
+      case 'chat_message':
+        return 'A hardware shop sent you a message.';
+      default:
+        return 'A hardware shop submitted a quotation for your estimate.';
     }
   }
 }

@@ -239,7 +239,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
               Positioned(
                 right: -50,
-                bottom: 22,
+                bottom: 20,
                 child: _buildSubmitButton(enabled: canSubmit),
               ),
             ],
@@ -265,8 +265,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ).withValues(alpha: 0.45),
           minimumSize: const Size(170, 46),
           shape: const StadiumBorder(),
-          elevation: enabled ? 4 : 0,
-          shadowColor: const Color(0xFF2C3E50).withValues(alpha: 0.35),
+          elevation: enabled ? 8 : 0,
+          shadowColor: Colors.black.withAlpha(102),
         ),
         child: const Text(
           'Continue',

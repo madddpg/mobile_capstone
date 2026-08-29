@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:iconstruct/core/firebase/firestore_error.dart';
 import 'package:iconstruct/core/widgets/user_avatar.dart';
+import 'package:iconstruct/core/widgets/app_message.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final String firstName;
@@ -48,7 +49,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final lName = _lNameController.text.trim();
 
     if (fName.isEmpty || lName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      showAppMessage(context, 
         const SnackBar(content: Text('Please fill out all fields.')),
       );
       return;
@@ -62,13 +63,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      showAppMessage(
+        context,
         const SnackBar(content: Text('Profile updated successfully.')),
+        kind: AppMessageKind.success,
       );
       Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      showAppMessage(context, 
         SnackBar(
           content: Text(firestoreUserMessage(e, action: 'update your profile')),
         ),

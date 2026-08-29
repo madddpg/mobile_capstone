@@ -5,21 +5,19 @@ import 'package:flutter/foundation.dart';
 ///
 /// [action] completes the sentence `Could not ...`, so pass a verb phrase such
 /// as `'save your estimate'`.
-///
-/// Raw exception text is only appended in debug builds; released builds never
-/// show error codes, stack text or setup instructions to a builder.
 String firestoreUserMessage(Object error, {required String action}) {
   final code = error is FirebaseException ? error.code : null;
+
+  if (kDebugMode) {
+    debugPrint('Firestore error while trying to $action: $error');
+  }
 
   switch (code) {
     case 'permission-denied':
       if (FirebaseAuth.instance.currentUser == null) {
         return 'Your session expired. Please log in again to $action.';
       }
-      return _withDebugDetail(
-        "You don't have permission to $action.",
-        'Check firestore.rules and App Check settings.',
-      );
+      return "You don't have permission to $action.";
 
     case 'unauthenticated':
       return 'Your session expired. Please log in again to $action.';
@@ -49,19 +47,8 @@ String firestoreUserMessage(Object error, {required String action}) {
   }
 
   if (error is FirebaseAuthException) {
-    return _withDebugDetail(
-      'Could not $action. Please try again.',
-      '${error.code}: ${error.message ?? ''}',
-    );
+    return 'Could not $action. Please try again.';
   }
 
-  return _withDebugDetail(
-    'Could not $action. Please try again.',
-    error.toString(),
-  );
-}
-
-String _withDebugDetail(String message, String detail) {
-  if (!kDebugMode || detail.trim().isEmpty) return message;
-  return '$message\n[debug] ${detail.trim()}';
+  return 'Could not $action. Please try again.';
 }

@@ -12,6 +12,7 @@ import 'package:iconstruct/core/widgets/offset_panel_shell.dart';
 import 'package:iconstruct/features/auth/presentation/screens/material_estimator.dart';
 import 'package:iconstruct/features/project_creation/data/bom_quantity_estimator.dart';
 import 'package:iconstruct/features/project_creation/data/renovation_templates.dart';
+import 'package:iconstruct/core/widgets/app_message.dart';
 
 IconData getFilterIcon(String filter) {
   switch (filter.trim()) {
@@ -60,6 +61,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
   late final MaterialRecommendationController _materials;
   final ScrollController _materialsScrollController = ScrollController();
   final PageController _categoryPageController = PageController();
+  int _categoryPageIndex = 0;
 
   final List<AddedPlumbingSelection> _selectedProducts =
       <AddedPlumbingSelection>[];
@@ -76,6 +78,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     final firestore = FirestoreMaterialsService();
     _materials = MaterialRecommendationController(firestore: firestore);
     _materials.addListener(_onMaterialsChanged);
+    _categoryPageController.addListener(_onCategoryPageChanged);
 
     if (_isTemplateMode) {
       _seedFromTemplate(widget.template!);
@@ -123,6 +126,14 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     });
   }
 
+  void _onCategoryPageChanged() {
+    if (!_categoryPageController.hasClients) return;
+    final page = _categoryPageController.page?.round() ?? 0;
+    if (page != _categoryPageIndex) {
+      setState(() => _categoryPageIndex = page);
+    }
+  }
+
   void _onMaterialsChanged() {
     if (!mounted) return;
     setState(() {});
@@ -155,6 +166,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
   @override
   void dispose() {
     _materials.removeListener(_onMaterialsChanged);
+    _categoryPageController.removeListener(_onCategoryPageChanged);
     _materialsScrollController.dispose();
     _categoryPageController.dispose();
     super.dispose();
@@ -191,7 +203,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
           const SizedBox(height: 10),
           Text(
             _isTemplateMode
-                ? 'Reference package — quantities scaled from area.\nEdit qty, remove items, or drag alternatives onto any material row to change type.'
+                ? 'Reference package — quantities scaled from area.\nEdit qty, remove items, or drag a type onto its matching material only.'
                 : 'Select products for your project.\nSizes will appear after clicking a product.',
             style: GoogleFonts.poppins(
               fontSize: 12,
@@ -225,6 +237,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     if (_categoryPageController.hasClients) {
       _categoryPageController.jumpToPage(0);
     }
+    setState(() => _categoryPageIndex = 0);
 
     if (!_materialsScrollController.hasClients) return;
 
@@ -271,7 +284,7 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
       children: [
         if (areaLabel != null) ...[
           Text(
-            'Quantities auto-estimated for $areaLabel. Drag an alternative onto a tile row to change type.',
+            'Quantities auto-estimated for $areaLabel. Drag a type onto its own material only.',
             style: GoogleFonts.poppins(
               fontSize: 11,
               color: const Color(0xFF8FB2D4),
@@ -289,39 +302,147 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
               final selected = _selectedProducts[index];
 
               return Padding(
-                padding: const EdgeInsets.only(bottom: 14),
+                padding: const EdgeInsets.only(bottom: 4),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    DragTarget<MaterialAlternative>(
+                    if (item.alternatives.isNotEmpty) ...[
+                      Text(
+                        'Available types',
+                        style: GoogleFonts.poppins(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFFE0D7C9),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      SizedBox(
+                        height: 36,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: item.alternatives.length,
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(width: 8),
+                          itemBuilder: (context, altIndex) {
+                            final alt = item.alternatives[altIndex];
+                            return Draggable<_SlotAlternative>(
+                              data: _SlotAlternative(
+                                slotIndex: index,
+                                alternative: alt,
+                              ),
+                              feedback: Material(
+                                color: Colors.transparent,
+                                child: _AltChip(
+                                  label: alt.name,
+                                  dragging: true,
+                                ),
+                              ),
+                              childWhenDragging: Opacity(
+                                opacity: 0.35,
+                                child: _AltChip(label: alt.name),
+                              ),
+                              child: GestureDetector(
+                                onTap: () => _swapTemplateItem(index, alt),
+                                child: _AltChip(
+                                  label: alt.name,
+                                  selected: alt.name == item.name,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                    DragTarget<_SlotAlternative>(
                       onWillAcceptWithDetails: (details) =>
-                          item.isSwappable || item.alternatives.isNotEmpty,
+                          details.data.slotIndex == index &&
+                          (item.isSwappable || item.alternatives.isNotEmpty),
                       onAcceptWithDetails: (details) {
-                        _swapTemplateItem(index, details.data);
+                        _swapTemplateItem(index, details.data.alternative);
                       },
                       builder: (context, candidate, rejected) {
                         final hovering = candidate.isNotEmpty;
                         return Container(
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(16),
+                              bottomLeft: Radius.circular(16),
+                            ),
                             border: hovering
                                 ? Border.all(
                                     color: const Color(0xFF6EE7B7),
                                     width: 2,
                                   )
-                                : null,
+                                : rejected.isNotEmpty
+                                    ? Border.all(
+                                        color: const Color(0xFFFF8A80),
+                                        width: 1.5,
+                                      )
+                                    : null,
                           ),
                           child: _AddedMaterialItem(
                             title: selected.materialName,
                             subtitle: [
                               item.category,
-                              if ((selected.size ?? '').trim().isNotEmpty)
-                                selected.size!.trim(),
+                              if ((selected.size ?? item.size ?? '').trim().isNotEmpty)
+                                (selected.size ?? item.size!).trim(),
                               selected.unit,
-                              'drag to swap',
                             ].where((s) => s.isNotEmpty).join(' • '),
                             unit: selected.unit,
                             qtyController: selected.qtyController,
+                            availableSizes: item.availableSizes,
+                            selectedSize: selected.size ?? item.size,
+                            formulaString: BomQuantityEstimator.getFormulaString(
+                              item: item,
+                              areaSqm: widget.projectAreaSqm ?? 1.0,
+                              currentQty: selected.quantity,
+                            ),
+                            onSizeChanged: item.availableSizes.isEmpty
+                                ? null
+                                : (newSize) {
+                                    if (newSize == null || newSize.isEmpty) return;
+                                    final area = widget.projectAreaSqm ?? 1.0;
+                                    final result = BomQuantityEstimator.recalculateForSize(
+                                      item: item,
+                                      newSize: newSize,
+                                      areaSqm: area,
+                                    );
+                                    setState(() {
+                                      selected.size = newSize;
+                                      selected.quantity = result.newQty;
+                                      selected.qtyController.text =
+                                          result.newQty.toInt() == result.newQty
+                                              ? result.newQty.toInt().toString()
+                                              : result.newQty.toStringAsFixed(1);
+                                      _templateItems[index] = item.copyWith(
+                                        size: newSize,
+                                        defaultQuantity: result.newQty,
+                                      );
+
+                                      // Also check and update linked items (e.g. tile grout)
+                                      for (var i = 0; i < _templateItems.length; i++) {
+                                        final linkedItem = _templateItems[i];
+                                        final linkedSel = _selectedProducts[i];
+                                        if (linkedItem.name.toLowerCase().contains('grout') ||
+                                            linkedItem.name.toLowerCase().contains('adhesive')) {
+                                          final linkedRes = BomQuantityEstimator.recalculateForSize(
+                                            item: linkedItem,
+                                            newSize: newSize,
+                                            areaSqm: area,
+                                          );
+                                          linkedSel.quantity = linkedRes.newQty;
+                                          linkedSel.qtyController.text =
+                                              linkedRes.newQty.toInt() == linkedRes.newQty
+                                                  ? linkedRes.newQty.toInt().toString()
+                                                  : linkedRes.newQty.toStringAsFixed(1);
+                                          _templateItems[i] = linkedItem.copyWith(
+                                            defaultQuantity: linkedRes.newQty,
+                                          );
+                                        }
+                                      }
+                                    });
+                                  },
                             onChanged: (val) {
                               selected.quantity =
                                   double.tryParse(val) ?? 0.0;
@@ -341,47 +462,11 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
                         );
                       },
                     ),
-                    if (item.alternatives.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        'Drag onto row to change type:',
-                        style: GoogleFonts.poppins(
-                          fontSize: 10,
-                          color: const Color(0xFFE0D7C9),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      SizedBox(
-                        height: 36,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: item.alternatives.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(width: 8),
-                          itemBuilder: (context, altIndex) {
-                            final alt = item.alternatives[altIndex];
-                            return Draggable<MaterialAlternative>(
-                              data: alt,
-                              feedback: Material(
-                                color: Colors.transparent,
-                                child: _AltChip(label: alt.name, dragging: true),
-                              ),
-                              childWhenDragging: Opacity(
-                                opacity: 0.35,
-                                child: _AltChip(label: alt.name),
-                              ),
-                              child: GestureDetector(
-                                onTap: () => _swapTemplateItem(index, alt),
-                                child: _AltChip(
-                                  label: alt.name,
-                                  selected: alt.name == item.name,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
+                    const SizedBox(height: 12),
+                    const Divider(
+                      color: Color(0xFFEDE4D4),
+                      thickness: 1,
+                    ),
                   ],
                 ),
               );
@@ -391,28 +476,30 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
         const SizedBox(height: 12),
         Align(
           alignment: Alignment.centerRight,
-          child: SizedBox(
-            width: 150,
-            height: 40,
-            child: ElevatedButton(
-              onPressed: _selectedProducts.isEmpty ? null : _goToEstimator,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFEDE4D4),
-                foregroundColor: const Color(0xFF1E3042),
-                disabledBackgroundColor:
-                    const Color(0xFFEDE4D4).withValues(alpha: 0.4),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                elevation: 6,
-                shadowColor: Colors.black.withAlpha(100),
+          child: ElevatedButton(
+            onPressed: _selectedProducts.isEmpty ? null : _goToEstimator,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEDE4D4),
+              foregroundColor: const Color(0xFF1E3042),
+              disabledBackgroundColor:
+                  const Color(0xFFEDE4D4).withValues(alpha: 0.4),
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+              minimumSize: const Size(0, 40),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(30),
               ),
-              child: Text(
-                'Estimate Now',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
+              elevation: 6,
+              shadowColor: Colors.black.withAlpha(100),
+            ),
+            child: Text(
+              'Estimate Now',
+              maxLines: 1,
+              softWrap: false,
+              style: GoogleFonts.poppins(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                height: 1.1,
               ),
             ),
           ),
@@ -475,6 +562,9 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
           child: PageView.builder(
             controller: _categoryPageController,
             itemCount: slides.length,
+            onPageChanged: (page) {
+              setState(() => _categoryPageIndex = page);
+            },
             itemBuilder: (context, index) {
               final category = slides[index];
               final items = _materials.getItemsByCategory(category.title);
@@ -537,59 +627,55 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
           ),
         ),
 
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
 
-        Align(
-          alignment: Alignment.centerRight,
-          child: SizedBox(
-            width: 100,
-            height: 40,
-            child: ElevatedButton(
-              onPressed: () => _showNextMaterialSlide(slides.length),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFEDE4D4),
-                foregroundColor: const Color(0xFF1E3042),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                elevation: 6,
-                shadowColor: Colors.black.withAlpha(100),
-              ),
-              child: Text(
-                'Next',
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
+        if (slides.length > 1) ...[
+          _CategoryPager(
+            pageCount: slides.length,
+            currentPage: _categoryPageIndex.clamp(0, slides.length - 1),
+            labels: slides.map((s) => s.title).toList(),
+            onDotTap: (page) {
+              _categoryPageController.animateToPage(
+                page,
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeOutCubic,
+              );
+            },
+            onPrev: () {
+              final current = _categoryPageIndex.clamp(0, slides.length - 1);
+              _showMaterialSlide(
+                current == 0 ? slides.length - 1 : current - 1,
+              );
+            },
+            onNext: () => _showNextMaterialSlide(slides.length),
           ),
-        ),
-
-        const SizedBox(height: 10),
+          const SizedBox(height: 14),
+        ],
 
         Align(
           alignment: Alignment.centerRight,
-          child: SizedBox(
-            width: 150,
-            height: 40,
-            child: ElevatedButton(
-              onPressed: _goToEstimator,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFEDE4D4),
-                foregroundColor: const Color(0xFF1E3042),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                elevation: 6,
-                shadowColor: Colors.black.withAlpha(100),
+          child: ElevatedButton(
+            onPressed: _goToEstimator,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEDE4D4),
+              foregroundColor: const Color(0xFF1E3042),
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+              minimumSize: const Size(0, 40),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(30),
               ),
-              child: Text(
-                'Estimate Now',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
+              elevation: 6,
+              shadowColor: Colors.black.withAlpha(100),
+            ),
+            child: Text(
+              'Estimate Now',
+              maxLines: 1,
+              softWrap: false,
+              style: GoogleFonts.poppins(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                height: 1.1,
               ),
             ),
           ),
@@ -600,31 +686,30 @@ class _CostEstimationScreenState extends State<CostEstimationScreen> {
     );
   }
 
-  Future<void> _showNextMaterialSlide(int slideCount) async {
-    if (slideCount <= 0) return;
+  Future<void> _showMaterialSlide(int page) async {
     if (!_categoryPageController.hasClients) return;
-
-    final current = (_categoryPageController.page ?? 0).round();
-    final next = (current + 1) % slideCount;
-
     await _categoryPageController.animateToPage(
-      next,
-      duration: const Duration(milliseconds: 250),
+      page,
+      duration: const Duration(milliseconds: 320),
       curve: Curves.easeOutCubic,
     );
-
     if (!_materialsScrollController.hasClients) return;
-
     await _materialsScrollController.animateTo(
       0,
-      duration: const Duration(milliseconds: 250),
+      duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
     );
   }
 
+  Future<void> _showNextMaterialSlide(int slideCount) async {
+    if (slideCount <= 0) return;
+    final current = (_categoryPageController.page ?? 0).round();
+    await _showMaterialSlide((current + 1) % slideCount);
+  }
+
   void _goToEstimator() {
     if (_selectedProducts.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      showAppMessage(context, 
         const SnackBar(
           content: Text('Add or keep at least one material before estimating.'),
         ),
@@ -1039,7 +1124,7 @@ class _FavoriteButton extends StatelessWidget {
               if (isFavorite) {
                 await service.removeFavorite(item);
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  showAppMessage(context, 
                     SnackBar(
                       content: const Text('Removed from favorites'),
                       backgroundColor: Colors.red.shade400,
@@ -1050,18 +1135,20 @@ class _FavoriteButton extends StatelessWidget {
               } else {
                 await service.addFavorite(item);
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  showAppMessage(
+                    context,
                     SnackBar(
                       content: const Text('Added to favorites'),
                       backgroundColor: Colors.green.shade400,
                       duration: const Duration(seconds: 2),
                     ),
+                    kind: AppMessageKind.success,
                   );
                 }
               }
             } catch (_) {
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
+                showAppMessage(context, 
                   const SnackBar(content: Text('Failed to update favorites')),
                 );
               }
@@ -1126,6 +1213,127 @@ class _MaterialThumb extends StatelessWidget {
   }
 }
 
+class _SlotAlternative {
+  final int slotIndex;
+  final MaterialAlternative alternative;
+
+  const _SlotAlternative({
+    required this.slotIndex,
+    required this.alternative,
+  });
+}
+
+class _CategoryPager extends StatelessWidget {
+  final int pageCount;
+  final int currentPage;
+  final List<String> labels;
+  final ValueChanged<int> onDotTap;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+
+  const _CategoryPager({
+    required this.pageCount,
+    required this.currentPage,
+    required this.labels,
+    required this.onDotTap,
+    required this.onPrev,
+    required this.onNext,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = currentPage >= 0 && currentPage < labels.length
+        ? labels[currentPage]
+        : '';
+
+    return Column(
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFFEDE4D4),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            _PagerArrow(icon: Icons.chevron_left_rounded, onTap: onPrev),
+            Expanded(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(pageCount, (i) {
+                  final active = i == currentPage;
+                  return GestureDetector(
+                    onTap: () => onDotTap(i),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      height: 8,
+                      width: active ? 22 : 8,
+                      decoration: BoxDecoration(
+                        color: active
+                            ? const Color(0xFFEDE4D4)
+                            : const Color(0xFFEDE4D4).withValues(alpha: 0.28),
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: active
+                            ? [
+                                BoxShadow(
+                                  color: const Color(0xFFEDE4D4)
+                                      .withValues(alpha: 0.45),
+                                  blurRadius: 8,
+                                ),
+                              ]
+                            : null,
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+            _PagerArrow(icon: Icons.chevron_right_rounded, onTap: onNext),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${currentPage + 1} / $pageCount',
+          style: GoogleFonts.poppins(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFFEDE4D4).withValues(alpha: 0.7),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PagerArrow extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _PagerArrow({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFEDE4D4).withValues(alpha: 0.14),
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: 36,
+          height: 36,
+          child: Icon(icon, color: const Color(0xFFEDE4D4), size: 22),
+        ),
+      ),
+    );
+  }
+}
+
 class _AltChip extends StatelessWidget {
   final String label;
   final bool selected;
@@ -1164,13 +1372,17 @@ class _AltChip extends StatelessWidget {
   }
 }
 
-class _AddedMaterialItem extends StatelessWidget {
+class _AddedMaterialItem extends StatefulWidget {
   final String title;
   final String subtitle;
   final TextEditingController qtyController;
   final String unit;
   final ValueChanged<String> onChanged;
   final VoidCallback onRemove;
+  final List<String> availableSizes;
+  final String? selectedSize;
+  final ValueChanged<String?>? onSizeChanged;
+  final String? formulaString;
 
   const _AddedMaterialItem({
     required this.title,
@@ -1179,13 +1391,24 @@ class _AddedMaterialItem extends StatelessWidget {
     required this.unit,
     required this.onChanged,
     required this.onRemove,
+    this.availableSizes = const [],
+    this.selectedSize,
+    this.onSizeChanged,
+    this.formulaString,
   });
+
+  @override
+  State<_AddedMaterialItem> createState() => _AddedMaterialItemState();
+}
+
+class _AddedMaterialItemState extends State<_AddedMaterialItem> {
+  bool _showFormula = false;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: const Color(0xFF1E3042),
         borderRadius: BorderRadius.circular(16),
@@ -1194,108 +1417,218 @@ class _AddedMaterialItem extends StatelessWidget {
           width: 1,
         ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                    height: 1.25,
-                  ),
-                ),
-                if (subtitle.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.poppins(
-                      fontSize: 11,
-                      color: const Color(0xFFE0D7C9),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-
-          const SizedBox(width: 10),
-
-          // Loose fit so the field gives way on narrow panels instead of
-          // overflowing the row.
-          Flexible(
-            child: Container(
-              width: 132,
-              height: 38,
-              decoration: BoxDecoration(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: const Color(0xFFEDE4D4).withAlpha(120),
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                    controller: qtyController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      onChanged: onChanged,
-                      textAlign: TextAlign.center,
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.poppins(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
+                        height: 1.25,
                       ),
-                      decoration: InputDecoration(
-                        hintText: 'Qty',
-                        hintStyle: GoogleFonts.poppins(
-                          color: Colors.white38,
-                          fontSize: 10,
+                    ),
+                    if (widget.subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        widget.subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: const Color(0xFFE0D7C9),
                         ),
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
-                        border: InputBorder.none,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              const SizedBox(width: 8),
+
+              Flexible(
+                child: Container(
+                  width: 120,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: const Color(0xFFEDE4D4).withAlpha(120),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: widget.qtyController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          onChanged: widget.onChanged,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                          decoration: const InputDecoration(
+                            hintText: 'Qty',
+                            hintStyle: TextStyle(
+                              color: Colors.white38,
+                              fontSize: 10,
+                            ),
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                            border: InputBorder.none,
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Text(
+                          widget.unit,
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: const Color(0xFFEDE4D4).withAlpha(180),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              IconButton(
+                onPressed: widget.onRemove,
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.only(left: 4),
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                icon: const Icon(
+                  Icons.close_rounded,
+                  color: Color(0xFFEDE4D4),
+                  size: 18,
+                ),
+              ),
+            ],
+          ),
+
+          if (widget.availableSizes.isNotEmpty && widget.onSizeChanged != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text(
+                  'Size / Spec:',
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF8FB2D4),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Container(
+                    height: 32,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2C3E50),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: const Color(0xFFEDE4D4).withAlpha(60),
+                      ),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: widget.availableSizes.contains(widget.selectedSize)
+                            ? widget.selectedSize
+                            : widget.availableSizes.first,
+                        isExpanded: true,
+                        dropdownColor: const Color(0xFF1E3042),
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFFEDE4D4),
+                        ),
+                        icon: const Icon(
+                          Icons.arrow_drop_down,
+                          color: Color(0xFFEDE4D4),
+                          size: 18,
+                        ),
+                        items: widget.availableSizes.map((size) {
+                          return DropdownMenuItem<String>(
+                            value: size,
+                            child: Text(
+                              size,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: widget.onSizeChanged,
                       ),
                     ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: Text(
-                      unit,
-                      style: GoogleFonts.poppins(
-                        fontSize: 11,
-                        color: const Color(0xFFEDE4D4).withAlpha(180),
-                      ),
+                ),
+              ],
+            ),
+          ],
+
+          if (widget.formulaString != null && widget.formulaString!.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            InkWell(
+              onTap: () => setState(() => _showFormula = !_showFormula),
+              child: Row(
+                children: [
+                  Icon(
+                    _showFormula ? Icons.info : Icons.info_outline,
+                    size: 13,
+                    color: const Color(0xFF8FB2D4),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    _showFormula ? 'Hide Formula' : 'View Formula',
+                    style: GoogleFonts.poppins(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF8FB2D4),
+                      decoration: TextDecoration.underline,
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-
-          IconButton(
-            onPressed: onRemove,
-            visualDensity: VisualDensity.compact,
-            padding: const EdgeInsets.only(left: 4),
-            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-            icon: const Icon(
-              Icons.close_rounded,
-              color: Color(0xFFEDE4D4),
-              size: 18,
-            ),
-          ),
+            if (_showFormula) ...[
+              const SizedBox(height: 6),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2C3E50),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: const Color(0xFF8FB2D4).withAlpha(40),
+                  ),
+                ),
+                child: Text(
+                  widget.formulaString!,
+                  style: GoogleFonts.poppins(
+                    fontSize: 10,
+                    color: const Color(0xFFE0D7C9),
+                    height: 1.35,
+                  ),
+                ),
+              ),
+            ],
+          ],
         ],
       ),
     );
@@ -1416,7 +1749,7 @@ class AddedPlumbingSelection {
   final String categoryTitle;
   final String kind;
   final String materialName;
-  final String? size;
+  String? size;
   final String? length;
   final String? coverSize;
   final String unit;

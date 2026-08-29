@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:iconstruct/core/theme/app_theme.dart';
 import 'package:iconstruct/features/project_creation/screens/select_planning_method_screen.dart';
 import 'package:iconstruct/features/project_creation/widgets/glitched_flow_shell.dart';
 
@@ -51,13 +52,13 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
           'Next, choose how to plan materials — AI Planner or a renovation template.',
       trailingAction: GlitchedPillButton(
         label: 'Continue',
-        width: 140,
         onPressed: _continue,
       ),
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.only(right: 4, bottom: 8),
+          padding: const EdgeInsets.only(right: 4, bottom: 24),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           children: [
             Text(
               'Estimate Name *',
@@ -76,6 +77,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                 fontSize: 14,
               ),
               decoration: _fieldDecoration('e.g. Modern Kitchen Materials'),
+              scrollPadding: const EdgeInsets.only(bottom: 140),
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
                   return 'Estimate name is required';
@@ -104,6 +106,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
               decoration: _fieldDecoration(
                 'Preferred materials, brand notes, or BOM remarks',
               ),
+              scrollPadding: const EdgeInsets.only(bottom: 140),
             ),
           ],
         ),
@@ -137,9 +140,17 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: Colors.redAccent),
+        borderSide: const BorderSide(color: AppColors.warning),
       ),
-      errorStyle: GoogleFonts.poppins(fontSize: 11),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: AppColors.warning, width: 1.4),
+      ),
+      errorStyle: GoogleFonts.poppins(
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        color: AppColors.warning,
+      ),
     );
   }
 }

@@ -8,12 +8,14 @@ import 'package:iconstruct/features/auth/presentation/screens/cost_estimation.da
 import 'package:iconstruct/core/firebase/firestore_error.dart';
 import 'package:iconstruct/core/models/project_model.dart';
 import 'package:iconstruct/core/navigation/planning_nav.dart';
+import 'package:iconstruct/core/state/active_project_state.dart';
 import 'package:iconstruct/core/widgets/iconstruct_panel.dart';
 import 'package:iconstruct/core/widgets/offset_panel_shell.dart';
 import 'package:iconstruct/features/bidding/screens/posted_project_details_screen.dart';
 import 'package:iconstruct/features/project_creation/data/bom_export.dart';
 import 'package:iconstruct/features/project_creation/data/project_lifecycle.dart';
 import 'package:iconstruct/features/project_creation/widgets/bom_share_sheet.dart';
+import 'package:iconstruct/core/widgets/app_message.dart';
 
 class MaterialEstimatorScreen extends StatefulWidget {
   final String projectName;
@@ -68,6 +70,15 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
 
   int get _materialCount =>
       _localTiles.length + _localPlumbing.length + _localMaterials.length;
+
+  bool get _alreadyPosted =>
+      widget.existingProject != null &&
+      ProjectLifecycle.isPosted(
+        widget.existingProject!.status,
+        postId: widget.existingProject!.postId,
+      );
+
+  bool get _detailsLocked => widget.lockEstimateDetails || _alreadyPosted;
 
   @override
   void initState() {
@@ -179,7 +190,9 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Review Bill of\nMaterials',
+            _alreadyPosted
+                ? 'Review Bill of\nMaterials'
+                : 'Review Bill of\nMaterials',
             style: GoogleFonts.poppins(
               fontSize: 26,
               height: 1.15,
@@ -189,7 +202,9 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Finalize your material plan before requesting supplier quotations.',
+            _alreadyPosted
+                ? 'This estimate is posted for quotations. The material list is locked so shops quote the same BOM.'
+                : 'Finalize your material plan before requesting supplier quotations.',
             style: GoogleFonts.poppins(
               fontSize: 12,
               color: const Color(0xFFE0D7C9),
@@ -216,8 +231,8 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
           _buildTextField(
             'e.g., Modern Kitchen Materials',
             controller: _projectNameController,
-            readOnly: widget.lockEstimateDetails,
-            onChanged: widget.lockEstimateDetails
+            readOnly: _detailsLocked,
+            onChanged: _detailsLocked
                 ? null
                 : (val) {
                     setState(() {
@@ -230,8 +245,8 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
           _buildTextField(
             'e.g., Kitchen Renovation',
             controller: _projectTypeController,
-            readOnly: widget.lockEstimateDetails,
-            onChanged: widget.lockEstimateDetails
+            readOnly: _detailsLocked,
+            onChanged: _detailsLocked
                 ? null
                 : (val) {
                     setState(() {
@@ -241,15 +256,15 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
           ),
           const SizedBox(height: 14),
           _buildInputLabel(
-            widget.lockEstimateDetails
+            _detailsLocked
                 ? 'Project Area (sqm):'
                 : 'Project Area (sqm) — optional:',
           ),
           _buildTextField(
             '0.00',
             controller: _projectAreaController,
-            readOnly: widget.lockEstimateDetails,
-            onChanged: widget.lockEstimateDetails
+            readOnly: _detailsLocked,
+            onChanged: _detailsLocked
                 ? null
                 : (val) {
                     setState(() {
@@ -260,21 +275,28 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
           ),
           const SizedBox(height: 14),
           _buildInputLabel(
-            widget.lockEstimateDetails &&
-                    (widget.aiBudget?.trim().isNotEmpty ?? false)
+            _alreadyPosted ||
+                    (widget.lockEstimateDetails &&
+                        (widget.aiBudget?.trim().isNotEmpty ?? false))
                 ? 'Budget Preference:'
                 : 'Budget Preference — optional:',
           ),
           _buildDropdownField(
-            readOnly: widget.lockEstimateDetails &&
-                (widget.aiBudget?.trim().isNotEmpty ?? false),
+            readOnly: _alreadyPosted ||
+                (widget.lockEstimateDetails &&
+                    (widget.aiBudget?.trim().isNotEmpty ?? false)),
           ),
           const SizedBox(height: 14),
-          _buildInputLabel('Remarks for suppliers — optional:'),
+          _buildInputLabel(
+            _alreadyPosted
+                ? 'Remarks for suppliers:'
+                : 'Remarks for suppliers — optional:',
+          ),
           _buildTextField(
             'Brand preferences, delivery notes, or scope remarks',
             controller: _remarksController,
             maxLines: 3,
+            readOnly: _alreadyPosted,
           ),
           const SizedBox(height: 20),
           Row(
@@ -300,7 +322,9 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Confirm materials and quantities. Prices come from supplier quotations.',
+            _alreadyPosted
+                ? 'This list is locked. Shops are quoting these materials.'
+                : 'Confirm materials and quantities. Prices come from supplier quotations.',
             style: GoogleFonts.poppins(
               fontSize: 11,
               color: const Color(0xFFE0D7C9),
@@ -443,29 +467,85 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
             ),
           ),
           const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _materialCount == 0 ? null : _postProjectForBidding,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFEDE4D4),
-                foregroundColor: const Color(0xFF2C3E50),
-                disabledBackgroundColor:
-                    const Color(0xFFEDE4D4).withValues(alpha: 0.4),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
+          if (_alreadyPosted) ...[
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  final postId = widget.existingProject?.postId;
+                  if (postId == null || postId.isEmpty) return;
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => PostedProjectDetailsScreen(
+                        postId: postId,
+                      ),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFEDE4D4),
+                  foregroundColor: const Color(0xFF2C3E50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-              child: Text(
-                'Request Supplier Quotations',
-                style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
+                child: Text(
+                  'View Quotations',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
                 ),
               ),
             ),
-          ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () => PlanningNav.startNewEstimate(context),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFEDE4D4),
+                  side: const BorderSide(color: Color(0xFFEDE4D4)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: Text(
+                  'Start New Estimate',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ),
+          ] else
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _materialCount == 0 ? null : _postProjectForBidding,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFEDE4D4),
+                  foregroundColor: const Color(0xFF2C3E50),
+                  disabledBackgroundColor:
+                      const Color(0xFFEDE4D4).withValues(alpha: 0.4),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: Text(
+                  'Request Supplier Quotations',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ),
           const SizedBox(height: 10),
           SizedBox(
             width: double.infinity,
@@ -490,10 +570,11 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
             ),
           ),
           const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: _materialCount == 0 ? null : _saveProject,
+          if (!_alreadyPosted)
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: _materialCount == 0 ? null : _saveProject,
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFFEDE4D4),
                 side: const BorderSide(color: Color(0xFFEDE4D4)),
@@ -619,8 +700,22 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(context, 
           const SnackBar(content: Text('Please log in to save projects')),
+        );
+      }
+      return;
+    }
+
+    if (_alreadyPosted) {
+      if (mounted) {
+        showAppMessage(
+          context,
+          const SnackBar(
+            content: Text(
+              'This estimate is already posted. The material list cannot be changed.',
+            ),
+          ),
         );
       }
       return;
@@ -628,7 +723,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
 
     if (_projectName.trim().isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(context, 
           const SnackBar(content: Text('Please enter an Estimate Name')),
         );
       }
@@ -679,10 +774,12 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       await savedRef.set(projectData, SetOptions(merge: true));
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(
+          context,
           const SnackBar(
             content: Text('Draft saved. You can request quotations anytime.'),
           ),
+          kind: AppMessageKind.success,
         );
         // By using `push` instead of `pushReplacement`, the current screen
         // stays in the navigation stack, preserving values. When the user taps
@@ -691,7 +788,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(context, 
           SnackBar(
             content: Text(firestoreUserMessage(e, action: 'save this draft')),
             duration: const Duration(seconds: 6),
@@ -756,8 +853,21 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(context, 
           const SnackBar(content: Text('Please log in to post projects')),
+        );
+      }
+      return;
+    }
+
+    if (_alreadyPosted) {
+      if (mounted) {
+        showAppMessage(context, 
+          const SnackBar(
+            content: Text(
+              'This estimate is already posted. Start a new plan to canvass another project.',
+            ),
+          ),
         );
       }
       return;
@@ -765,7 +875,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
 
     if (_projectName.trim().isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(context, 
           const SnackBar(content: Text('Please enter an Estimate Name')),
         );
       }
@@ -776,7 +886,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
 
     if (materialsList.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(context, 
           const SnackBar(
             content: Text('Cannot post a project without materials'),
           ),
@@ -824,6 +934,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       final Map<String, dynamic> projectPostData = {
         'postId': newPostRef.id,
         'userId': uid,
+        'builderId': uid,
         'projectId': savedProjectRef.id,
         'projectName': _projectName,
         'projectType': _projectType,
@@ -862,13 +973,17 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
 
       await batch.commit();
 
+      ActiveProjectState.instance.clear();
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(
+          context,
           const SnackBar(
             content: Text(
               'BOM sent to hardware shops. Waiting for supplier quotations.',
             ),
           ),
+          kind: AppMessageKind.success,
         );
         Navigator.pushReplacement(
           context,
@@ -880,7 +995,7 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(context, 
           SnackBar(
             content: Text(
               firestoreUserMessage(e, action: 'request supplier quotations'),
@@ -1023,11 +1138,13 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       category: 'Material',
       quantity: 0,
       projectArea: _projectArea,
-      onRemove: () {
-        setState(() {
-          _localMaterials.remove(material);
-        });
-      },
+      onRemove: _alreadyPosted
+          ? null
+          : () {
+              setState(() {
+                _localMaterials.remove(material);
+              });
+            },
     );
   }
 
@@ -1039,11 +1156,13 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       size: tile.tileSizeName,
       quantity: tile.quantity,
       projectArea: _projectArea,
-      onRemove: () {
-        setState(() {
-          _localTiles.remove(tile);
-        });
-      },
+      onRemove: _alreadyPosted
+          ? null
+          : () {
+              setState(() {
+                _localTiles.remove(tile);
+              });
+            },
     );
   }
 
@@ -1056,11 +1175,13 @@ class _MaterialEstimatorScreenState extends State<MaterialEstimatorScreen> {
       length: plumbing.length,
       quantity: plumbing.quantity,
       projectArea: _projectArea,
-      onRemove: () {
-        setState(() {
-          _localPlumbing.remove(plumbing);
-        });
-      },
+      onRemove: _alreadyPosted
+          ? null
+          : () {
+              setState(() {
+                _localPlumbing.remove(plumbing);
+              });
+            },
     );
   }
 

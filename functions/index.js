@@ -36,30 +36,47 @@ const auth = admin.auth();
 
 const OTP_TTL_MS = 5 * 60 * 1000;
 const OTP_REQUEST_COOLDOWN_MS = 60 * 1000;
+const OTP_MAX_SENDS_PER_HOUR = 5;
+const OTP_MAX_SENDS_PER_DAY = 10;
+const OTP_MAX_SENDS_PER_IP_PER_HOUR = 10;
+const OTP_MAX_SENDS_PER_IP_PER_DAY = 30;
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
 const VERIFIED_REGISTRATION_WINDOW_MS = 15 * 60 * 1000;
 const OTP_COLLECTION = "email_otp";
+const OTP_IP_LIMIT_COLLECTION = "otp_send_ip";
 
+// Registration/OTP must work before a builder has an App Check token.
+const publicAuthCallable = {
+  enforceAppCheck: false,
+  consumeAppCheckToken: false,
+};
+
+
+function abort(code, message) {
+  throw new HttpsError(code, message, { userMessage: message });
+}
 
 function readEmail(request) {
   const email = String(request.data?.email || "").trim().toLowerCase();
 
   if (!email) {
-    throw new HttpsError("invalid-argument", "Email is required.");
+    abort("invalid-argument", "Email is required.");
   }
 
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    throw new HttpsError("invalid-argument", "Enter a valid email address.");
+    abort("invalid-argument", "Enter a valid email address.");
   }
 
   return email;
 }
 
 function readOtp(request) {
-  const otp = String(request.data?.otp || "").trim();
+  const otp = String(request.data?.otp ?? "").replace(/\D/g, "").trim();
 
   if (!/^\d{6}$/.test(otp)) {
-    throw new HttpsError("invalid-argument", "Enter the 6-digit OTP code.");
+    abort("invalid-argument", "Enter the 6-digit OTP code.");
   }
 
   return otp;
@@ -86,49 +103,148 @@ function hashVerificationToken(token) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-exports.sendEmailOtp = onCall(async (request) => {
+function rollingWindow(data, now, countKey, startKey, windowMs) {
+  const start = data?.[startKey]?.toMillis?.() || 0;
+  if (!start || now - start >= windowMs) {
+    return { count: 0, start: now };
+  }
+  return { count: Number(data?.[countKey] || 0), start };
+}
+
+function clientIpHash(request) {
+  const forwarded = request.rawRequest?.headers?.["x-forwarded-for"];
+  const raw =
+    (typeof forwarded === "string" && forwarded.split(",")[0].trim()) ||
+    request.rawRequest?.ip ||
+    request.rawRequest?.socket?.remoteAddress ||
+    "";
+  if (!raw || raw === "unknown") return null;
+  return crypto.createHash("sha256").update(raw).digest("hex").slice(0, 32);
+}
+
+async function consumeIpSendSlot(ipHash, now) {
+  if (!ipHash) return;
+  const ref = db.collection(OTP_IP_LIMIT_COLLECTION).doc(ipHash);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const data = snap.data() || {};
+    const hour = rollingWindow(
+      data,
+      now,
+      "send_count_hour",
+      "hour_window_start",
+      HOUR_MS
+    );
+    if (hour.count >= OTP_MAX_SENDS_PER_IP_PER_HOUR) {
+      throw new HttpsError(
+        "resource-exhausted",
+        "Too many codes requested from this device. Try again in an hour."
+      );
+    }
+    const day = rollingWindow(
+      data,
+      now,
+      "send_count_day",
+      "day_window_start",
+      DAY_MS
+    );
+    if (day.count >= OTP_MAX_SENDS_PER_IP_PER_DAY) {
+      throw new HttpsError(
+        "resource-exhausted",
+        "Daily code limit reached. Try again tomorrow."
+      );
+    }
+    tx.set(
+      ref,
+      {
+        last_request_time: Timestamp.fromMillis(now),
+        send_count_hour: hour.count + 1,
+        hour_window_start: Timestamp.fromMillis(hour.start),
+        send_count_day: day.count + 1,
+        day_window_start: Timestamp.fromMillis(day.start),
+      },
+      { merge: true }
+    );
+  });
+}
+
+exports.sendEmailOtp = onCall(publicAuthCallable, async (request) => {
   const email = readEmail(request);
   const now = Date.now();
-  const nowTimestamp = Timestamp.now();
+  const nowTimestamp = Timestamp.fromMillis(now);
   const docRef = db.collection(OTP_COLLECTION).doc(email);
+  const otp = generateOtp();
 
   logger.info("Generating email OTP", { email });
 
-  const existingDoc = await docRef.get();
-  const existingData = existingDoc.data();
-  const lastRequestTime = existingData?.last_request_time?.toMillis?.() || 0;
+  await consumeIpSendSlot(clientIpHash(request), now);
 
-  if (lastRequestTime && now - lastRequestTime < OTP_REQUEST_COOLDOWN_MS) {
-    logger.warn("OTP requested too soon", { email });
-    throw new HttpsError(
-      "failed-precondition",
-      "Please wait before requesting another code."
+  await db.runTransaction(async (tx) => {
+    const existingDoc = await tx.get(docRef);
+    const existingData = existingDoc.data() || {};
+    const lastRequestTime = existingData.last_request_time?.toMillis?.() || 0;
+
+    if (lastRequestTime && now - lastRequestTime < OTP_REQUEST_COOLDOWN_MS) {
+      const waitSec = Math.ceil(
+        (OTP_REQUEST_COOLDOWN_MS - (now - lastRequestTime)) / 1000
+      );
+      logger.warn("OTP requested too soon", { email, waitSec });
+      throw new HttpsError(
+        "resource-exhausted",
+        `Please wait ${waitSec} seconds before requesting another code.`
+      );
+    }
+
+    const hour = rollingWindow(
+      existingData,
+      now,
+      "send_count_hour",
+      "hour_window_start",
+      HOUR_MS
     );
-  }
+    if (hour.count >= OTP_MAX_SENDS_PER_HOUR) {
+      logger.warn("OTP hourly cap reached", { email, count: hour.count });
+      throw new HttpsError(
+        "resource-exhausted",
+        "Too many codes sent to this email. Try again in an hour."
+      );
+    }
 
-  const otp = generateOtp();
-  const otpPayload = {
-    email,
-    otp_code: otp,
-    created_at: nowTimestamp,
-    expires_at: Timestamp.fromMillis(now + OTP_TTL_MS),
-    attempt_count: 0,
-    last_request_time: nowTimestamp,
-  };
-
-  try {
-    await docRef.set(otpPayload);
-    logger.info("OTP stored in Firestore", {
-      email,
-      collection: OTP_COLLECTION,
-    });
-  } catch (error) {
-    logger.error("Failed to store OTP in Firestore", { email, error });
-    throw new HttpsError(
-      "internal",
-      "Could not save the verification code. Please try again."
+    const day = rollingWindow(
+      existingData,
+      now,
+      "send_count_day",
+      "day_window_start",
+      DAY_MS
     );
-  }
+    if (day.count >= OTP_MAX_SENDS_PER_DAY) {
+      logger.warn("OTP daily cap reached", { email, count: day.count });
+      throw new HttpsError(
+        "resource-exhausted",
+        "Daily code limit reached. Try again tomorrow."
+      );
+    }
+
+    tx.set(
+      docRef,
+      {
+        email,
+        otp_code: otp,
+        created_at: nowTimestamp,
+        expires_at: Timestamp.fromMillis(now + OTP_TTL_MS),
+        attempt_count: 0,
+        last_request_time: nowTimestamp,
+        send_count_hour: hour.count + 1,
+        hour_window_start: Timestamp.fromMillis(hour.start),
+        send_count_day: day.count + 1,
+        day_window_start: Timestamp.fromMillis(day.start),
+        verification_token_hash: admin.firestore.FieldValue.delete(),
+        verified_at: admin.firestore.FieldValue.delete(),
+        verification_expires_at: admin.firestore.FieldValue.delete(),
+      },
+      { merge: true }
+    );
+  });
 
   const { sendOtpEmail, sendForgotPasswordEmail } = require("./src/services/brevoService");
 
@@ -141,8 +257,12 @@ exports.sendEmailOtp = onCall(async (request) => {
     logger.info("OTP email sent via Brevo", { email });
   } catch (error) {
     logger.error("Failed to send OTP email", { email, error });
-    await docRef.delete().catch(() => null);
-    throw new HttpsError("internal", `Could not send the verification code. Detail: ${error.message}`);
+    // Keep last_request_time and send counters so a Brevo error cannot be
+    // used to hammer the third-party mail API.
+    throw new HttpsError(
+      "internal",
+      "Could not send the verification code. Wait a minute and try again."
+    );
   }
 
   return {
@@ -151,11 +271,17 @@ exports.sendEmailOtp = onCall(async (request) => {
   };
 });
 
-exports.verifyEmailOtp = onCall(async (request) => {
+const verifyEmailOtp = onCall(publicAuthCallable, async (request) => {
   const email = readEmail(request);
   const otp = readOtp(request);
   const docRef = db.collection(OTP_COLLECTION).doc(email);
   const doc = await docRef.get();
+
+  logger.info("verifyEmailOtp invoked", {
+    email,
+    otpLength: otp.length,
+    hasStoredCode: doc.exists,
+  });
 
   if (!doc.exists) {
     logger.warn("OTP verification requested without stored code", { email });
@@ -187,13 +313,15 @@ exports.verifyEmailOtp = onCall(async (request) => {
     );
   }
 
-  if (data.otp_code !== otp) {
+  const storedOtp = String(data.otp_code ?? "").replace(/\D/g, "").trim();
+  if (storedOtp !== otp) {
     await docRef.set({ attempt_count: attemptCount + 1 }, { merge: true });
     logger.warn("Incorrect OTP submitted", {
       email,
       attemptCount: attemptCount + 1,
+      storedType: typeof data.otp_code,
     });
-    throw new HttpsError("invalid-argument", "Incorrect OTP code.");
+    abort("invalid-argument", "Incorrect OTP code.");
   }
 
   const verificationToken = crypto.randomBytes(32).toString("hex");
@@ -243,7 +371,12 @@ exports.verifyEmailOtp = onCall(async (request) => {
   };
 });
 
-exports.finalizeEmailOtpRegistration = onCall(async (request) => {
+// Production already has an older HTTP `verifyEmailOtp` (nodejs24). Do not
+// re-export that name as a callable or deploy will collide. The builder app
+// calls this unique name instead.
+exports.confirmBuilderEmailOtp = verifyEmailOtp;
+
+exports.finalizeEmailOtpRegistration = onCall(publicAuthCallable, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
@@ -316,7 +449,7 @@ exports.finalizeEmailOtpRegistration = onCall(async (request) => {
   };
 });
 
-exports.resetPasswordWithToken = onCall(async (request) => {
+exports.resetPasswordWithToken = onCall(publicAuthCallable, async (request) => {
   const email = readEmail(request);
   const verificationToken = readVerificationToken(request);
   const newPassword = String(request.data?.newPassword || "").trim();

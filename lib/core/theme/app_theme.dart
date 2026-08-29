@@ -54,12 +54,14 @@ class AppTheme {
         centerTitle: false,
       ),
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: AppColors.navy,
+        backgroundColor: const Color(0xFFFFF4D6),
         contentTextStyle: GoogleFonts.poppins(
-          color: AppColors.creamLight,
+          color: AppColors.warning,
           fontSize: 14,
+          fontWeight: FontWeight.w600,
         ),
         behavior: SnackBarBehavior.floating,
+        dismissDirection: DismissDirection.up,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),

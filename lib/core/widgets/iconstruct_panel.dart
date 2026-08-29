@@ -57,14 +57,16 @@ class IConstructPanel {
     return BorderRadius.only(topLeft: r, bottomLeft: r);
   }
 
-  /// Tall fill panels (AI): rounded top + bottom-left, flush right.
+  /// Tall fill panels (AI chat): round only the top-left. Right and bottom
+  /// stay square so the sheet is flush to the screen edge, not hanging.
   static BorderRadius offsetTallRadiusOf(BuildContext context) {
     final r = Radius.circular(cornerRadiusOf(context));
-    return BorderRadius.only(
-      topLeft: r,
-      topRight: r,
-      bottomLeft: r,
-    );
+    return BorderRadius.only(topLeft: r);
+  }
+
+  /// Centered chat card: rounded on every corner.
+  static BorderRadius centeredRadiusOf(BuildContext context) {
+    return BorderRadius.circular(cornerRadiusOf(context));
   }
 
   static EdgeInsets contentPaddingOf(BuildContext context) {
@@ -97,7 +99,6 @@ class IConstructPanel {
   );
   static const BorderRadius topRadius = BorderRadius.only(
     topLeft: Radius.circular(48),
-    topRight: Radius.circular(48),
   );
   static const EdgeInsets contentPadding = EdgeInsets.fromLTRB(30, 26, 22, 22);
 
@@ -107,7 +108,7 @@ class IConstructPanel {
       offsetRadiusOf(context);
   static BorderRadius topRadiusOf(BuildContext context) {
     final r = Radius.circular(cornerRadiusOf(context));
-    return BorderRadius.only(topLeft: r, topRight: r);
+    return BorderRadius.only(topLeft: r);
   }
 
   static double horizontalMarginOf(BuildContext context) =>
@@ -145,9 +146,8 @@ class CreamBackdrop extends StatelessWidget {
   }
 }
 
-/// Full-bleed cream under the status bar + header controls. Also covers the
-/// area behind the panel’s top-right radius so no gray/gradient “error gap”
-/// appears at that seam.
+/// Full-bleed cream under the status bar + header controls. Stops at the
+/// navy panel’s top edge so the sheet can sit flush-right.
 class CreamHeaderBand extends StatelessWidget {
   final Widget child;
 
@@ -157,8 +157,9 @@ class CreamHeaderBand extends StatelessWidget {
   Widget build(BuildContext context) {
     final topPad = MediaQuery.paddingOf(context).top;
     final headerHeight = IConstructPanel.headerHeightOf(context);
-    final coverHeight = IConstructPanel.panelTopOf(context) +
-        IConstructPanel.cornerRadiusOf(context);
+    // Stop at the panel’s top edge. Painting cream *into* the navy card used
+    // to hide a rounded top-right corner and made the sheet look hung.
+    final coverHeight = IConstructPanel.panelTopOf(context);
 
     return Stack(
       children: [

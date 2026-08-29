@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:iconstruct/core/firebase/firestore_error.dart';
 import 'package:iconstruct/core/validation/password_policy.dart';
 import 'package:iconstruct/features/auth/presentation/screens/login_screen.dart';
+import 'package:iconstruct/core/widgets/app_message.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
   const ChangePasswordScreen({super.key});
@@ -39,7 +40,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     if (currentPassword.isEmpty ||
         newPassword.isEmpty ||
         confirmPassword.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      showAppMessage(context, 
         const SnackBar(content: Text('Please fill in all fields.')),
       );
       return;
@@ -47,14 +48,12 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
     final policyError = PasswordPolicy.validate(newPassword);
     if (policyError != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('$policyError.')));
+      showAppMessage(context, SnackBar(content: Text('$policyError.')));
       return;
     }
 
     if (newPassword != confirmPassword) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      showAppMessage(context, 
         const SnackBar(content: Text('New passwords do not match.')),
       );
       return;
@@ -69,7 +68,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
       if (user == null || user.email == null) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(context, 
           const SnackBar(content: Text('No logged-in user found.')),
         );
         setState(() {
@@ -92,11 +91,13 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      showAppMessage(
+        context,
         const SnackBar(
           content: Text('Password changed. Please sign in again.'),
           backgroundColor: Colors.green,
         ),
+        kind: AppMessageKind.success,
       );
 
       // Force a fresh session after a credential change.
@@ -122,7 +123,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(context, 
           SnackBar(
             content: Text(message),
             backgroundColor: Colors.red.shade400,
@@ -131,7 +132,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        showAppMessage(context, 
           SnackBar(
             content: Text(
               firestoreUserMessage(e, action: 'change your password'),

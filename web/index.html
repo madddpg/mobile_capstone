@@ -31,6 +31,14 @@
 
   <title>iconstruct</title>
   <link rel="manifest" href="manifest.json">
+  <script>
+    // Debug App Check token for local Flutter web only. Register the printed
+    // UUID in Firebase Console → App Check → Manage debug tokens.
+    if (window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1') {
+      self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    }
+  </script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>

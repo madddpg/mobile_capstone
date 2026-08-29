@@ -13,6 +13,8 @@ class ProjectModel {
   final DateTime lastUpdated;
   final String? postId;
 
+  final String projectScope; // Full Renovation, Extension
+
   ProjectModel({
     required this.id,
     required this.projectName,
@@ -24,6 +26,7 @@ class ProjectModel {
     required this.status,
     required this.lastUpdated,
     this.postId,
+    this.projectScope = 'Full Renovation',
   });
 
   factory ProjectModel.fromDocument(DocumentSnapshot doc) {
@@ -44,6 +47,7 @@ class ProjectModel {
       lastUpdated:
           (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       postId: data['postId'],
+      projectScope: data['projectScope'] ?? 'Full Renovation',
     );
   }
 }

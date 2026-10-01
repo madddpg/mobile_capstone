@@ -157,7 +157,7 @@ test('unrelated builder cannot read another builder post', async () => {
   await assertFails(stranger.doc('projectPosts/post-1').get());
 });
 
-test('builder can accept a quote with only status and acceptedAt', async () {
+test('builder can accept a quote with only status and acceptedAt', async () => {
   await env.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
     await db.doc('projectPosts/post-1').set({
@@ -185,7 +185,7 @@ test('builder can accept a quote with only status and acceptedAt', async () {
   );
 });
 
-test('builder cannot accept a quote with extra keys', async () {
+test('builder cannot accept a quote with extra keys', async () => {
   await env.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
     await db.doc('projectPosts/post-1').set({
@@ -215,7 +215,7 @@ test('builder cannot accept a quote with extra keys', async () {
   );
 });
 
-test('builder can accept a quote when the post stores uid on builderId', async () {
+test('builder can accept a quote when the post stores uid on builderId', async () => {
   await env.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
     await db.doc('projectPosts/post-1').set({
@@ -242,7 +242,7 @@ test('builder can accept a quote when the post stores uid on builderId', async (
   );
 });
 
-test('builder can create a conversation after accepting a quote', async () {
+test('builder can create a conversation after accepting a quote', async () => {
   await env.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
     await db.doc('projectPosts/post-1').set({
@@ -284,5 +284,102 @@ test('builder can create a conversation after accepting a quote', async () {
       createdAt: new Date(),
     }),
   );
+});
+
+test('collection-group create cannot bypass nested quotation constraints', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await db.doc('projectPosts/post-1').set({
+      userId: 'builder-1',
+      projectName: 'Bath',
+      materials: [],
+      status: 'open',
+      quotationCount: 0,
+    });
+    await db.doc('shops/shop-a').set({ status: 'approved', name: 'A' });
+  });
+
+  const shopA = authed('shop-a');
+  // Missing estimatedTotal / wrong doc id / pre-accepted status would pass the
+  // old wildcard create rule; nested path must still reject.
+  await assertFails(
+    shopA.doc('projectPosts/post-1/quotations/forged-id').set({
+      shopId: 'shop-a',
+      postId: 'post-1',
+      status: 'accepted',
+    }),
+  );
+  await assertFails(
+    shopA.doc('projectPosts/post-1/quotations/shop-a').set({
+      shopId: 'shop-a',
+      postId: 'post-1',
+      status: 'accepted',
+    }),
+  );
+});
+
+test('approved shop cannot rewrite quotationCount on a builder post', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await db.doc('projectPosts/post-1').set({
+      userId: 'builder-1',
+      projectName: 'Bath',
+      materials: [],
+      status: 'has_quotations',
+      quotationCount: 3,
+    });
+    await db.doc('shops/shop-a').set({ status: 'approved', name: 'A' });
+  });
+
+  const shopA = authed('shop-a');
+  await assertFails(
+    shopA.doc('projectPosts/post-1').update({
+      quotationCount: 0,
+      updatedAt: new Date(),
+    }),
+  );
+});
+
+test('shop cannot delete a quotation after it was accepted', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await db.doc('projectPosts/post-1').set({
+      userId: 'builder-1',
+      projectName: 'Roof',
+      materials: [],
+      status: 'offer_accepted',
+      selectedQuotationId: 'shop-a',
+      quotationCount: 1,
+    });
+    await db.doc('projectPosts/post-1/quotations/shop-a').set({
+      shopId: 'shop-a',
+      postId: 'post-1',
+      estimatedTotal: 100,
+      status: 'accepted',
+    });
+    await db.doc('shops/shop-a').set({ status: 'approved', name: 'A' });
+  });
+
+  const shopA = authed('shop-a');
+  await assertFails(
+    shopA.doc('projectPosts/post-1/quotations/shop-a').delete(),
+  );
+});
+
+test('signed-in stranger cannot read another user profile or fcmTokens', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    await context.firestore().doc('users/builder-1').set({
+      email: 'builder@example.com',
+      firstName: 'Pat',
+      fcmTokens: ['secret-device-token'],
+      isVerified: true,
+    });
+  });
+
+  const stranger = authed('builder-2');
+  await assertFails(stranger.doc('users/builder-1').get());
+
+  const owner = authed('builder-1');
+  await assertSucceeds(owner.doc('users/builder-1').get());
 });
 

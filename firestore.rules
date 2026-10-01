@@ -158,9 +158,10 @@ service cloud.firestore {
 
     // ── Builders / mobile app users ─────────────────────────────────────────
     // Profiles + fcmTokens live on users/{uid}. Nested drafts stay owner-only.
-    // Owner must be able to list their own user doc + subcollections.
+    // get/list must stay owner/admin — signed-in strangers must not read
+    // another builder's email or FCM device tokens.
     match /users/{userId} {
-      allow get: if signedIn();
+      allow get: if isOwner(userId) || isAdmin();
       allow list: if isOwner(userId) || isAdmin();
       allow create, update: if isOwner(userId) || isAdmin();
       allow delete: if isAdmin();
@@ -200,11 +201,10 @@ service cloud.firestore {
              'price', 'unitPrice', 'catalogPrice', 'estimatedTotal', 'listPrice'
            ]);
 
-      // Admin; shop bid-counter bump; or the owning builder (accept offer, edits).
+      // quotationCount / post status are owned by Cloud Functions (Admin SDK).
+      // Shops must not client-write the builder's post — only the owner (or
+      // admin) may update it.
       allow update: if isAdmin()
-        || (isApprovedShop()
-            && request.resource.data.diff(resource.data).affectedKeys()
-                .hasOnly(["quotationCount", "updatedAt"]))
         || (isPostOwner(resource.data)
             && request.resource.data.userId == resource.data.userId);
 
@@ -239,10 +239,9 @@ service cloud.firestore {
                    .hasOnly(['status', 'acceptedAt'])
               && request.resource.data.status in ['accepted', 'rejected']);
 
-        allow delete: if isAdmin()
-          || (signedIn()
-              && resource.data.shopId == request.auth.uid
-              && shopIsApproved(request.auth.uid));
+        // Bids are append-only for shops. Deleting an accepted (or any) quote
+        // would orphan selectedQuotationId / chat unlock proofs.
+        allow delete: if isAdmin();
       }
 
       match /acceptance/{acceptanceId} {
@@ -257,7 +256,9 @@ service cloud.firestore {
     }
 
     // Collection-group queries used by the web shop dashboard.
-    // Builders only see quotes on their own posts; shops only see their own.
+    // Read-only here: Firestore ORs overlapping matches, so a create rule on
+    // this wildcard would bypass the stricter projectPosts/.../quotations
+    // create checks (doc id == shop uid, estimatedTotal, status, postId).
     match /{path=**}/quotations/{quotationId} {
       allow read: if isAdmin()
         || (signedIn() && resource.data.shopId == request.auth.uid)
@@ -266,10 +267,7 @@ service cloud.firestore {
              || resource.data.builderId == request.auth.uid
            ));
 
-      allow create: if signedIn()
-        && request.resource.data.keys().hasAll(["shopId"])
-        && request.resource.data.shopId == request.auth.uid
-        && shopIsApproved(request.auth.uid);
+      allow create, update, delete: if false;
     }
 
     // Builder ↔ shop chat. Unlocks after a quotation is accepted.

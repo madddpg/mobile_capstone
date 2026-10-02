@@ -273,7 +273,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                         final msg = docs[index].data();
                         final role = (msg['senderRole'] ?? '').toString();
                         final senderId = (msg['senderId'] ?? '').toString();
-                        final mine = senderId == uid || role == 'builder';
+                        // Never trust senderRole alone — shops could spoof
+                        // role "builder" and appear as the local user's bubbles.
+                        final mine = senderId == uid;
                         final system = role == 'system';
                         final text = (msg['text'] ?? '').toString();
                         if (system) {

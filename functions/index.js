@@ -111,15 +111,40 @@ function rollingWindow(data, now, countKey, startKey, windowMs) {
   return { count: Number(data?.[countKey] || 0), start };
 }
 
+const {
+  OTP_CLEAR,
+  nextOtpAttemptState,
+  resolveClientIp,
+} = require("./src/otpVerification");
+
 function clientIpHash(request) {
-  const forwarded = request.rawRequest?.headers?.["x-forwarded-for"];
-  const raw =
-    (typeof forwarded === "string" && forwarded.split(",")[0].trim()) ||
-    request.rawRequest?.ip ||
-    request.rawRequest?.socket?.remoteAddress ||
-    "";
+  const raw = resolveClientIp(request.rawRequest);
   if (!raw || raw === "unknown") return null;
   return crypto.createHash("sha256").update(raw).digest("hex").slice(0, 32);
+}
+
+function applyOtpClearFields(patch) {
+  const out = { ...patch };
+  for (const [key, value] of Object.entries(out)) {
+    if (value === OTP_CLEAR) {
+      out[key] = admin.firestore.FieldValue.delete();
+    }
+  }
+  return out;
+}
+
+/** Clear OTP secrets without wiping per-email send counters / cooldown. */
+async function clearOtpSecrets(docRef, extra = {}) {
+  await docRef.set(
+    applyOtpClearFields({
+      otp_code: OTP_CLEAR,
+      verification_token_hash: OTP_CLEAR,
+      verified_at: OTP_CLEAR,
+      verification_expires_at: OTP_CLEAR,
+      ...extra,
+    }),
+    { merge: true }
+  );
 }
 
 async function consumeIpSendSlot(ipHash, now) {
@@ -275,75 +300,94 @@ const verifyEmailOtp = onCall(publicAuthCallable, async (request) => {
   const email = readEmail(request);
   const otp = readOtp(request);
   const docRef = db.collection(OTP_COLLECTION).doc(email);
-  const doc = await docRef.get();
+  const nowMs = Date.now();
 
   logger.info("verifyEmailOtp invoked", {
     email,
     otpLength: otp.length,
-    hasStoredCode: doc.exists,
   });
 
-  if (!doc.exists) {
-    logger.warn("OTP verification requested without stored code", { email });
-    throw new HttpsError(
-      "not-found",
-      "No verification code was found for this email. Request a new code."
-    );
-  }
+  let verificationToken = null;
+  let verifiedAtMs = nowMs;
+  let failure = null;
 
-  const data = doc.data();
-  const expiresAt = data.expires_at?.toMillis?.() || 0;
-  const attemptCount = Number(data.attempt_count || 0);
+  // Do not throw inside the transaction after scheduling writes — Firestore
+  // aborts the whole transaction on throw and the attempt_count bump is lost.
+  await db.runTransaction(async (tx) => {
+    const doc = await tx.get(docRef);
+    const data = doc.exists ? doc.data() : null;
 
-  if (Date.now() > expiresAt) {
-    await docRef.delete();
-    logger.warn("Expired OTP attempted", { email });
-    throw new HttpsError(
-      "deadline-exceeded",
-      "This code has expired. Please request a new one."
-    );
-  }
-
-  if (attemptCount >= MAX_ATTEMPTS) {
-    await docRef.delete();
-    logger.warn("OTP attempts exceeded", { email, attemptCount });
-    throw new HttpsError(
-      "resource-exhausted",
-      "Too many incorrect attempts. Please request a new code."
-    );
-  }
-
-  const storedOtp = String(data.otp_code ?? "").replace(/\D/g, "").trim();
-  if (storedOtp !== otp) {
-    await docRef.set({ attempt_count: attemptCount + 1 }, { merge: true });
-    logger.warn("Incorrect OTP submitted", {
-      email,
-      attemptCount: attemptCount + 1,
-      storedType: typeof data.otp_code,
+    const result = nextOtpAttemptState({
+      data,
+      otp,
+      nowMs,
+      maxAttempts: MAX_ATTEMPTS,
+      verificationWindowMs: VERIFIED_REGISTRATION_WINDOW_MS,
+      createToken: () => crypto.randomBytes(32).toString("hex"),
+      hashToken: hashVerificationToken,
     });
-    abort("invalid-argument", "Incorrect OTP code.");
+
+    if (result.outcome === "missing") {
+      failure = result.error;
+      return;
+    }
+
+    if (result.outcome === "expired" || result.outcome === "exhausted") {
+      tx.set(docRef, applyOtpClearFields(result.patch), { merge: true });
+      failure = {
+        ...result.error,
+        log:
+          result.outcome === "expired"
+            ? "Expired OTP attempted"
+            : "OTP attempts exceeded",
+        attemptCount: Number(data?.attempt_count || 0),
+      };
+      return;
+    }
+
+    if (result.outcome === "wrong") {
+      tx.set(docRef, applyOtpClearFields(result.patch), { merge: true });
+      failure = {
+        ...result.error,
+        log: "Incorrect OTP submitted",
+        attemptCount: result.attemptCount,
+      };
+      return;
+    }
+
+    verificationToken = result.verificationToken;
+    verifiedAtMs = result.patch.verified_at;
+    const verifiedAt = Timestamp.fromMillis(verifiedAtMs);
+    tx.set(
+      docRef,
+      applyOtpClearFields({
+        email,
+        created_at: data.created_at || verifiedAt,
+        expires_at: data.expires_at,
+        last_request_time: data.last_request_time || verifiedAt,
+        attempt_count: 0,
+        otp_code: OTP_CLEAR,
+        verified_at: verifiedAt,
+        verification_expires_at: Timestamp.fromMillis(
+          result.patch.verification_expires_at
+        ),
+        verification_token_hash: result.patch.verification_token_hash,
+      }),
+      { merge: true }
+    );
+  });
+
+  if (failure) {
+    logger.warn(failure.log || "OTP verification failed", {
+      email,
+      attemptCount: failure.attemptCount,
+    });
+    throw new HttpsError(failure.code, failure.message, {
+      userMessage: failure.message,
+    });
   }
 
-  const verificationToken = crypto.randomBytes(32).toString("hex");
-  const verificationTokenHash = hashVerificationToken(verificationToken);
-  const verifiedAt = Timestamp.now();
-
-  await docRef.set(
-    {
-      email,
-      created_at: data.created_at || verifiedAt,
-      expires_at: data.expires_at,
-      last_request_time: data.last_request_time || verifiedAt,
-      attempt_count: 0,
-      otp_code: admin.firestore.FieldValue.delete(),
-      verified_at: verifiedAt,
-      verification_expires_at: Timestamp.fromMillis(
-        Date.now() + VERIFIED_REGISTRATION_WINDOW_MS
-      ),
-      verification_token_hash: verificationTokenHash,
-    },
-    { merge: true }
-  );
+  const verifiedAt = Timestamp.fromMillis(verifiedAtMs);
 
   // Mark the account verified server-side. The client is signed out during
   // verification, so it cannot write users/{uid} itself under security rules.
@@ -414,7 +458,7 @@ exports.finalizeEmailOtpRegistration = onCall(publicAuthCallable, async (request
   const verificationExpiresAt = data.verification_expires_at?.toMillis?.() || 0;
 
   if (!data.verification_token_hash || Date.now() > verificationExpiresAt) {
-    await docRef.delete();
+    await clearOtpSecrets(docRef);
     throw new HttpsError(
       "failed-precondition",
       "Your verification session expired. Request a new OTP and verify again."
@@ -429,7 +473,7 @@ exports.finalizeEmailOtpRegistration = onCall(publicAuthCallable, async (request
   }
 
   await auth.updateUser(request.auth.uid, { emailVerified: true });
-  await docRef.delete();
+  await clearOtpSecrets(docRef);
 
   try {
     const { sendWelcomeEmail } = require("./src/services/brevoService");
@@ -475,7 +519,7 @@ exports.resetPasswordWithToken = onCall(publicAuthCallable, async (request) => {
   const verificationExpiresAt = data.verification_expires_at?.toMillis?.() || 0;
 
   if (!data.verification_token_hash || Date.now() > verificationExpiresAt) {
-    await docRef.delete();
+    await clearOtpSecrets(docRef);
     throw new HttpsError(
       "failed-precondition",
       "Your verification session has expired. Please verify again."
@@ -492,7 +536,7 @@ exports.resetPasswordWithToken = onCall(publicAuthCallable, async (request) => {
   try {
     const userRecord = await auth.getUserByEmail(email);
     await auth.updateUser(userRecord.uid, { password: newPassword });
-    await docRef.delete();
+    await clearOtpSecrets(docRef);
 
     try {
       const { sendPasswordResetSuccessEmail } = require("./src/services/brevoService");

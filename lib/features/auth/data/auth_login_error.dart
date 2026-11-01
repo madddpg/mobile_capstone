@@ -58,6 +58,9 @@ String callableUserMessage(
     case 'failed-precondition':
       return usableDetail ??
           'Please wait a moment before requesting another code.';
+    case 'already-exists':
+      return usableDetail ??
+          'This email already has an account. Please sign in.';
     case 'unauthenticated':
     case 'permission-denied':
     case 'unavailable':

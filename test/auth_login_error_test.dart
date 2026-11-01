@@ -59,6 +59,14 @@ void main() {
         ),
         'Could not verify the code right now. Try again in a moment.',
       );
+      expect(
+        callableUserMessage(
+          'already-exists',
+          message: 'This email already has an account. Please sign in.',
+          action: 'send the code',
+        ),
+        'This email already has an account. Please sign in.',
+      );
     });
 
     test('reads userMessage from callable HTTP error details', () {

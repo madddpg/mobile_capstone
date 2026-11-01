@@ -333,8 +333,9 @@ class EmailService {
         action: 'verify the code',
       );
 
-      // confirmBuilderEmailOtp marks the account verified server-side. The
-      // client is signed out at this point, so it cannot write users/{uid}.
+      // confirmBuilderEmailOtp only mints a verificationToken. Registration
+      // finishes via [completeVerifiedRegistration]; login re-verify via
+      // [finalizeLoginEmailVerification] while signed in as [uid].
       debugPrint('OTP verified for ${uid ?? trimmedEmail}.');
 
       return EmailOtpVerificationResult(
@@ -349,9 +350,45 @@ class EmailService {
     }
   }
 
+  /// Applies OTP proof to the currently signed-in Auth user (login re-verify).
+  Future<void> finalizeLoginEmailVerification({
+    required String email,
+    required String verificationToken,
+  }) async {
+    final trimmedEmail = email.trim().toLowerCase();
+    if (trimmedEmail.isEmpty || verificationToken.isEmpty) {
+      throw const EmailApiException(
+        'Could not finish verification. Request a new code.',
+      );
+    }
+    if (_auth.currentUser == null) {
+      throw const EmailApiException(
+        'Sign in again, then enter the verification code.',
+      );
+    }
+
+    try {
+      await _invokeAuthCallable(
+        'finalizeEmailOtpRegistration',
+        {
+          'email': trimmedEmail,
+          'verificationToken': verificationToken,
+        },
+        action: 'finish verification',
+        withIdToken: true,
+      );
+      await _auth.currentUser?.reload();
+    } on EmailApiException {
+      rethrow;
+    } catch (e) {
+      throw EmailApiException('Could not finish verification. $e');
+    }
+  }
+
   Future<EmailSendOtpResult> sendOtp({
     required String email,
     bool isPasswordReset = false,
+    bool isLoginReverify = false,
   }) async {
     final trimmedEmail = email.trim().toLowerCase();
     if (trimmedEmail.isEmpty) {
@@ -377,7 +414,10 @@ class EmailService {
 
       await _invokeAuthCallable(
         'sendEmailOtp',
-        {'email': trimmedEmail},
+        {
+          'email': trimmedEmail,
+          if (isLoginReverify) 'purpose': 'login_reverify',
+        },
         action: 'send the code',
       );
 
@@ -468,13 +508,15 @@ class EmailService {
 
       // 4. Refuse to hand out a session to an unverified account. A fresh code
       // is sent so the caller can surface the OTP step right away.
+      // Keep the Auth session so [finalizeLoginEmailVerification] can prove
+      // ownership of this uid after OTP (unauthenticated verify no longer
+      // promotes whatever Auth user owns the email).
       final profileVerified = userDoc.data()?['isVerified'] == true;
       final authVerified = credential.user?.emailVerified ?? false;
       if (!profileVerified && !authVerified) {
         debugPrint('Login blocked: email not verified for $uid');
-        await _auth.signOut();
         try {
-          await sendOtp(email: trimmedEmail);
+          await sendOtp(email: trimmedEmail, isLoginReverify: true);
         } catch (e) {
           debugPrint('Could not resend verification OTP: $e');
         }
@@ -538,7 +580,7 @@ class EmailService {
     if (user == null) {
       throw const EmailApiException('No signed-in user found.');
     }
-    return sendOtp(email: user.email ?? '');
+    return sendOtp(email: user.email ?? '', isLoginReverify: true);
   }
 
   User? get currentUser => _auth.currentUser;

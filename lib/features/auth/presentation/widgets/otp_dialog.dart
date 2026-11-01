@@ -107,7 +107,10 @@ class _OtpDialogState extends State<OtpDialog> {
     setState(() => _resendingEmail = true);
 
     try {
-      final result = await _emailService.sendOtp(email: widget.email);
+      final result = await _emailService.sendOtp(
+        email: widget.email,
+        isLoginReverify: !widget.isPendingSignup,
+      );
       if (!mounted) return;
       showAppMessage(
         context,
@@ -148,15 +151,16 @@ class _OtpDialogState extends State<OtpDialog> {
 
       if (!result.success) return;
 
+      final token = result.verificationToken;
+      if (token == null || token.isEmpty) {
+        setState(() {
+          _errorMessage =
+              'Could not finish verification. Request a new code.';
+        });
+        return;
+      }
+
       if (widget.isPendingSignup) {
-        final token = result.verificationToken;
-        if (token == null || token.isEmpty) {
-          setState(() {
-            _errorMessage =
-                'Could not finish registration. Request a new code.';
-          });
-          return;
-        }
         await _emailService.completeVerifiedRegistration(
           email: widget.email,
           password: widget.password!,
@@ -164,8 +168,16 @@ class _OtpDialogState extends State<OtpDialog> {
           lastName: widget.lastName ?? '',
           verificationToken: token,
         );
-        if (!mounted) return;
+      } else {
+        // Login re-verify: session stayed signed in so finalize can bind the
+        // OTP proof to this uid instead of whatever Auth email exists.
+        await _emailService.finalizeLoginEmailVerification(
+          email: widget.email,
+          verificationToken: token,
+        );
+        await _emailService.logout();
       }
+      if (!mounted) return;
 
       showAppMessage(
         context,

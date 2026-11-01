@@ -26,6 +26,8 @@ const {
   runMaterialConsult,
 } = require("./src/services/iconstructAi");
 
+const { registrationOtpBlockReason } = require("./src/otpAccountGuard");
+
 const { app: apiApp } = require("./api");
 
 // Deploy as an Express-wrapped Cloud Function
@@ -170,12 +172,37 @@ async function consumeIpSendSlot(ipHash, now) {
 
 exports.sendEmailOtp = onCall(publicAuthCallable, async (request) => {
   const email = readEmail(request);
+  const purpose = String(request.data?.purpose || "").trim();
   const now = Date.now();
   const nowTimestamp = Timestamp.fromMillis(now);
   const docRef = db.collection(OTP_COLLECTION).doc(email);
   const otp = generateOtp();
 
-  logger.info("Generating email OTP", { email });
+  logger.info("Generating email OTP", { email, purpose: purpose || "register" });
+
+  // Registration OTP must not run against an email that already has an Auth
+  // user. Otherwise a pre-created (squatted) Auth account can sit under the
+  // victim's email while they complete OTP proof meant for a new signup.
+  let authUserExists = false;
+  try {
+    await auth.getUserByEmail(email);
+    authUserExists = true;
+  } catch (error) {
+    if (error.code !== "auth/user-not-found") {
+      logger.error("Failed to check existing Auth user before OTP send", {
+        email,
+        error,
+      });
+      throw new HttpsError(
+        "internal",
+        "Could not start verification. Please try again."
+      );
+    }
+  }
+  const blocked = registrationOtpBlockReason(purpose, authUserExists);
+  if (blocked) {
+    throw new HttpsError(blocked.code, blocked.message);
+  }
 
   await consumeIpSendSlot(clientIpHash(request), now);
 
@@ -249,7 +276,7 @@ exports.sendEmailOtp = onCall(publicAuthCallable, async (request) => {
   const { sendOtpEmail, sendForgotPasswordEmail } = require("./src/services/brevoService");
 
   try {
-    if (request.data?.purpose === "password_reset") {
+    if (purpose === "password_reset") {
       await sendForgotPasswordEmail(email, otp);
     } else {
       await sendOtpEmail(email, otp);
@@ -345,22 +372,12 @@ const verifyEmailOtp = onCall(publicAuthCallable, async (request) => {
     { merge: true }
   );
 
-  // Mark the account verified server-side. The client is signed out during
-  // verification, so it cannot write users/{uid} itself under security rules.
-  try {
-    const userRecord = await auth.getUserByEmail(email);
-    await auth.updateUser(userRecord.uid, { emailVerified: true });
-    await db.collection("users").doc(userRecord.uid).set(
-      { isVerified: true, verified_at: verifiedAt },
-      { merge: true }
-    );
-    logger.info("Account marked verified", { uid: userRecord.uid });
-  } catch (error) {
-    // A reset-password OTP can run before an account exists; that is not fatal.
-    if (error.code !== "auth/user-not-found") {
-      logger.error("Failed to mark account verified", error);
-    }
-  }
+  // Do NOT mark Auth/Firestore verified here. Unauthenticated OTP proof only
+  // mints a verificationToken. Promoting getUserByEmail(email) would verify a
+  // pre-created (attacker-owned) Auth user when the victim enters the OTP.
+  // Registration and login re-verify must call finalizeEmailOtpRegistration
+  // while signed in as the uid that should be verified. Password reset uses
+  // resetPasswordWithToken instead.
 
   logger.info("OTP verified successfully", { email });
 
@@ -429,6 +446,10 @@ exports.finalizeEmailOtpRegistration = onCall(publicAuthCallable, async (request
   }
 
   await auth.updateUser(request.auth.uid, { emailVerified: true });
+  await db.collection("users").doc(request.auth.uid).set(
+    { isVerified: true, verified_at: Timestamp.now() },
+    { merge: true }
+  );
   await docRef.delete();
 
   try {

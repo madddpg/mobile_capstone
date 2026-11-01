@@ -93,13 +93,16 @@ class _LoginScreenState extends State<LoginScreen> {
     } on EmailNotVerifiedException catch (e) {
       if (!mounted) return;
       // Credentials were right, so let them finish verification here instead of
-      // bouncing them back with an error they cannot act on.
+      // bouncing them back with an error they cannot act on. The Auth session
+      // stays signed in so OTP finalize can bind proof to this uid.
       showAppMessage(context, SnackBar(content: Text(e.message)));
       await showDialog<void>(
         context: context,
         barrierDismissible: false,
         builder: (_) => OtpDialog(email: e.email, uid: e.uid),
       );
+      // If verification did not complete, drop the half-open session.
+      await _emailService.logout();
     } catch (e) {
       if (!mounted) return;
       final message = stripAuthExceptionPrefix(e);

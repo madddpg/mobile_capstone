@@ -272,9 +272,9 @@ service cloud.firestore {
         && shopIsApproved(request.auth.uid);
     }
 
-    // Builder ↔ shop chat. Unlocks after a quotation is accepted.
+    // Builder ↔ shop chat. Unlocks only for the selected/accepted quotation.
     // Canonical builder uid is userId on the post; conversations store it as
-    // builderId (and may also copy userId).
+    // builderId (and may also copy userId). Both must equal the creating builder.
     match /conversations/{conversationId} {
       function isConvParticipant(data) {
         return signedIn() && (
@@ -284,15 +284,36 @@ service cloud.firestore {
         );
       }
 
+      function convPost() {
+        return get(/databases/$(database)/documents/projectPosts/$(request.resource.data.projectId)).data;
+      }
+
+      function convQuote() {
+        return get(/databases/$(database)/documents/projectPosts/$(request.resource.data.projectId)/quotations/$(request.resource.data.quotationId)).data;
+      }
+
+      // Award proof: post must point at this quotation, and the quote must be
+      // accepted for this shop. Do not unlock chat from quotation.status alone —
+      // builders can flip status on any bid they own.
       function acceptedQuoteForConv() {
         return request.resource.data.projectId is string
           && request.resource.data.quotationId is string
+          && exists(/databases/$(database)/documents/projectPosts/$(request.resource.data.projectId))
           && exists(/databases/$(database)/documents/projectPosts/$(request.resource.data.projectId)/quotations/$(request.resource.data.quotationId))
-          && get(/databases/$(database)/documents/projectPosts/$(request.resource.data.projectId)/quotations/$(request.resource.data.quotationId)).data.status == 'accepted'
+          && convPost().selectedQuotationId == request.resource.data.quotationId
+          && convQuote().status == 'accepted'
           && (
-               get(/databases/$(database)/documents/projectPosts/$(request.resource.data.projectId)/quotations/$(request.resource.data.quotationId)).data.shopId == request.resource.data.shopId
+               convQuote().shopId == request.resource.data.shopId
                || request.resource.data.quotationId == request.resource.data.shopId
              );
+      }
+
+      function messageSenderRoleAllowed(conv) {
+        return (request.resource.data.senderRole == 'builder'
+                && (conv.builderId == request.auth.uid
+                    || conv.userId == request.auth.uid))
+          || (request.resource.data.senderRole == 'shop'
+              && conv.shopId == request.auth.uid);
       }
 
       allow get: if isAdmin()
@@ -303,8 +324,8 @@ service cloud.firestore {
       allow list: if isAdmin() || isConvParticipant(resource.data);
 
       allow create: if signedIn()
-        && (request.resource.data.builderId == request.auth.uid
-            || request.resource.data.userId == request.auth.uid)
+        && request.resource.data.builderId == request.auth.uid
+        && request.resource.data.userId == request.auth.uid
         && ownsPostedEstimate(request.resource.data.projectId)
         && request.resource.data.shopId is string
         && request.resource.data.shopId.size() > 0
@@ -315,6 +336,8 @@ service cloud.firestore {
       allow update: if isAdmin()
         || (isConvParticipant(resource.data)
             && request.resource.data.shopId == resource.data.shopId
+            && request.resource.data.builderId == resource.data.builderId
+            && request.resource.data.userId == resource.data.userId
             && request.resource.data.diff(resource.data).affectedKeys()
                  .hasOnly(['lastMessage', 'lastMessageAt', 'lastSenderId', 'updatedAt', 'status']));
 
@@ -330,7 +353,9 @@ service cloud.firestore {
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 4000
-          && request.resource.data.senderRole in ['builder', 'shop'];
+          && messageSenderRoleAllowed(
+               get(/databases/$(database)/documents/conversations/$(conversationId)).data
+             );
 
         allow update, delete: if false;
       }

@@ -163,6 +163,66 @@ class BomQuantityEstimator {
     }
   }
 
+  /// True for ceramic/porcelain wall tile pieces — not adhesives, tools, or paint.
+  static bool _isWallTileItem(String name, String cat) {
+    if (_isTileConsumable(name) || _isPaintTool(name)) return false;
+    return name.contains('wall tile') ||
+        name.contains('backsplash') ||
+        (cat.contains('wall surface') && name.contains('tile'));
+  }
+
+  /// True for ceramic/porcelain floor tile pieces — not vinyl, roof tiles, or adhesives.
+  static bool _isFloorTileItem(String name, String cat) {
+    if (_isTileConsumable(name) || _isPaintTool(name)) return false;
+    if (name.contains('vinyl') || name.contains('roof')) return false;
+    if (name.contains('wall tile') || name.contains('backsplash')) return false;
+    if (name.contains('floor tile') || name.contains('porcelain tile')) {
+      return true;
+    }
+    // Bare "…tiles" only when category is a floor/tile surface. Do not match
+    // category "Flooring" alone — vinyl planks use qtyPerSqm in sqm.
+    if (name.contains('tile') &&
+        (cat.contains('floor surface') ||
+            cat.contains('flooring') ||
+            cat.contains('tile'))) {
+      return true;
+    }
+    return false;
+  }
+
+  static bool _isTileConsumable(String name) {
+    return name.contains('adhesive') ||
+        name.contains('grout') ||
+        name.contains('spacer');
+  }
+
+  static bool _isPaintCoating(String name) {
+    if (_isPaintTool(name)) return false;
+    return name.contains('paint') ||
+        name.contains('primer') ||
+        name.contains('skim');
+  }
+
+  static bool _isPaintTool(String name) {
+    return name.contains('roller') ||
+        name.contains('brush') ||
+        name.contains('tray') ||
+        name.contains('drop cloth') ||
+        name.contains('masking');
+  }
+
+  /// Washed sand / sand bedding — not sandpaper packs.
+  static bool _isBeddingSand(String name) {
+    if (name.contains('sandpaper') || name.contains('sand paper')) {
+      return false;
+    }
+    return name.contains('washed sand') ||
+        name == 'sand' ||
+        name.startsWith('sand ') ||
+        name.endsWith(' sand') ||
+        name.contains(' sand ');
+  }
+
   /// Calculates material quantity according to Philippine DPWH/NSCP mathematical formulas.
   static double estimateQuantity({
     required RenovationTemplateItem item,
@@ -174,16 +234,14 @@ class BomQuantityEstimator {
     final sizeKey = item.size ?? '';
 
     // 1. Wall Tiles (Wall Area = 2.2x floor area)
-    if (name.contains('wall tile') || cat.contains('wall surface')) {
+    if (_isWallTileItem(name, cat)) {
       final wallArea = area * 2.2;
       return PhRenovationRates.calculateWallTilePieces(wallArea, sizeKey);
     }
 
-    // 2. Floor Tiles
-    if (name.contains('floor tile') || name.contains('tile') || cat.contains('floor surface') || cat.contains('flooring')) {
-      if (!name.contains('adhesive') && !name.contains('grout')) {
-        return PhRenovationRates.calculateFloorTilePieces(area, sizeKey);
-      }
+    // 2. Floor Tiles (ceramic/porcelain pieces only)
+    if (_isFloorTileItem(name, cat)) {
+      return PhRenovationRates.calculateFloorTilePieces(area, sizeKey);
     }
 
     // 3. Tile Adhesive
@@ -196,8 +254,8 @@ class BomQuantityEstimator {
       return PhRenovationRates.calculateTileGroutPacks(area, sizeKey);
     }
 
-    // 5. Paint / Primer / Skim Coat
-    if (name.contains('paint') || name.contains('primer') || name.contains('skim')) {
+    // 5. Paint / Primer / Skim Coat (not rollers/brushes)
+    if (_isPaintCoating(name)) {
       final p = PhRenovationRates.calculatePaintWorks(area);
       if (name.contains('primer')) return p.primerGal;
       if (name.contains('skim')) return p.skimCoatBags;
@@ -212,8 +270,8 @@ class BomQuantityEstimator {
       return PhRenovationRates.calculateTileBeddingMortar(area).cementBags;
     }
 
-    // 7. Washed Sand
-    if (name.contains('sand')) {
+    // 7. Washed Sand (not sandpaper)
+    if (_isBeddingSand(name)) {
       return PhRenovationRates.calculateTileBeddingMortar(area).sandCum;
     }
 
@@ -250,18 +308,28 @@ class BomQuantityEstimator {
     final cat = item.category.toLowerCase();
 
     // Wall Tiles
-    if (name.contains('wall tile') || cat.contains('wall surface')) {
+    if (_isWallTileItem(name, cat)) {
       final wallArea = area * 2.2;
       final pcs = PhRenovationRates.calculateWallTilePieces(wallArea, newSize);
       final formula = PhRenovationRates.wallTileFormulaString(wallArea, newSize, pcs);
       return (newQty: pcs, formulaString: formula);
     }
 
-    // Floor Tiles
-    if (name.contains('floor tile') || name.contains('tile') || cat.contains('floor surface')) {
+    // Floor Tiles (same exclusions as estimateQuantity — never adhesives)
+    if (_isFloorTileItem(name, cat)) {
       final pcs = PhRenovationRates.calculateFloorTilePieces(area, newSize);
       final formula = PhRenovationRates.floorTileFormulaString(area, newSize, pcs);
       return (newQty: pcs, formulaString: formula);
+    }
+
+    // Tile Adhesive — size of the paired tile only changes joint context via grout;
+    // bag count stays area-based.
+    if (name.contains('adhesive')) {
+      final bags = PhRenovationRates.calculateTileAdhesiveBags(area);
+      return (
+        newQty: bags,
+        formulaString: PhRenovationRates.tileAdhesiveFormulaString(area, bags),
+      );
     }
 
     // Tile Grout
@@ -306,12 +374,13 @@ class BomQuantityEstimator {
   }) {
     final area = areaSqm <= 0 ? 1.0 : areaSqm;
     final name = item.name.toLowerCase();
+    final cat = item.category.toLowerCase();
     final sizeKey = item.size ?? '';
 
-    if (name.contains('wall tile')) {
+    if (_isWallTileItem(name, cat)) {
       return PhRenovationRates.wallTileFormulaString(area * 2.2, sizeKey, currentQty);
     }
-    if (name.contains('floor tile') || name.contains('tile')) {
+    if (_isFloorTileItem(name, cat)) {
       return PhRenovationRates.floorTileFormulaString(area, sizeKey, currentQty);
     }
     if (name.contains('adhesive')) {
@@ -320,7 +389,7 @@ class BomQuantityEstimator {
     if (name.contains('grout')) {
       return PhRenovationRates.tileGroutFormulaString(area, sizeKey, currentQty);
     }
-    if (name.contains('paint')) {
+    if (_isPaintCoating(name)) {
       return PhRenovationRates.paintFormulaString(area, currentQty);
     }
     if (name.contains('skim')) {
@@ -329,7 +398,7 @@ class BomQuantityEstimator {
     if (name.contains('cement')) {
       return PhRenovationRates.beddingCementFormulaString(area, currentQty);
     }
-    if (name.contains('sand')) {
+    if (_isBeddingSand(name)) {
       return PhRenovationRates.beddingSandFormulaString(area, currentQty);
     }
     if (name.contains('chb')) {

@@ -157,7 +157,7 @@ test('unrelated builder cannot read another builder post', async () => {
   await assertFails(stranger.doc('projectPosts/post-1').get());
 });
 
-test('builder can accept a quote with only status and acceptedAt', async () {
+test('builder can accept a quote with only status and acceptedAt', async () => {
   await env.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
     await db.doc('projectPosts/post-1').set({
@@ -185,7 +185,7 @@ test('builder can accept a quote with only status and acceptedAt', async () {
   );
 });
 
-test('builder cannot accept a quote with extra keys', async () {
+test('builder cannot accept a quote with extra keys', async () => {
   await env.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
     await db.doc('projectPosts/post-1').set({
@@ -215,7 +215,7 @@ test('builder cannot accept a quote with extra keys', async () {
   );
 });
 
-test('builder can accept a quote when the post stores uid on builderId', async () {
+test('builder can accept a quote when the post stores uid on builderId', async () => {
   await env.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
     await db.doc('projectPosts/post-1').set({
@@ -242,7 +242,7 @@ test('builder can accept a quote when the post stores uid on builderId', async (
   );
 });
 
-test('builder can create a conversation after accepting a quote', async () {
+test('builder can create a conversation after accepting a quote', async () => {
   await env.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
     await db.doc('projectPosts/post-1').set({
@@ -250,6 +250,8 @@ test('builder can create a conversation after accepting a quote', async () {
       projectName: 'Roof',
       materials: [],
       status: 'offer_accepted',
+      selectedQuotationId: 'shop-a',
+      selectedShopId: 'shop-a',
       quotationCount: 1,
     });
     await db.doc('projectPosts/post-1/quotations/shop-a').set({
@@ -283,6 +285,145 @@ test('builder can create a conversation after accepting a quote', async () {
       text: 'Hello',
       createdAt: new Date(),
     }),
+  );
+});
+
+test('chat create requires selectedQuotationId, not quotation.status alone', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await db.doc('projectPosts/post-1').set({
+      userId: 'builder-1',
+      projectName: 'Roof',
+      materials: [],
+      status: 'has_quotations',
+      quotationCount: 2,
+    });
+    await db.doc('projectPosts/post-1/quotations/shop-a').set({
+      shopId: 'shop-a',
+      postId: 'post-1',
+      estimatedTotal: 100,
+      status: 'accepted',
+    });
+    await db.doc('projectPosts/post-1/quotations/shop-b').set({
+      shopId: 'shop-b',
+      postId: 'post-1',
+      estimatedTotal: 90,
+      status: 'submitted',
+    });
+  });
+
+  const builder = authed('builder-1');
+  await assertFails(
+    builder.doc('conversations/post-1_shop-a').set({
+      projectId: 'post-1',
+      quotationId: 'shop-a',
+      shopId: 'shop-a',
+      builderId: 'builder-1',
+      userId: 'builder-1',
+      status: 'open',
+    }),
+  );
+});
+
+test('chat create cannot pin builderId to another user', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await db.doc('projectPosts/post-1').set({
+      userId: 'builder-1',
+      projectName: 'Roof',
+      materials: [],
+      status: 'offer_accepted',
+      selectedQuotationId: 'shop-a',
+      selectedShopId: 'shop-a',
+      quotationCount: 1,
+    });
+    await db.doc('projectPosts/post-1/quotations/shop-a').set({
+      shopId: 'shop-a',
+      postId: 'post-1',
+      estimatedTotal: 100,
+      status: 'accepted',
+    });
+  });
+
+  const builder = authed('builder-1');
+  await assertFails(
+    builder.doc('conversations/post-1_shop-a').set({
+      projectId: 'post-1',
+      quotationId: 'shop-a',
+      shopId: 'shop-a',
+      builderId: 'victim-user',
+      userId: 'builder-1',
+      status: 'open',
+    }),
+  );
+});
+
+test('participants cannot spoof the other side senderRole', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await db.doc('conversations/post-1_shop-a').set({
+      projectId: 'post-1',
+      quotationId: 'shop-a',
+      shopId: 'shop-a',
+      builderId: 'builder-1',
+      userId: 'builder-1',
+      status: 'open',
+    });
+  });
+
+  const builder = authed('builder-1');
+  await assertFails(
+    builder.doc('conversations/post-1_shop-a/messages/m-spoof').set({
+      senderId: 'builder-1',
+      senderRole: 'shop',
+      text: 'pretending to be the shop',
+      createdAt: new Date(),
+    }),
+  );
+
+  const shop = authed('shop-a');
+  await assertFails(
+    shop.doc('conversations/post-1_shop-a/messages/m-spoof-2').set({
+      senderId: 'shop-a',
+      senderRole: 'builder',
+      text: 'pretending to be the builder',
+      createdAt: new Date(),
+    }),
+  );
+
+  await assertSucceeds(
+    shop.doc('conversations/post-1_shop-a/messages/m-ok').set({
+      senderId: 'shop-a',
+      senderRole: 'shop',
+      text: 'real shop reply',
+      createdAt: new Date(),
+    }),
+  );
+});
+
+test('non-participants cannot read chat messages', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await db.doc('conversations/post-1_shop-a').set({
+      projectId: 'post-1',
+      quotationId: 'shop-a',
+      shopId: 'shop-a',
+      builderId: 'builder-1',
+      userId: 'builder-1',
+      status: 'open',
+    });
+    await db.doc('conversations/post-1_shop-a/messages/m1').set({
+      senderId: 'builder-1',
+      senderRole: 'builder',
+      text: 'secret',
+      createdAt: new Date(),
+    });
+  });
+
+  const stranger = authed('stranger');
+  await assertFails(stranger.doc('conversations/post-1_shop-a').get());
+  await assertFails(
+    stranger.doc('conversations/post-1_shop-a/messages/m1').get(),
   );
 });
 
